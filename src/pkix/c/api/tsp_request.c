@@ -189,10 +189,6 @@ int tsreq_set_nonce(TimeStampReq_t *tsreq, const INTEGER_t *nonce)
 
 cleanup:
 
-    if (ret != RET_OK) {
-        ASN_FREE(&INTEGER_desc, tsreq->nonce);
-    }
-
     return ret;
 }
 
@@ -217,11 +213,6 @@ int tsreq_generate_nonce(TimeStampReq_t *tsreq)
     DO(asn_create_integer(cur_time, sizeof(cur_time), &tsreq->nonce));
 
 cleanup:
-
-    if (ret != RET_OK) {
-        ASN_FREE(&INTEGER_desc, tsreq->nonce);
-        tsreq->nonce = NULL;
-    }
 
     return ret;
 }

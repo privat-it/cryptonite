@@ -8,7 +8,6 @@
 
 
 #include "asn_codecs_prim.h"
-#include "asn_internal.h"
 
 #include "ber_tlv_length.h"
 #include "ber_tlv_tag.h"
@@ -49,7 +48,5 @@
 #include "UTCTime.h"
 #include "UTF8String.h"
 #include "VisibleString.h"
-
-#include "asn1_utils.h"
 
 #endif /* __ASN_1_H__ */

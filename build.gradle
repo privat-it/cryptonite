@@ -36,7 +36,6 @@ ext {
 }
 
 model {
-
     platforms {
         osx_ppc {
             operatingSystem "osx"
@@ -58,7 +57,6 @@ model {
             architecture    "arm-v8"
         }
     }
-
 
     toolChains {
         visualCpp(VisualCpp)
@@ -542,7 +540,7 @@ def getResultExec(String execute, String cmdArgs) {
 }
 
 void runTest(def binary) {
-    def dirTest = file(binary.executableFile).parent 
+    def dirTest = file(binary.executableFile).parent
 
     for(lib in binary.dependentBinaries) {
         if (lib.name.contains('Shared') && lib.sharedLibraryFile != null) {
@@ -572,7 +570,7 @@ void runTest(def binary) {
 }
 
 void runTValgrind(def binary) {
-    def dirTest = file(binary.executableFile).parent 
+    def dirTest = file(binary.executableFile).parent
 
     for(lib in binary.dependentBinaries) {
         if (lib.name.contains('Shared') && lib.sharedLibraryFile != null) {
@@ -656,21 +654,19 @@ def formatSources(boolean changeSrc) {
 
 task help() {
     doLast {
-        def text = "Универсальная библиотека криптопреобразований «Cryptonite» предназначена для обеспечения программных \n" +
-                   "продуктов собственной разработки или продуктов сторонних разработчиков средствами криптозащиты\n\n" +
-                   "Список возможных выполняемых задач:\n" +
-                   " * build - собрать все\n" +
-                   " * cryptonite - собрать библиотеку cryptonite\n" + 
-                   "    - cryptoniteUtest - запустить unit тесты\n" +
-                   "    - cryptoniteAtest - запустить accept тесты\n" + 
-                   "    - cryptonitePtest - запустить performance тесты\n\n" + 
-                   " - pkix - собрать библиотеку cryptonite_pki\n" +
-                   "    - pkixUtest - запустить unit тесты\n" 
+        def text = "Cryptonite - universal library of cryptotransformations.\n" +
+                   "Cryptonite is intended for providing software products of own " + 
+                   "development or products of third-party developers with means of " +
+                   "cryptoprotection.\n" +
+                   "The list of the possible tasks:\n" +
+                   " * build - build all\n" +
+                   " * cryptonite - build cryptonite libraries\n" +
+                   " * cryptoniteUtest - run unit tests for cryptonite\n" +
+                   " * cryptoniteAtest - run accept tests for cryptonite\n" +
+                   " * cryptonitePtest - run performance tests for cryptonite\n" +
+                   " * pkix - build cryptonite_pki library\n" +
+                   " * pkixUtest - run unit tests for cryptonite_pki\n"
 
-        if (currentOs.isWindows()) {
-            println new String(text.getBytes("CP1251")) 
-        } else {
-            println text 
-        }
+        println text
     }
 }

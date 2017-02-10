@@ -3,14 +3,15 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
-#include "pkix_errors.h"
+#include "ext.h"
+
+#include "pkix_macros_internal.h"
 #include "log_internal.h"
 #include "asn1_utils.h"
 #include "pkix_utils.h"
 #include "cert.h"
 #include "crl.h"
 #include "cryptonite_manager.h"
-#include "ext.h"
 #include "exts.h"
 
 #undef FILE_MARKER
@@ -261,7 +262,7 @@ cleanup:
 int ext_create_cert_policies(bool critical, OidNumbers **oids, int cnt, Extension_t **ext)
 {
     int ret = RET_OK;
-    CertificatePolicies_t cp;
+    CertificatePolicies_t* cp = NULL;
     PolicyInformation_t *pi = NULL;
     int i;
 
@@ -277,21 +278,21 @@ int ext_create_cert_policies(bool critical, OidNumbers **oids, int cnt, Extensio
         }
     }
 
-    memset(&cp, 0, sizeof(cp));
+    ASN_ALLOC(cp);
     INIT_EXTENSION(ext, OID_CERTIFICATE_POLICIES_EXTENSION_ID, critical);
 
     for (i = 0; i < cnt; ++i) {
         ASN_ALLOC(pi);
         EXT2OID(oids[i], pi->policyIdentifier);
-        DO(ASN_SEQUENCE_ADD(&cp.list, pi));
+        DO(ASN_SEQUENCE_ADD(&cp->list, pi));
         pi = NULL;
     }
 
-    DO(type_to_octstring(&CertificatePolicies_desc, &cp, &(*ext)->extnValue));
+    DO(type_to_octstring(&CertificatePolicies_desc, cp, &(*ext)->extnValue));
 
 cleanup:
 
-    ASN_FREE_CONTENT_STATIC(&CertificatePolicies_desc, &cp);
+    ASN_FREE(&CertificatePolicies_desc, cp);
     ASN_FREE(&PolicyInformation_desc, pi);
 
     if (ret != RET_OK) {
@@ -428,6 +429,7 @@ int ext_create_crl_reason(bool critical, const CRLReason_t *reason, Extension_t 
 
     LOG_ENTRY();
 
+    CHECK_PARAM(reason != NULL);
     CHECK_PARAM(ext != NULL);
 
     INIT_EXTENSION(ext, OID_CRL_REASON_EXTENSION_ID, critical);
@@ -669,16 +671,19 @@ int ext_create_private_key_usage(bool critical,
 {
     int ret = RET_OK;
 
-    PrivateKeyUsagePeriod_t pkup;
+    PrivateKeyUsagePeriod_t *pkup = NULL;
     GeneralizedTime_t *asn_gt = NULL;
     time_t t_utc;
 
     LOG_ENTRY();
 
     CHECK_PARAM(ext != NULL);
-    CHECK_PARAM(validity && (!not_before || !not_after));
+    if (!validity) {
+        CHECK_PARAM(not_before != NULL);
+        CHECK_PARAM(not_after != NULL);
+    }
 
-    memset(&pkup, 0, sizeof(pkup));
+    ASN_ALLOC(pkup);
     INIT_EXTENSION(ext, OID_PRIVATE_KEY_USAGE_PERIOD_EXTENSION_ID, critical);
 
     if (validity) {
@@ -691,13 +696,13 @@ int ext_create_private_key_usage(bool critical,
         case PKIXTime_PR_utcTime:
             t_utc = asn_UT2time(&validity->notBefore.choice.utcTime, NULL, false);
             asn_gt = asn_time2GT(NULL, localtime(&t_utc), true);
-            CHECK_NOT_NULL(pkup.notBefore = asn_copy_with_alloc(&GeneralizedTime_desc, asn_gt));
+            CHECK_NOT_NULL(pkup->notBefore = asn_copy_with_alloc(&GeneralizedTime_desc, asn_gt));
             ASN_FREE(&GeneralizedTime_desc, asn_gt);
             asn_gt = NULL;
             break;
 
         case PKIXTime_PR_generalTime:
-            CHECK_NOT_NULL(pkup.notBefore = asn_copy_with_alloc(&GeneralizedTime_desc, &validity->notBefore.choice.generalTime));
+            CHECK_NOT_NULL(pkup->notBefore = asn_copy_with_alloc(&GeneralizedTime_desc, &validity->notBefore.choice.generalTime));
             break;
 
         default:
@@ -709,13 +714,13 @@ int ext_create_private_key_usage(bool critical,
         case PKIXTime_PR_utcTime:
             t_utc = asn_UT2time(&validity->notAfter.choice.utcTime, NULL, false);
             asn_gt = asn_time2GT(NULL, localtime(&t_utc), true);
-            pkup.notAfter = asn_copy_with_alloc(&GeneralizedTime_desc, asn_gt);
+            pkup->notAfter = asn_copy_with_alloc(&GeneralizedTime_desc, asn_gt);
             ASN_FREE(&GeneralizedTime_desc, asn_gt);
             asn_gt = NULL;
             break;
 
         case PKIXTime_PR_generalTime:
-            pkup.notAfter = asn_copy_with_alloc(&GeneralizedTime_desc, &validity->notAfter.choice.generalTime);
+            pkup->notAfter = asn_copy_with_alloc(&GeneralizedTime_desc, &validity->notAfter.choice.generalTime);
             break;
 
         default:
@@ -725,15 +730,15 @@ int ext_create_private_key_usage(bool critical,
 
     } else {
 
-        pkup.notBefore = asn_time2GT(NULL, localtime(not_before), true);
-        pkup.notAfter = asn_time2GT(NULL, localtime(not_after), true);
+        pkup->notBefore = asn_time2GT(NULL, localtime(not_before), true);
+        pkup->notAfter = asn_time2GT(NULL, localtime(not_after), true);
     }
 
-    DO(type_to_octstring(&PrivateKeyUsagePeriod_desc, &pkup, &(*ext)->extnValue));
+    DO(type_to_octstring(&PrivateKeyUsagePeriod_desc, pkup, &(*ext)->extnValue));
 
 cleanup:
 
-    ASN_FREE_CONTENT_STATIC(&PrivateKeyUsagePeriod_desc, &pkup);
+    ASN_FREE(&PrivateKeyUsagePeriod_desc, pkup);
     ASN_FREE(&GeneralizedTime_desc, asn_gt);
 
     if (ret != RET_OK) {
@@ -846,7 +851,7 @@ int ext_create_subj_alt_name_directly(bool critical,
         Extension_t **ext)
 {
     int ret = RET_OK;
-    SubjectAltName_t san;
+    SubjectAltName_t *san = NULL;
     GeneralName_t *gn = NULL;
     int i;
 
@@ -856,7 +861,7 @@ int ext_create_subj_alt_name_directly(bool critical,
     CHECK_PARAM(names != NULL);
     CHECK_PARAM(cnt != 0);
 
-    memset(&san, 0, sizeof(san));
+    ASN_ALLOC(san);
     INIT_EXTENSION(ext, OID_SUBJECT_ALT_NAME_EXTENSION_ID, critical);
 
     for (i = 0; i < cnt; ++i) {
@@ -878,15 +883,15 @@ int ext_create_subj_alt_name_directly(bool critical,
             SET_ERROR(RET_PKIX_UNSUPPORTED_PKIX_OBJ);
         }
 
-        DO(ASN_SEQUENCE_ADD(&san.list, gn));
+        DO(ASN_SEQUENCE_ADD(&san->list, gn));
         gn = NULL;
     }
 
-    DO(type_to_octstring(&SubjectAltName_desc, &san, &(*ext)->extnValue));
+    DO(type_to_octstring(&SubjectAltName_desc, san, &(*ext)->extnValue));
 
 cleanup:
 
-    ASN_FREE_CONTENT_STATIC(&SubjectAltName_desc, &san);
+    ASN_FREE(&SubjectAltName_desc, san);
 
     if (ret != RET_OK) {
         ASN_FREE(&Extension_desc, *ext);
@@ -900,7 +905,7 @@ int ext_create_subj_dir_attr_directly(bool critical, const char *subject_attr, E
 {
     int ret = RET_OK;
 
-    PrintableString_t ps;
+    PrintableString_t *ps = NULL;
     SubjectDirectoryAttributes_t *sdas = NULL;
     Attribute_t *attr = NULL;
     AttributeValue_t *attrv = NULL;
@@ -921,31 +926,33 @@ int ext_create_subj_dir_attr_directly(bool critical, const char *subject_attr, E
     DO(parse_key_value(subject_attr, &keys, &values, &count));
 
     ASN_ALLOC(sdas);
-    memset(&ps, 0, sizeof(PrintableString_t));
 
     for (i = 0; i < count; i++) {
         ASN_ALLOC(attr);
+        ASN_ALLOC(ps);
 
         DO(asn_parse_args_oid(keys[i], &oid_numbers, &oid_numbers_len));
         DO(asn_set_oid(oid_numbers, oid_numbers_len, &attr->type));
 
-        ASN_FREE_CONTENT_STATIC(&PrintableString_desc, &ps);
-        DO(OCTET_STRING_fromString(&ps, values[i]));
+        DO(OCTET_STRING_fromString(ps, values[i]));
 
-        DO(asn_create_any(&PrintableString_desc, &ps, &attrv));
+        DO(asn_create_any(&PrintableString_desc, ps, &attrv));
         DO(ASN_SEQUENCE_ADD(&attr->value.list, attrv));
 
         DO(ASN_SEQUENCE_ADD(&sdas->list, attr));
 
         attrv = NULL;
         attr = NULL;
+
+        ASN_FREE(&PrintableString_desc, ps);
+        ps = NULL;
     }
 
     DO(type_to_octstring(&SubjectDirectoryAttributes_desc, sdas, &(*ext)->extnValue));
 
 cleanup:
 
-    ASN_FREE_CONTENT_STATIC(&PrintableString_desc, &ps);
+    ASN_FREE(&PrintableString_desc, ps);
     ASN_FREE(&AttributeValue_desc, attrv);
     ASN_FREE(&Attribute_desc, attr);
     ASN_FREE(&SubjectDirectoryAttributes_desc, sdas);

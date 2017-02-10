@@ -5,6 +5,7 @@
 
 #include "pkcs5.h"
 
+#include "pkix_macros_internal.h"
 #include "storage_errors.h"
 #include "cryptonite_manager.h"
 #include "PBES2-params.h"

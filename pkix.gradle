@@ -48,12 +48,7 @@ model {
                     }
 
                     if (toolChain in Clang) {
-                        cCompiler.args "-Wno-extended-offsetof"  
-                    }
-
-                    /* Issue all the warnings demanded by strict ISO C. */
-                    if (!noWarnings && ((toolChain in Gcc) || (toolChain in Clang))) {
-                        cCompiler.args "-Wextra"
+                        cCompiler.args "-Wno-extended-offsetof"
                     }
                 }
             }

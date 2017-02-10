@@ -228,6 +228,41 @@ cleanup:
     BA_FREE(sign_ba, alg_ba, exp_sign_ba, private_key, creq_ba, cert_ba);
 }
 
+static void test_creq_init_by_sign_2(CertificationRequest_t *creq)
+{
+    ASSERT_RET(RET_INVALID_PARAM, creq_init_by_sign(NULL, &creq->certificationRequestInfo, &creq->signatureAlgorithm, &creq->signature));
+    ASSERT_RET(RET_INVALID_PARAM, creq_init_by_sign(creq, NULL, &creq->signatureAlgorithm, &creq->signature));
+    ASSERT_RET(RET_INVALID_PARAM, creq_init_by_sign(creq, &creq->certificationRequestInfo, NULL, &creq->signature));
+    ASSERT_RET(RET_INVALID_PARAM, creq_init_by_sign(creq, &creq->certificationRequestInfo, &creq->signatureAlgorithm, NULL));
+
+cleanup:
+
+    return;
+}
+
+static void test_creq_init_by_adapter_2(CertificationRequest_t *creq)
+{
+    Certificate_t *cert_tmp = cert_alloc();
+    SignAdapter *sa = NULL;
+    ByteArray *private_key =
+            ba_alloc_from_le_hex_string("7B66B62C23673C1299B84AE4AACFBBCA1C50FC134A846EF2E24A37407D01D32A");
+    ByteArray *buffer = NULL;
+
+    ASSERT_RET_OK(ba_alloc_from_file("src/pkixUtest/resources/certificate257.cer", &buffer));
+    ASSERT_RET_OK(cert_decode(cert_tmp, buffer));
+    ASSERT_RET_OK(sign_adapter_init_by_cert(private_key, cert_tmp, &sa));
+
+    ASSERT_RET(RET_INVALID_PARAM, creq_init_by_adapter(NULL, &creq->certificationRequestInfo, sa));
+    ASSERT_RET(RET_INVALID_PARAM, creq_init_by_adapter(creq, NULL, sa));
+    ASSERT_RET(RET_INVALID_PARAM, creq_init_by_adapter(creq, &creq->certificationRequestInfo, NULL));
+
+cleanup:
+
+    sign_adapter_free(sa);
+    BA_FREE(private_key, buffer);
+    cert_free(cert_tmp);
+}
+
 void utest_creq(void)
 {
     CertificationRequest_t *creq = NULL;
@@ -246,6 +281,8 @@ void utest_creq(void)
         test_creq_get_attributes(creq);
         test_creq_get_ext_by_oid();
         test_creq_init_by_adapter();
+        test_creq_init_by_sign_2(creq);
+        test_creq_init_by_adapter_2(creq);
     }
 
     creq_free(creq);

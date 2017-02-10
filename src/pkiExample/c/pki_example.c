@@ -30,6 +30,9 @@
 #define REPORT_DIR "build/tmp/pkiExample"
 
 /* Криптопровайдер. */
+
+#include "stacktrace.h"
+
 /* PKIX. */
 #include "pkix_utils.h"
 #include "oids.h"
@@ -2651,19 +2654,14 @@ static void decrypt_enveloped_data(const ContentInfo_t *ci,
     aid_free(content_encryption_alg);
 }
 
-static int get_first_dha(const ByteArray *storage_body, DhAdapter **dha)
+static void get_first_dha(const ByteArray *storage_body, DhAdapter **dha)
 {
     Pkcs12Ctx *storage = NULL;
-    int ret = RET_OK;
 
-    DO(pkcs12_decode(NULL, storage_body, DEFAULT_STORAGE_PASSWORD, &storage));
-    DO(pkcs12_select_key(storage, NULL, DEFAULT_KEY_PASSWORD));
-    DO(pkcs12_get_dh_adapter(storage, dha));
+    EXECUTE(pkcs12_decode(NULL, storage_body, DEFAULT_STORAGE_PASSWORD, &storage));
+    EXECUTE(pkcs12_select_key(storage, NULL, DEFAULT_KEY_PASSWORD));
+    EXECUTE(pkcs12_get_dh_adapter(storage, dha));
     pkcs12_free(storage);
-
-cleanup:
-
-    return ret;
 }
 
 #define ASSERT_EQUALS_BA(expected, actual)                                                              \
@@ -2735,10 +2733,12 @@ void generate_enveloped_data_static(void)
         load_certificate(dstu_params_name_map[i], "userfiz/certificate.cer", &subject_cert);
 
         load_ba_from_file(&issuer_storage_body, dstu_params_name_map[i], "root/private.key");
-        EXECUTE(get_first_dha(issuer_storage_body, &issuer_dha));
+        get_first_dha(issuer_storage_body, &issuer_dha);
+        IS_NULL(issuer_dha);
 
         load_ba_from_file(&subject_storage_body, dstu_params_name_map[i], "userfiz/private.key");
-        EXECUTE(get_first_dha(subject_storage_body, &subject_dha));
+        get_first_dha(subject_storage_body, &subject_dha);
+        IS_NULL(subject_dha);
 
         tprintf("        - Генерация контейнера защищенных данных\n"
                 "          с применением алгоритма шифрования ГОСТ 28147 в решиме CFB.\n"
@@ -2748,6 +2748,7 @@ void generate_enveloped_data_static(void)
 
         EXECUTE(pkix_create_oid(oids_get_oid_numbers_by_id(OID_GOST28147_CFB_ID), &cipher_oid));
         create_enveloped_data_container(cipher_oid, issuer_dha, issuer_cert, subject_cert, data, false, &enveloped_data);
+        IS_NULL(enveloped_data);
 
         EXECUTE(cinfo_encode(enveloped_data, &buffer));
         save_ba_to_file(buffer, dstu_params_name_map[i], "userfiz/enveloped-data-container-without-cert-cfb.der");
@@ -2927,18 +2928,21 @@ void generate_enveloped_data_dynamic(void)
     load_certificate(dstu_params_name_map[0], "userfiz/certificate.cer", &issuer_cert);
     load_ba_from_file(&issuer_storage_body, dstu_params_name_map[0], "userfiz/private.key");
 
-    EXECUTE(get_first_dha(issuer_storage_body, &issuer_dha));
+    get_first_dha(issuer_storage_body, &issuer_dha);
+    IS_NULL(issuer_dha);
 
     issuer_params = 0;
 
     load_certificate(dstu_params_name_map[0], "userfiz/certificate.cer", &first_cert);
     load_ba_from_file(&first_storage_body, dstu_params_name_map[0], "userfiz/private.key");
-    EXECUTE(get_first_dha(first_storage_body, &first_dha));
+    get_first_dha(first_storage_body, &first_dha);
+    IS_NULL(first_dha);
 
     for (i = 1; i < sizeof(dstu_params_id_map) / sizeof(Dstu4145ParamsId); i++) {
         load_certificate(dstu_params_name_map[i], "userfiz/certificate.cer", &subject_cert);
         load_ba_from_file(&subject_storage_body, dstu_params_name_map[i], "userfiz/private.key");
-        EXECUTE(get_first_dha(subject_storage_body, &subject_dha));
+        get_first_dha(subject_storage_body, &subject_dha);
+        IS_NULL(subject_dha);
 
         tprintf("        - Генерация контейнера защищенных данных\n"
                 "          с применением алгоритма шифрования ГОСТ 28147 в решиме CFB.\n"

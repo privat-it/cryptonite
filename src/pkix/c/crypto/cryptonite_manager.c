@@ -3,9 +3,9 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+#include "sha1.h"
 #include "sha2.h"
 #include "cryptonite_manager.h"
-
 #include "pkix_utils.h"
 #include "pkix_macros_internal.h"
 #include "cryptonite_errors.h"
@@ -13,9 +13,9 @@
 #include "log_internal.h"
 #include "gost34_311.h"
 #include "aes.h"
+#include "dstu4145.h"
 #include "rs.h"
 #include "prng.h"
-#include "sha1.h"
 #include "asn1_utils.h"
 #include "cert.h"
 #include "aid.h"
@@ -518,8 +518,11 @@ int digest_adapter_init_by_cert(const Certificate_t *cert, DigestAdapter **da)
     if (pkix_check_oid_parent(&cert->signatureAlgorithm.algorithm,
             oids_get_oid_numbers_by_id(OID_PKI_DSTU4145_WITH_GOST3411_ID))) {
         DO(digest_adapter_init_by_aid(&cert->tbsCertificate.subjectPublicKeyInfo.algorithm, da));
-    } else if (pkix_check_oid_equal(&cert->signatureAlgorithm.algorithm,
-            oids_get_oid_numbers_by_id(OID_ECDSA_WITH_SHA256_ID))) {
+    } else if (pkix_check_oid_equal(&cert->signatureAlgorithm.algorithm, oids_get_oid_numbers_by_id(OID_ECDSA_WITH_SHA224_ID)) ||
+               pkix_check_oid_equal(&cert->signatureAlgorithm.algorithm, oids_get_oid_numbers_by_id(OID_ECDSA_WITH_SHA256_ID)) ||
+               pkix_check_oid_equal(&cert->signatureAlgorithm.algorithm, oids_get_oid_numbers_by_id(OID_ECDSA_WITH_SHA384_ID)) ||
+               pkix_check_oid_equal(&cert->signatureAlgorithm.algorithm, oids_get_oid_numbers_by_id(OID_ECDSA_WITH_SHA512_ID)) ||
+               pkix_check_oid_equal(&cert->signatureAlgorithm.algorithm, oids_get_oid_numbers_by_id(OID_ECDSA_WITH_SHA1_ID))) {
         DO(digest_adapter_init_by_aid(&cert->signatureAlgorithm, da));
     } else {
         SET_ERROR(RET_PKIX_UNSUPPORTED_OID);
@@ -909,8 +912,12 @@ static int cryptonite_sign_params_asn_init(CryptoniteSignParams *sign_parameters
         ASN_FREE(&DSTU4145Params_desc, sign_parameters_str->asn_dstu_params);
         sign_parameters_str->asn_dstu_params = params_buf;
 
-    } else if (pkix_check_oid_parent(&sign_parameters_str->signature_aid->algorithm,
-            oids_get_oid_numbers_by_id(OID_ECDSA_WITH_SHA256_ID))) {
+    } else if (pkix_check_oid_equal(&sign_parameters_str->signature_aid->algorithm, oids_get_oid_numbers_by_id(OID_ECDSA_WITH_SHA224_ID)) ||
+            pkix_check_oid_equal(&sign_parameters_str->signature_aid->algorithm, oids_get_oid_numbers_by_id(OID_ECDSA_WITH_SHA256_ID)) ||
+            pkix_check_oid_equal(&sign_parameters_str->signature_aid->algorithm, oids_get_oid_numbers_by_id(OID_ECDSA_WITH_SHA384_ID)) ||
+            pkix_check_oid_equal(&sign_parameters_str->signature_aid->algorithm, oids_get_oid_numbers_by_id(OID_ECDSA_WITH_SHA512_ID)) ||
+            pkix_check_oid_equal(&sign_parameters_str->signature_aid->algorithm, oids_get_oid_numbers_by_id(OID_ECDSA_WITH_SHA1_ID))) {
+
         sign_parameters_str->alg_marker = ECDSA;
         CHECK_NOT_NULL(params_buf = asn_any2type(sign_parameters_str->params_aid->parameters, &ECParameters_desc));
         ASN_FREE(&ECParameters_desc, sign_parameters_str->asn_ec_params);
@@ -1242,8 +1249,8 @@ static int va_verify_hash(const VerifyAdapter *va, const ByteArray *hash, const 
             DO(ba_swap(compressed_buffer));
             CHECK_NOT_NULL(qx = ba_copy_with_alloc(compressed_buffer, 0, (ba_get_len(compressed_buffer) >> 1)));
             CHECK_NOT_NULL(qy = ba_copy_with_alloc(compressed_buffer, (ba_get_len(compressed_buffer) >> 1), 0));
-            //Открытый ключ в формате be
 
+            //Открытый ключ в формате be
             DO(ba_swap(qx));
             DO(ba_swap(qy));
 

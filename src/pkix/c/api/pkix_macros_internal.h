@@ -7,10 +7,7 @@
 #define SRC_API_PKIX_MACROS_H_
 
 #include "pkix_errors.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include "macros_internal.h"
 
 #define DO_ASN(func, _ret)                               \
     {                                                    \
@@ -41,9 +38,5 @@ extern "C" {
             *_dst_end-- = _tmp;                               \
         }                                                     \
     }
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* SRC_API_PKIX_MACROS_H_ */

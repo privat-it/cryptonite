@@ -6,6 +6,7 @@
 #ifndef CRYPTONITE_PKIXTESTUTILS_H
 #define CRYPTONITE_PKIXTESTUTILS_H
 
+#include "stacktrace.h"
 #include "asn1_module.h"
 #include "oids.h"
 

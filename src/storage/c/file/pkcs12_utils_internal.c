@@ -21,6 +21,7 @@
 #include "PBES2-params.h"
 #include "cryptonite_manager.h"
 
+#include "pkix_macros_internal.h"
 #include "log_internal.h"
 #include "pkcs5.h"
 #include "pkcs8.h"
@@ -117,7 +118,7 @@ int pfx_encode(const PFX_t *container, ByteArray **encode)
     CHECK_PARAM(container != NULL);
     CHECK_PARAM(encode != NULL);
 
-    return asn_encode_ba(&PFX_desc, container, encode);
+    DO(asn_encode_ba(&PFX_desc, container, encode));
 
 cleanup:
 

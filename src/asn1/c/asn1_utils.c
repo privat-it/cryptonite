@@ -854,7 +854,7 @@ int asn_bytes2INTEGER(INTEGER_t *integer, const unsigned char *value, size_t len
     }
 
     if (integer->buf) {
-        FREEMEM(integer->buf);
+        free(integer->buf);
     }
 
     integer->buf = buf;

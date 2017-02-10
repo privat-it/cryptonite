@@ -6,7 +6,7 @@
 #include "aid.h"
 
 #include "log_internal.h"
-#include "pkix_errors.h"
+#include "pkix_macros_internal.h"
 #include "pkix_utils.h"
 #include "asn1_utils.h"
 #include "oids.h"
@@ -416,6 +416,7 @@ int aid_init(AlgorithmIdentifier_t *aid,
 
     LOG_ENTRY();
 
+    CHECK_PARAM(aid != NULL);
     CHECK_PARAM(oid != NULL);
 
     aid_clean(aid);

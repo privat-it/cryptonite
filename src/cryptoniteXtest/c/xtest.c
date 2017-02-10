@@ -37,7 +37,7 @@ int main(void)
     PR("+------------------------------------------------------------------------------+\n");
     data_size_byte = MODE_2kb;
     xtest_ctx = rnd_generate(data_size_byte);
-#if !(defined(__APPLE__) || defined(__arm__) || (defined(__unix__) && !(__linux__)))
+#if !(defined(__APPLE__) || defined(__arm__) || defined(__aarch64__) || (defined(__unix__) && !(__linux__)))
     ctx = table_builder_alloc(2);
 
     add_lib_name(ctx, "Libcppcrypto");
@@ -98,8 +98,8 @@ LOOP_NUM = 1;
     PR("+------------------------------------------------------------------------------+\n");
     data_size_byte = MODE_4mb;
     xtest_ctx = rnd_generate(data_size_byte);
-#ifdef __linux__
-#ifndef __arm__
+
+#if !(defined(__APPLE__) || defined(__arm__) || defined(__aarch64__) || (defined(__unix__) && !(__linux__)))
     ctx = table_builder_alloc(2);
 
     add_lib_name(ctx, "Libcppcrypto");
@@ -112,7 +112,7 @@ LOOP_NUM = 1;
 
     table_builder_free(ctx);
 #endif
-#endif
+
     ctx = table_builder_alloc(XTEST_LIB_NUM);
 
     add_lib_name(ctx, "OpenSSL");

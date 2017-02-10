@@ -10,6 +10,7 @@ int main(void)
 {
     utest_pkcs12_dstu();
     utest_pkcs12_ecdsa();
+    utest_pkcs5();
 
     printf("Total errors: %d\n", (int)error_count);
 

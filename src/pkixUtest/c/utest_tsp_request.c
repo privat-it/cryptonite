@@ -195,6 +195,50 @@ cleanup:
     tsreq_free(tsreq);
 }
 
+static void test_get_message_2(void)
+{
+    MessageImprint_t *msg = NULL;
+    ASSERT_RET(RET_INVALID_PARAM, tsreq_get_message(NULL, &msg));
+    ASSERT_TRUE(msg == NULL);
+
+cleanup:
+
+    ASN_FREE(&MessageImprint_desc, msg);
+}
+
+static void test_set_nonce_2(TimeStampReq_t *tsreq)
+{
+    TimeStampReq_t *tsreq_tmp = NULL;
+
+    ASSERT_NOT_NULL(tsreq_tmp = tsreq_alloc());
+    ASSERT_RET(RET_INVALID_PARAM, tsreq_set_nonce(tsreq_tmp, NULL));
+    ASSERT_RET(RET_INVALID_PARAM, tsreq_set_nonce(NULL, tsreq->nonce));
+
+cleanup:
+
+    tsreq_free(tsreq_tmp);
+}
+
+static void test_tsreq_generate_nonce(void)
+{
+    ASSERT_RET(RET_INVALID_PARAM, tsreq_generate_nonce(NULL));
+
+cleanup:
+
+    return;
+}
+
+static void test_get_version_2(void)
+{
+    INTEGER_t *version = NULL;
+
+    ASSERT_RET(RET_INVALID_PARAM, tsreq_get_version(NULL, &version));
+    ASSERT_TRUE(version == NULL);
+
+cleanup:
+    ASN_FREE(&INTEGER_desc, version);
+}
+
 void utest_tsp_request(void)
 {
     PR("%s\n", __FILE__);
@@ -217,6 +261,10 @@ void utest_tsp_request(void)
         test_get_policy_2();
         test_get_nonce_2();
         test_get_cert_req_2();
+        test_get_message_2();
+        test_set_nonce_2(tsreq);
+        test_tsreq_generate_nonce();
+        test_get_version_2();
     }
 
     tsreq_free(tsreq);

@@ -6,7 +6,7 @@
 #include "ocsp_request_engine.h"
 
 #include "log_internal.h"
-#include "pkix_errors.h"
+#include "pkix_macros_internal.h"
 #include "cert.h"
 #include "asn1_utils.h"
 #include "pkix_utils.h"

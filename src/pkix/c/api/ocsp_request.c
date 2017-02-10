@@ -145,10 +145,6 @@ int ocspreq_set_sign(OCSPRequest_t *ocspreq, const Signature_t *sign)
 
 cleanup:
 
-    if (ret != RET_OK) {
-        ASN_FREE(&Signature_desc, ocspreq->optionalSignature);
-    }
-
     return ret;
 }
 

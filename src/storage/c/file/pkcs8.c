@@ -11,6 +11,7 @@
 #include "storage_errors.h"
 #include "pkix_utils.h"
 #include "log_internal.h"
+#include "pkix_macros_internal.h"
 #include "cert.h"
 #include "aid.h"
 #include "spki.h"

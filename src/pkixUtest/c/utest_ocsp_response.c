@@ -249,6 +249,7 @@ static void test_get_responder_id_2(void)
 cleanup:
 
     ocspresp_free(ocspr);
+    ASN_FREE(&ResponderID_desc, resp_id);
 }
 
 static void test_ocspresp_verify(void)
@@ -271,6 +272,16 @@ cleanup:
     ba_free(buffer);
     cert_free(cert);
     verify_adapter_free(va);
+}
+
+static void test_set_response_bytes_2(OCSPResponse_t *ocspr)
+{
+    ASSERT_RET(RET_INVALID_PARAM, ocspresp_set_response_bytes(NULL, ocspr->responseBytes));
+    ASSERT_RET(RET_INVALID_PARAM, ocspresp_set_response_bytes(ocspr, NULL));
+
+cleanup:
+
+    return;
 }
 
 void utest_ocsp_response(void)
@@ -297,6 +308,7 @@ void utest_ocsp_response(void)
         test_get_responder_ids(ocspr);
         test_get_responder_id_2();
         test_ocspresp_verify();
+        test_set_response_bytes_2(ocspr);
     }
 
     ocspresp_free(ocspr);

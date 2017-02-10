@@ -8,6 +8,7 @@
 #include "storage_errors.h"
 #include "pkix_utils.h"
 #include "log_internal.h"
+#include "pkix_macros_internal.h"
 #include "cert.h"
 #include "spki.h"
 #include "cert_store.h"
@@ -811,7 +812,11 @@ int pkcs12_decode(const char *storage_name, const ByteArray *storage_body, const
 
     CHECK_NOT_NULL(pfx = pfx_alloc());
     DO(pfx_decode(pfx, storage_body));
-    DO(pfx_check_mac(pfx, pass));
+
+    if (pfx->macData != NULL) {
+        DO(pfx_check_mac(pfx, pass));
+    }
+
     DO(pfx_get_contents(pfx, pass, &int_storage->contents, &int_storage->contents_len));
     CHECK_NOT_NULL(int_storage->mac_data = asn_copy_with_alloc(&MacData_desc, pfx->macData));
 

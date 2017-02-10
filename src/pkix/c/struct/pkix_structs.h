@@ -6,7 +6,7 @@
 #ifndef __PKIX_MODULE_H__
 #define __PKIX_MODULE_H__
 
-#include "asn1_module.h"
+#include "asn1_utils.h"
 
 #include "BinaryField.h"
 #include "Pentanomial.h"

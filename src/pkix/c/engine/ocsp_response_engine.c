@@ -3,12 +3,11 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
-#include "pkix_structs.h"
 #include "ocsp_response_engine.h"
 
 #include "log_internal.h"
 #include "asn1_utils.h"
-#include "pkix_errors.h"
+#include "pkix_macros_internal.h"
 #include "verify_adapter.h"
 #include "cert.h"
 #include "crl.h"

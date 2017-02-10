@@ -12,6 +12,8 @@
 #undef FILE_MARKER
 #define FILE_MARKER "asn1/GeneralizedTime.c"
 
+#define _BSD_SOURCE     /* for timegm(3) */
+
 #include <stdlib.h>
 #include "asn_internal.h"
 #include "GeneralizedTime.h"
@@ -128,7 +130,6 @@ static long GMTOFF(struct tm a)
 
     return (long)(local_time - gmt_time);
 }
-#define _EMULATE_TIMEGM
 
 #define ATZVARS do {                            \
         char tzoldbuf[64];                      \
@@ -144,8 +145,8 @@ static long GMTOFF(struct tm a)
                 tzold = MALLOC(tzlen + 1);          \
                 if(tzold) memcpy(tzold, dupptr, tzlen + 1); \
             }                           \
-            setenv("TZ", "UTC", 1);                 \
         }                               \
+        setenv("TZ", "UTC", 1);                 \
         tzset();                            \
     } while(0)
 #define ATZOLDTZ do {                           \
@@ -634,7 +635,6 @@ local_finish:
             0;      /* XXX: Р»РµС‚РЅРµРµ РІСЂРµР�?СЏ РѕРїСЂРµРґРµР»СЏРµС‚ РЅРµ РїСЂР°РІРёР»СЊРЅРѕ СЃ РїР°СЂР°Р�?РµС‚СЂРѕР�? -1;*/
 
     tm_s.tm_sec -= gmtoff;
-    tm_s.tm_sec += GMTOFF(tm_s);
 
     /*** AT THIS POINT tm_s is either GMT or local (unknown) ****/
 

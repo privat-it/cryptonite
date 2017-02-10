@@ -5,7 +5,7 @@
 
 #include "adapters_map.h"
 
-#include "pkix_errors.h"
+#include "pkix_macros_internal.h"
 #include "log_internal.h"
 #include "cryptonite_manager.h"
 

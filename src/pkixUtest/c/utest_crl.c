@@ -484,6 +484,52 @@ cleanup:
 
 #endif
 
+static void test_crl_get_tbs_2(void)
+{
+    TBSCertList_t *tbs_crl = NULL;
+
+    ASSERT_RET(RET_INVALID_PARAM, crl_get_tbs(NULL, &tbs_crl));
+    ASSERT_TRUE(tbs_crl == NULL);
+
+cleanup:
+
+    ASN_FREE(&TBSCertList_desc, tbs_crl);
+}
+
+static void test_crl_init_by_sign_2(CertificateList_t *crl)
+{
+    ASSERT_RET(RET_INVALID_PARAM, crl_init_by_sign(NULL, &crl->tbsCertList, &crl->signatureAlgorithm, &crl->signatureValue));
+    ASSERT_RET(RET_INVALID_PARAM, crl_init_by_sign(crl, NULL, &crl->signatureAlgorithm, &crl->signatureValue));
+    ASSERT_RET(RET_INVALID_PARAM, crl_init_by_sign(crl, &crl->tbsCertList, NULL, &crl->signatureValue));
+    ASSERT_RET(RET_INVALID_PARAM, crl_init_by_sign(crl, &crl->tbsCertList, &crl->signatureAlgorithm, NULL));
+
+cleanup:
+
+    return;
+}
+
+static void test_crl_init_by_adapter_2(CertificateList_t *crl)
+{
+    Certificate_t *cert_tmp = cert_alloc();
+    SignAdapter *sa = NULL;
+    ByteArray *private_key =
+            ba_alloc_from_le_hex_string("7B66B62C23673C1299B84AE4AACFBBCA1C50FC134A846EF2E24A37407D01D32A");
+    ByteArray *buffer = NULL;
+
+    ASSERT_RET_OK(ba_alloc_from_file("src/pkixUtest/resources/certificate257.cer", &buffer));
+    ASSERT_RET_OK(cert_decode(cert_tmp, buffer));
+    ASSERT_RET_OK(sign_adapter_init_by_cert(private_key, cert_tmp, &sa));
+
+    ASSERT_RET(RET_INVALID_PARAM, crl_init_by_adapter(NULL, &crl->tbsCertList, sa));
+    ASSERT_RET(RET_INVALID_PARAM, crl_init_by_adapter(crl, NULL, sa));
+    ASSERT_RET(RET_INVALID_PARAM, crl_init_by_adapter(crl, &crl->tbsCertList, NULL));
+
+cleanup:
+
+    sign_adapter_free(sa);
+    BA_FREE(private_key, buffer);
+    cert_free(cert_tmp);
+}
 void utest_crl(void)
 {
     CertificateList_t *crl = NULL;
@@ -519,6 +565,10 @@ void utest_crl(void)
 #if defined(__LP64__) || defined(_WIN32)
         test_crl_get_this_update();
 #endif
+
+        test_crl_get_tbs_2();
+        test_crl_init_by_sign_2(crl);
+        test_crl_init_by_adapter_2(crl);
     }
 
     crl_free(crl);

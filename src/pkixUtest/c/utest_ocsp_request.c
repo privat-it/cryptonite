@@ -142,6 +142,35 @@ cleanup:
     ocspreq_free(ocspreq);
 }
 
+static void test_ocspreq_get_tbsreq_2(void)
+{
+    TBSRequest_t *tbsreq = NULL;
+
+    ASSERT_RET(RET_INVALID_PARAM, ocspreq_get_tbsreq(NULL, &tbsreq));
+    ASSERT_TRUE(tbsreq == NULL);
+
+cleanup:
+
+    ASN_FREE(&TBSRequest_desc, tbsreq);
+}
+
+static void test_ocspreq_set_sign_2(void)
+{
+    OCSPRequest_t *ocspreq = NULL;
+    ByteArray *ocspreq_ba = NULL;
+
+    ASSERT_RET_OK(ba_alloc_from_file("src/pkixUtest/resources/oscp_request_with_sign.dat", &ocspreq_ba));
+    ASSERT_NOT_NULL(ocspreq = asn_decode_ba_with_alloc(&OCSPRequest_desc, ocspreq_ba));
+
+    ASSERT_RET(RET_INVALID_PARAM, ocspreq_set_sign(NULL, ocspreq->optionalSignature));
+    ASSERT_RET(RET_INVALID_PARAM, ocspreq_set_sign(ocspreq, NULL));
+
+cleanup:
+
+    ba_free(ocspreq_ba);
+    ocspreq_free(ocspreq);
+}
+
 void utest_ocsp_request(void)
 {
     PR("%s\n", __FILE__);
@@ -155,6 +184,8 @@ void utest_ocsp_request(void)
         test_ocspreq_has_sign();
         test_ocspreq_set_sign();
         test_ocspreq_verify();
+        test_ocspreq_get_tbsreq_2();
+        test_ocspreq_set_sign_2();
     }
 
     ocspreq_free(ocspreq);

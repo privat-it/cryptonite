@@ -6,7 +6,7 @@
 #include "signed_data_engine.h"
 
 #include "pkix_utils.h"
-#include "pkix_errors.h"
+#include "pkix_macros_internal.h"
 #include "asn1_utils.h"
 #include "oids.h"
 #include "log_internal.h"

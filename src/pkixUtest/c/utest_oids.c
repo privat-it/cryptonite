@@ -91,6 +91,24 @@ static void test_oids_get_oid_numbers_by_id(void)
     ASSERT_TRUE(oid == NULL);
 }
 
+static void test_oids_get_oid_numbers_by_oid_2(void)
+{
+    OidNumbers *oids = NULL;
+    OBJECT_IDENTIFIER_t *oid = NULL;
+
+    oids = oids_get_oid_numbers_by_oid(oid);
+    ASSERT_TRUE(oids == NULL);
+}
+
+static void test_oids_get_oid_numbers_by_str_2(void)
+{
+    OidNumbers *oids = NULL;
+    char *oid_str = NULL;
+
+    oids = oids_get_oid_numbers_by_str(oid_str);
+    ASSERT_TRUE(oids == NULL);
+}
+
 void utest_oids(void)
 {
     PR("%s\n", __FILE__);
@@ -101,4 +119,6 @@ void utest_oids(void)
     test_oids_get_oid_numbers_by_str();
     test_oids_get_oid_by_id();
     test_oids_get_oid_numbers_by_id();
+    test_oids_get_oid_numbers_by_oid_2();
+    test_oids_get_oid_numbers_by_str_2();
 }

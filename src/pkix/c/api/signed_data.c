@@ -343,10 +343,6 @@ int sdata_set_certs(SignedData_t *sdata, const CertificateSet_t *certs)
 
 cleanup:
 
-    if (ret != RET_OK) {
-        ASN_FREE(&CertificateSet_desc, sdata->certificates);
-    }
-
     return ret;
 }
 
@@ -397,10 +393,6 @@ int sdata_set_crls(SignedData_t *sdata, const RevocationInfoChoices_t *crls)
     CHECK_NOT_NULL(sdata->crls = asn_copy_with_alloc(&RevocationInfoChoices_desc, crls));
 
 cleanup:
-
-    if (ret != RET_OK) {
-        ASN_FREE(&RevocationInfoChoices_desc, sdata->crls);
-    }
 
     return ret;
 }

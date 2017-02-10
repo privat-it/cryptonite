@@ -166,7 +166,7 @@ bool assert_equals_core(const void *expected, const void *actual, size_t size, c
         error_count++;
 
         COLOR_RESET;
-        PR("-------------------------------------------------------------------------------\n");
+        PR("\n-------------------------------------------------------------------------------\n");
 
         return false;
     }

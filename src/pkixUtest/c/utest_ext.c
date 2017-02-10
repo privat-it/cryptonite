@@ -362,6 +362,226 @@ cleanup:
     ext_free(ext);
 }
 
+static void test_ext_create_cert_policies(void)
+{
+    Extension_t *ext = NULL;
+    OidNumbers cert_policy1 = {NULL, 0};
+    OidNumbers *cert_policy = &cert_policy1;
+
+    ASSERT_RET(RET_INVALID_PARAM, ext_create_cert_policies(true, &cert_policy, 1, &ext));
+    ASSERT_TRUE(ext == NULL);
+
+cleanup:
+
+    ext_free(ext);
+}
+
+static void test_ext_create_subj_alt_name_directly(void)
+{
+    Extension_t *ext = NULL;
+    enum GeneralName_PR types[] = {GeneralName_PR_NOTHING, GeneralName_PR_otherName};
+    char dns[] = "ca.ua";
+    char email[] = "info@ca.ua";
+    const char *alt_names[2];
+    alt_names[0] = dns;
+    alt_names[1] = email;
+
+    ASSERT_RET(RET_INVALID_PARAM, ext_create_subj_alt_name_directly(false, NULL, alt_names, 2, &ext));
+    ASSERT_TRUE(ext == NULL);
+
+    ASSERT_RET(RET_INVALID_PARAM, ext_create_subj_alt_name_directly(false, types, NULL, 2, &ext));
+    ASSERT_TRUE(ext == NULL);
+
+    ASSERT_RET(RET_INVALID_PARAM, ext_create_subj_alt_name_directly(false, types, alt_names, 0, &ext));
+    ASSERT_TRUE(ext == NULL);
+
+    ASSERT_RET(RET_PKIX_UNSUPPORTED_PKIX_OBJ, ext_create_subj_alt_name_directly(false, types, alt_names, 2, &ext));
+    ASSERT_TRUE(ext == NULL);
+
+cleanup:
+
+    ext_free(ext);
+}
+
+static void test_ext_create_private_key_usage(void)
+{
+    Extension_t *ext = NULL;
+    time_t not_before;
+    time_t not_after;
+    struct tm *timeinfo = NULL;
+
+    /* UTC time 26.01.23 22:00:00. */
+    timeinfo = calloc(1, sizeof(struct tm));
+    timeinfo->tm_year = 123;
+    timeinfo->tm_mon  = 0;
+    timeinfo->tm_mday = 25;
+    timeinfo->tm_hour = 22;
+    timeinfo->tm_min  = 0;
+    timeinfo->tm_sec  = 0;
+    timeinfo->tm_isdst = -1;
+    not_after = mktime(timeinfo);
+    free(timeinfo);
+
+    /* UTC time 26.01.13 22:00:00. */
+    timeinfo = calloc(1, sizeof(struct tm));
+    timeinfo->tm_year = 113;
+    timeinfo->tm_mon  = 0;
+    timeinfo->tm_mday = 25;
+    timeinfo->tm_hour = 22;
+    timeinfo->tm_min  = 0;
+    timeinfo->tm_sec  = 0;
+    timeinfo->tm_isdst = -1;
+    not_before = mktime(timeinfo);
+    free(timeinfo);
+
+    ASSERT_RET(RET_INVALID_PARAM, ext_create_private_key_usage(false, NULL, NULL, NULL, &ext));
+    ASSERT_TRUE(ext == NULL);
+
+    ASSERT_RET(RET_INVALID_PARAM, ext_create_private_key_usage(false, NULL, NULL, &not_after, &ext));
+    ASSERT_TRUE(ext == NULL);
+
+    ASSERT_RET(RET_INVALID_PARAM, ext_create_private_key_usage(false, NULL, &not_before, NULL, &ext));
+    ASSERT_TRUE(ext == NULL);
+
+    ASSERT_RET_OK(ext_create_private_key_usage(false, NULL, &not_before, &not_after, &ext));
+    ASSERT_NOT_NULL(ext);
+
+cleanup:
+
+    ext_free(ext);
+}
+
+static void test_ext_create_subj_dir_attr_directly(void)
+{
+    Extension_t *ext = NULL;
+
+    ASSERT_RET(RET_INVALID_PARAM, ext_create_subj_dir_attr_directly(true, NULL, &ext));
+    ASSERT_TRUE(ext == NULL);
+
+cleanup:
+
+    ext_free(ext);
+}
+
+static void test_ext_create_any(void)
+{
+    Extension_t *ext = NULL;
+    long subj_info_oid[] = {1, 3, 6, 1, 5, 5, 7, 48, 3};
+    OidNumbers subj_info1 = {subj_info_oid, 9};
+    OidNumbers *subj_info = &subj_info1;
+
+    ASSERT_RET(RET_INVALID_PARAM, ext_create_any(true, subj_info, NULL, &ext));
+    ASSERT_TRUE(ext == NULL);
+
+cleanup:
+
+    ext_free(ext);
+}
+
+static void test_ext_create_nonce(void)
+{
+    Extension_t *ext = NULL;
+
+    ASSERT_RET(RET_INVALID_PARAM, ext_create_nonce(false, NULL, &ext));
+    ASSERT_TRUE(ext == NULL);
+
+cleanup:
+
+    ext_free(ext);
+}
+
+static void test_ext_create_subj_key_id(void)
+{
+    Extension_t *ext = NULL;
+
+    ASSERT_RET(RET_INVALID_PARAM, ext_create_subj_key_id(false, NULL, &ext));
+    ASSERT_TRUE(ext == NULL);
+
+cleanup:
+
+    ext_free(ext);
+}
+
+static void test_ext_create_auth_key_id_from_cert(void)
+{
+    Extension_t *ext = NULL;
+
+    ASSERT_RET(RET_INVALID_PARAM, ext_create_auth_key_id_from_cert(false, NULL, &ext));
+    ASSERT_TRUE(ext == NULL);
+
+cleanup:
+
+    ext_free(ext);
+}
+
+static void test_ext_create_auth_key_id_from_spki(void)
+{
+    Extension_t *ext = NULL;
+
+    ASSERT_RET(RET_INVALID_PARAM, ext_create_auth_key_id_from_spki(false, NULL, &ext));
+    ASSERT_TRUE(ext == NULL);
+
+cleanup:
+
+    ext_free(ext);
+}
+
+static void test_ext_create_crl_reason(void)
+{
+    Extension_t *ext = NULL;
+
+    ASSERT_RET(RET_INVALID_PARAM, ext_create_crl_reason(false, NULL, &ext));
+    ASSERT_TRUE(ext == NULL);
+
+cleanup:
+
+    ext_free(ext);
+}
+
+static void test_ext_create_private_key_usage_2(void)
+{
+    Extension_t *ext = NULL;
+    Validity_t *validity = NULL;
+    PKIXTime_t *pkix_time = NULL;
+    struct tm tm_time;
+    UTCTime_t *utcTime = NULL;
+    time_t not_after;
+    struct tm *timeinfo = NULL;
+
+    /* UTC time 26.01.23 22:00:00. */
+    timeinfo = calloc(1, sizeof(struct tm));
+    timeinfo->tm_year = 123;
+    timeinfo->tm_mon  = 0;
+    timeinfo->tm_mday = 25;
+    timeinfo->tm_hour = 22;
+    timeinfo->tm_min  = 0;
+    timeinfo->tm_sec  = 0;
+    timeinfo->tm_isdst = -1;
+    not_after = mktime(timeinfo);
+    free(timeinfo);
+
+    ASSERT_ASN_ALLOC(validity);
+
+    ASSERT_ASN_ALLOC(pkix_time);
+    memcpy(&tm_time, localtime(&not_after), sizeof(tm_time));
+    pkix_time->present = PKIXTime_PR_utcTime;
+    utcTime = asn_time2UT(NULL, &tm_time, true);
+
+    ASSERT_RET_OK(asn_copy(&UTCTime_desc, utcTime, &pkix_time->choice.utcTime));
+    ASSERT_RET_OK(asn_copy(&PKIXTime_desc, pkix_time, &validity->notAfter));
+    validity->notAfter.present = PKIXTime_PR_NOTHING;
+
+    ASSERT_RET(RET_PKIX_UNSUPPORTED_PKIX_TIME, ext_create_private_key_usage(false, validity, NULL, NULL, &ext));
+    ASSERT_TRUE(ext == NULL);
+
+cleanup:
+
+    ext_free(ext);
+    ASN_FREE(&Validity_desc, validity);
+    ASN_FREE(&PKIXTime_desc, pkix_time);
+    ASN_FREE(&UTCTime_desc, utcTime);
+}
+
 void utest_ext(void)
 {
     PR("%s\n", __FILE__);
@@ -373,4 +593,15 @@ void utest_ext(void)
     test_ext_create_freshest_crl();
     test_ext_create_crl_distr_points();
     test_ext_create_subj_info_access();
+    test_ext_create_cert_policies();
+    test_ext_create_subj_alt_name_directly();
+    test_ext_create_private_key_usage();
+    test_ext_create_subj_dir_attr_directly();
+    test_ext_create_any();
+    test_ext_create_nonce();
+    test_ext_create_subj_key_id();
+    test_ext_create_auth_key_id_from_cert();
+    test_ext_create_auth_key_id_from_spki();
+    test_ext_create_crl_reason();
+    test_ext_create_private_key_usage_2();
 }

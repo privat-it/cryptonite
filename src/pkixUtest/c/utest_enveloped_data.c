@@ -76,14 +76,11 @@ static void test_env_data_init(void)
     EnvelopedData_t *env_data = env_data_alloc();
     INTEGER_t *version = NULL;
     OriginatorInfo_t *originator_info = NULL;
-    CertificateSet_t *certs_set = NULL;
-    ByteArray *decoded = NULL;
     RecipientInfos_t *recipients = NULL;
     EncryptedContentInfo_t *encr_content_info = NULL;
     Attributes_t *attrs = NULL;
 
     ASSERT_RET_OK(asn_create_integer_from_long(2, &version));
-    ASSERT_ASN_ALLOC(certs_set);
     ASSERT_ASN_ALLOC(recipients);
     ASSERT_ASN_ALLOC(encr_content_info);
     ASSERT_ASN_ALLOC(attrs);
@@ -99,14 +96,53 @@ static void test_env_data_init(void)
 
 cleanup:
 
-    ba_free(decoded);
     env_data_free(env_data);
     ASN_FREE(&INTEGER_desc, version);
-    ASN_FREE(&CertificateSet_desc, certs_set);
     ASN_FREE(&RecipientInfos_desc, recipients);
     ASN_FREE(&EncryptedContentInfo_desc, encr_content_info);
     ASN_FREE(&OriginatorInfo_desc, originator_info);
     ASN_FREE(&Attributes_desc, attrs);
+}
+
+static void test_env_data_init_2(void)
+{
+    EnvelopedData_t *env_data = env_data_alloc();
+    INTEGER_t *version = NULL;
+    OriginatorInfo_t *originator_info = NULL;
+    RecipientInfos_t *recipients = NULL;
+    EncryptedContentInfo_t *encr_content_info = NULL;
+    Attributes_t *attrs = NULL;
+
+    ASSERT_RET_OK(asn_create_integer_from_long(2, &version));
+    ASSERT_ASN_ALLOC(recipients);
+    ASSERT_ASN_ALLOC(encr_content_info);
+    ASSERT_ASN_ALLOC(attrs);
+    ASSERT_ASN_ALLOC(originator_info);
+
+    ASSERT_RET(RET_INVALID_PARAM, env_data_init(NULL, version, originator_info, recipients, encr_content_info, attrs));
+    ASSERT_RET(RET_INVALID_PARAM, env_data_init(env_data, version, originator_info, NULL, encr_content_info, attrs));
+    ASSERT_RET(RET_INVALID_PARAM, env_data_init(env_data, version, originator_info, recipients, NULL, attrs));
+
+cleanup:
+
+    env_data_free(env_data);
+    ASN_FREE(&INTEGER_desc, version);
+    ASN_FREE(&RecipientInfos_desc, recipients);
+    ASN_FREE(&EncryptedContentInfo_desc, encr_content_info);
+    ASN_FREE(&OriginatorInfo_desc, originator_info);
+    ASN_FREE(&Attributes_desc, attrs);
+}
+
+static void test_env_get_content_encryption_aid(void)
+{
+    AlgorithmIdentifier_t *encr_aid = NULL;
+
+    ASSERT_RET(RET_INVALID_PARAM, env_get_content_encryption_aid(NULL, &encr_aid));
+    ASSERT_TRUE(encr_aid == NULL);
+
+cleanup:
+
+    ASN_FREE(&AlgorithmIdentifier_desc, encr_aid);
 }
 
 void utest_enveloped_data(void)
@@ -122,7 +158,9 @@ void utest_enveloped_data(void)
         test_has_issuer_cert(envdata);
         test_env_data_get_originator_cert();
         test_env_data_init();
-        //TODO: Добавить данные с OriginatorInfo
+        test_env_data_init_2();
+        test_env_get_content_encryption_aid();
+        //TODO: Р”РѕР±Р°РІРёС‚СЊ РґР°РЅРЅС‹Рµ СЃ OriginatorInfo
     }
 
     env_data_free(envdata);

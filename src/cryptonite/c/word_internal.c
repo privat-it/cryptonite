@@ -4,11 +4,8 @@
  */
 
 #include <memory.h>
-#include <time.h>
 
 #include "word_internal.h"
-#include "math_gfp_internal.h"
-#include "math_int_internal.h"
 #include "byte_utils_internal.h"
 #include "macros_internal.h"
 

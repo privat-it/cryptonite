@@ -139,10 +139,6 @@ int ocspresp_set_response_bytes(OCSPResponse_t *ocspresp, const ResponseBytes_t 
 
 cleanup:
 
-    if (ret != RET_OK) {
-        ASN_FREE(&ResponseBytes_desc, ocspresp->responseBytes);
-    }
-
     return ret;
 }
 

@@ -269,6 +269,48 @@ cleanup:
     sinfo_free(sinfo_tmp);
 }
 
+static void test_sinfo_get_signed_attrs_2(void)
+{
+    Attributes_t *attrs = NULL;
+
+    ASSERT_RET(RET_INVALID_PARAM, sinfo_get_signed_attrs(NULL, &attrs));
+    ASSERT_TRUE(attrs == NULL);
+
+cleanup:
+
+    ASN_FREE(&Attributes_desc, attrs);
+}
+
+static void test_sinfo_add_unsigned_attr_2(void)
+{
+    ByteArray *unsigned_attr =
+            ba_alloc_from_le_hex_string("3045060B2A864886F70D01091002153136303430323030300C060A2A86240201010101020104203A9723649ADEECE0670A57BE0062C1CFC3C7046232318021866353B4B2837DAB");
+    Attribute_t *unsigned_attribute = NULL;
+
+    ASSERT_NOT_NULL(unsigned_attribute = asn_decode_ba_with_alloc(&Attribute_desc, unsigned_attr));
+    ASSERT_RET(RET_INVALID_PARAM, sinfo_add_unsigned_attr(NULL, unsigned_attribute));
+    ASSERT_RET(RET_INVALID_PARAM, sinfo_add_unsigned_attr(sinfo, NULL));
+
+cleanup:
+
+    ba_free(unsigned_attr);
+    ASN_FREE(&Attribute_desc, unsigned_attribute);
+}
+
+static void test_sinfo_init(void)
+{
+    ASSERT_RET(RET_INVALID_PARAM, sinfo_init(NULL, 0, &sinfo->sid, &sinfo->digestAlgorithm, sinfo->signedAttrs, &sinfo->signatureAlgorithm, &sinfo->signature, NULL));
+    ASSERT_RET(RET_INVALID_PARAM, sinfo_init(sinfo, 0, NULL, &sinfo->digestAlgorithm, sinfo->signedAttrs, &sinfo->signatureAlgorithm, &sinfo->signature, NULL));
+    ASSERT_RET(RET_INVALID_PARAM, sinfo_init(sinfo, 0, &sinfo->sid, NULL, sinfo->signedAttrs, &sinfo->signatureAlgorithm, &sinfo->signature, NULL));
+    ASSERT_RET(RET_INVALID_PARAM, sinfo_init(sinfo, 0, &sinfo->sid, &sinfo->digestAlgorithm, NULL, &sinfo->signatureAlgorithm, &sinfo->signature, NULL));
+    ASSERT_RET(RET_INVALID_PARAM, sinfo_init(sinfo, 0, &sinfo->sid, &sinfo->digestAlgorithm, sinfo->signedAttrs, NULL, &sinfo->signature, NULL));
+    ASSERT_RET(RET_INVALID_PARAM, sinfo_init(sinfo, 0, &sinfo->sid, &sinfo->digestAlgorithm, sinfo->signedAttrs, &sinfo->signatureAlgorithm, NULL, NULL));
+
+cleanup:
+
+    return;
+}
+
 void utest_sinfo(void)
 {
     PR("%s\n", __FILE__);
@@ -289,6 +331,9 @@ void utest_sinfo(void)
         test_sinfo_get_attrs();
         test_sinfo_verify();
         test_sinfo_verify_signing_cert_v2();
+        test_sinfo_get_signed_attrs_2();
+        test_sinfo_add_unsigned_attr_2();
+        test_sinfo_init();
     }
     sinfo_free(sinfo);
 }

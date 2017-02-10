@@ -54,8 +54,8 @@ CRYPTONITE_EXPORT void ecert_free(CertificateEngine *ctx);
  * @return код помилки
  */
 CRYPTONITE_EXPORT int ecert_generate(const CertificateEngine *ctx, const CertificationRequest_t *req, int ver,
-                                     const ByteArray *cert_sn, const time_t *not_before, const time_t *not_after, const Extensions_t *exts,
-                                     Certificate_t **cert);
+        const ByteArray *cert_sn, const time_t *not_before, const time_t *not_after, const Extensions_t *exts,
+        Certificate_t **cert);
 
 #ifdef __cplusplus
 }

@@ -11,6 +11,7 @@
 #include "pkix_utils.h"
 #include "cert.h"
 #include "storage_errors.h"
+#include "pkix_macros_internal.h"
 #include "dirent_internal.h"
 #include "pthread_internal.h"
 #include "log_internal.h"

@@ -3,13 +3,11 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
-#include "Attribute.h"
-#include "Attributes.h"
 #include "certificate_request_engine.h"
 
 #include "exts.h"
 #include "log_internal.h"
-#include "pkix_errors.h"
+#include "pkix_macros_internal.h"
 #include "pkix_utils.h"
 #include "spki.h"
 #include "certification_request.h"

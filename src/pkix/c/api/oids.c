@@ -3,9 +3,9 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
-#include <stddef.h>
 #include "oids.h"
-#include "cryptonite_errors.h"
+
+#include "pkix_macros_internal.h"
 #include "asn1_utils.h"
 
 /* PKI. */

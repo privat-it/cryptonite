@@ -3,6 +3,8 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+#include <math.h>
+
 #include "utest_asn1.h"
 
 typedef struct tm tm_t;
@@ -189,7 +191,6 @@ void test_generalizedtime_der_encode(void)
     ASSERT_NOT_NULL(generalizedtime);
     ASSERT_NOT_NULL(expected = ba_alloc_from_uint8(exp, sizeof(exp)));
     ASSERT_RET_OK(asn_encode_ba(&GeneralizedTime_desc, generalizedtime, (void *)&actual));
-    ASSERT_NOT_NULL(actual);
 
     ASSERT_EQUALS_BA(expected, actual);
 cleanup:
@@ -309,6 +310,66 @@ cleanup:
     ASN_FREE(&GeneralizedTime_desc, actual);
 }
 
+void test_generalizedtime_frac(void)
+{
+    uint8_t encoded[] = {
+        0x18, 0x12, 0x32, 0x30, 0x31, 0x36, 0x31, 0x31,
+        0x30, 0x36, 0x32, 0x31, 0x30, 0x36, 0x32, 0x37,
+        0x2e, 0x33, 0x33, 0x33
+    };
+    int frac_value;
+    int frac_digits;
+    GeneralizedTime_t *actual = NULL;
+    time_t time_sec;
+    uint64_t time_msec_exp = 1478459187333;
+    uint64_t time_msec;
+
+    actual = asn_decode_with_alloc(&GeneralizedTime_desc, encoded, sizeof(encoded));
+    ASSERT_NOT_NULL(actual);
+    time_sec = asn_GT2time_frac(actual, &frac_value, &frac_digits, NULL, false);
+
+    time_msec = (uint64_t)time_sec * (uint64_t)1000 + (uint64_t)(frac_value * pow(10, 3 - frac_digits));
+
+    ASSERT_EQUALS(&time_msec_exp, &time_msec, sizeof(uint64_t));
+
+cleanup:
+
+    ASN_FREE(&GeneralizedTime_desc, actual);
+}
+
+void test_generalizedtime_frac2(void)
+{
+    uint8_t encoded[] = {0x18, 0x0F, 0x32, 0x30, 0x31, 0x37, 0x30, 0x32, 0x30, 0x37, 0x30, 0x39, 0x32, 0x31, 0x35, 0x31, 0x5A};
+    int frac_value;
+    int frac_digits;
+    GeneralizedTime_t *actual = NULL;
+    GeneralizedTime_t *gt_encoded = NULL;
+    time_t time_sec;
+    time_t time_sec_exp = 1486459311;
+    uint8_t *encode_actual = NULL;
+    size_t encode_actual_len;
+
+    actual = asn_decode_with_alloc(&GeneralizedTime_desc, encoded, sizeof(encoded));
+    ASSERT_NOT_NULL(actual);
+    time_sec = asn_GT2time_frac(actual, &frac_value, &frac_digits, NULL, false);
+    ASSERT_EQUALS(&time_sec_exp, &time_sec, sizeof(time_t));
+
+    const struct tm *st_tm = localtime(&time_sec);
+
+    gt_encoded = asn_time2GT_frac(0, st_tm, frac_value, frac_digits, true);
+    asn_encode(&GeneralizedTime_desc, gt_encoded, &encode_actual, &encode_actual_len);
+
+    ASSERT_EQUALS_SIZE_T(sizeof(encoded), encode_actual_len);
+    ASSERT_EQUALS(encoded, encode_actual, sizeof(encoded));
+
+cleanup:
+
+    ASN_FREE(&GeneralizedTime_desc, actual);
+    ASN_FREE(&GeneralizedTime_desc, gt_encoded);
+    free(encode_actual);
+
+}
+
 void utest_generalizedtime(void)
 {
     PR("%s\n", __FILE__);
@@ -322,4 +383,6 @@ void utest_generalizedtime(void)
     test_generalizedtime_der_encode();
     test_generalizedtime_uper_decode();
     test_generalizedtime_xer_decode();
+    test_generalizedtime_frac();
+    test_generalizedtime_frac2();
 }

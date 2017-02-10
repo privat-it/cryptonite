@@ -7,6 +7,7 @@
 
 #include "asn1_utils.h"
 #include "test_utils.h"
+#include "pkix_macros_internal.h"
 
 bool asn_equals_core(asn_TYPE_descriptor_t *type, const void *expected, const void *actual, const char *file,
         const size_t line)

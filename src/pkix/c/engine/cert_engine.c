@@ -7,7 +7,7 @@
 
 #include "log_internal.h"
 #include "asn1_utils.h"
-#include "pkix_errors.h"
+#include "pkix_macros_internal.h"
 #include "cert.h"
 
 #undef FILE_MARKER

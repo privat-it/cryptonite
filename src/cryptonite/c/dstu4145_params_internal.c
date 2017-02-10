@@ -1664,7 +1664,7 @@ cleanup:
     return ret;
 }
 
-int dstu4145_decompress_pubkey_core(const Dstu4145ParamsCtx *params, const ByteArray *q, ByteArray **qx, ByteArray **qy)
+int dstu4145_decompress_pubkey_core(const Dstu4145ParamsCtx *params, const ByteArray *q, ByteArray **qx_out, ByteArray **qy_out)
 {
     int k;
     WordArray *x = NULL;
@@ -1672,11 +1672,13 @@ int dstu4145_decompress_pubkey_core(const Dstu4145ParamsCtx *params, const ByteA
     const Gf2mCtx *gf2m;
     size_t q_len;
     int ret = RET_OK;
+    ByteArray *qx = NULL;
+    ByteArray *qy = NULL;
 
     CHECK_PARAM(params != NULL);
     CHECK_PARAM(q != NULL);
-    CHECK_PARAM(qx != NULL);
-    CHECK_PARAM(qy != NULL);
+    CHECK_PARAM(qx_out != NULL);
+    CHECK_PARAM(qy_out != NULL);
 
     CHECK_NOT_NULL(x = wa_alloc_from_ba(q));
     CHECK_NOT_NULL(y = wa_alloc(params->ec2m->len));
@@ -1693,15 +1695,11 @@ int dstu4145_decompress_pubkey_core(const Dstu4145ParamsCtx *params, const ByteA
     /* Если Qc = 0, то Qx = 0, Qy = sqrt(b). */
     if (int_is_zero(x)) {
 
-        CHECK_NOT_NULL(*qx = wa_to_ba(x));
+        CHECK_NOT_NULL(qx = wa_to_ba(x));
 
         gf2m_mod_sqrt(params->ec2m->gf2m, params->ec2m->b, y);
-        if (params->is_onb) {
-            pb_to_onb(params, y);
-        }
-        CHECK_NOT_NULL(*qy = wa_to_ba(y));
 
-        return ret;
+        goto ok;
     }
 
     /* Запоминаем младший бит сжатого представления открытого ключа. */
@@ -1723,7 +1721,7 @@ int dstu4145_decompress_pubkey_core(const Dstu4145ParamsCtx *params, const ByteA
             x->buf[0] ^= 1;
         }
 
-        CHECK_NOT_NULL(*qx = wa_to_ba(x));
+        CHECK_NOT_NULL(qx = wa_to_ba(x));
 
         DO(onb_to_pb(params, x));
     } else {
@@ -1732,7 +1730,7 @@ int dstu4145_decompress_pubkey_core(const Dstu4145ParamsCtx *params, const ByteA
             x->buf[0] ^= 1;
         }
 
-        CHECK_NOT_NULL(*qx = wa_to_ba(x));
+        CHECK_NOT_NULL(qx = wa_to_ba(x));
     }
 
     /* Нахождение свободного члена в уравнении
@@ -1758,18 +1756,27 @@ int dstu4145_decompress_pubkey_core(const Dstu4145ParamsCtx *params, const ByteA
         gf2m_mod_mul(gf2m, x, y, y);
     }
 
+ok:
+
     if (params->is_onb) {
         pb_to_onb(params, y);
     }
 
-    CHECK_NOT_NULL(*qy = wa_to_ba(y));
-    DO(ba_change_len(*qx, q_len));
-    DO(ba_change_len(*qy, q_len));
+    CHECK_NOT_NULL(qy = wa_to_ba(y));
+    DO(ba_change_len(qx, q_len));
+    DO(ba_change_len(qy, q_len));
+
+    *qx_out = qx;
+    qx = NULL;
+    *qy_out = qy;
+    qy = NULL;
+
+cleanup:
 
     wa_free(x);
     wa_free(y);
-
-cleanup:
+    ba_free(qx);
+    ba_free(qy);
 
     return ret;
 }

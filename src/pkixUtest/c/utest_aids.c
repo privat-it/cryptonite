@@ -958,11 +958,10 @@ static void test_aid_create_gost28147_cfb(void)
     ByteArray *act_dke_ba = NULL;
     ByteArray *exp_dke_ba =
             ba_alloc_from_le_hex_string("0440A9D6EB45F13C708280C4967B231F5EADF658EBA4C037291D38D96BF025CA4E17F8E9720DC615B43A28975F0BC1DEA36438B564EA2C179FD0123E6DB8FAC57904");
-    int ret;
 
     ASSERT_RET_OK(aid_create_gost28147_cfb(&aid));
     ASSERT_TRUE(pkix_check_oid_parent(&aid->algorithm, oids_get_oid_numbers_by_id(OID_GOST28147_CFB_ID)));
-    CHECK_NOT_NULL(params = asn_any2type(aid->parameters, &GOST28147Params_desc));
+    ASSERT_NOT_NULL(params = asn_any2type(aid->parameters, &GOST28147Params_desc));
     ASSERT_NOT_NULL(dke = asn_copy_with_alloc(&OCTET_STRING_desc, &params->dke));
 
     ASSERT_RET_OK(asn_encode_ba(&OCTET_STRING_desc, dke, &act_dke_ba));
@@ -972,8 +971,8 @@ cleanup:
 
     aid_free(aid);
     ASN_FREE(&GOST28147Params_desc, params);
-    BA_FREE(act_dke_ba, exp_dke_ba);
     ASN_FREE(&OCTET_STRING_desc, dke);
+    BA_FREE(act_dke_ba, exp_dke_ba);
 }
 
 static void test_aid_create_hmac_gost3411(void)
@@ -1216,6 +1215,36 @@ cleanup:
     ASN_FREE(&DSTU4145Params_desc, dstu_params);
 }
 
+static void test_aid_init_by_oid(void)
+{
+    AlgorithmIdentifier_t *aid = aid_alloc();
+    OidNumbers *oid = NULL;
+
+    ASSERT_NOT_NULL(oid = oids_get_oid_numbers_by_str("1.1.1"));
+    ASSERT_RET(RET_INVALID_PARAM, aid_init_by_oid(NULL, oid));
+    ASSERT_RET(RET_INVALID_PARAM, aid_init_by_oid(aid, NULL));
+
+cleanup:
+
+    oids_oid_numbers_free(oid);
+    aid_free(aid);
+}
+
+static void test_aid_init(void)
+{
+    AlgorithmIdentifier_t *aid = aid_alloc();
+    OBJECT_IDENTIFIER_t *oid = NULL;
+
+    ASSERT_RET_OK(asn_create_oid_from_text("1.1.1", &oid));
+    ASSERT_RET(RET_INVALID_PARAM, aid_init(NULL, oid, NULL, NULL));
+    ASSERT_RET(RET_INVALID_PARAM, aid_init(aid, NULL, NULL, NULL));
+
+cleanup:
+
+    ASN_FREE(&OBJECT_IDENTIFIER_desc, oid);
+    aid_free(aid);
+}
+
 #define UTEST_ECDSA_GET_PARAMS(from, to, func)                         \
 {                                                                      \
     size_t i = 0;                                                      \
@@ -1277,6 +1306,9 @@ void utest_aids(void)
     test_aid_get_dstu4145_params_2();
     test_aid_get_dstu4145_params_3();
     test_aid_get_dstu4145_params_4();
+
+    test_aid_init_by_oid();
+    test_aid_init();
 
 #if defined(UTEST_FULL)
     test_aid_create_dstu4145_M173_ONB();

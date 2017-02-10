@@ -4,8 +4,9 @@
  */
 
 #include "signer_info_engine.h"
+
 #include "oids.h"
-#include "pkix_errors.h"
+#include "pkix_macros_internal.h"
 #include "pkix_utils.h"
 #include "asn1_utils.h"
 #include "log_internal.h"

@@ -13,6 +13,7 @@
 #include "ext.h"
 #include "exts.h"
 #include "pkix_errors.h"
+#include "cryptonite_manager.h"
 
 static Certificate_t *load_test_data(void)
 {
@@ -105,7 +106,7 @@ static void utest_get_tbs_info(Certificate_t *cert)
 
     ASSERT_RET_OK(ba_alloc_from_file("src/pkixUtest/resources/acsk_cert.cer", &tbs_info));
     ASSERT_NOT_NULL(tbs_info);
-    //Обрезаем байты, указывающие длинну
+    //Обрезаем байты, указывающие длину
     ASSERT_NOT_NULL(tbs_info_expected = ba_copy_with_alloc(tbs_info, 4, 0));
 
     //Обрезаем байты, которые не относятся к сертификату
@@ -776,6 +777,81 @@ cleanup:
     BA_FREE(buffer, pub_key);
 }
 
+static void utest_get_sn_2(void)
+{
+    ByteArray *sn = NULL;
+
+    ASSERT_RET(RET_INVALID_PARAM, cert_get_sn(NULL, &sn));
+    ASSERT_TRUE(sn == NULL);
+
+cleanup:
+
+    ba_free(sn);
+}
+
+static void utest_cert_get_non_critical_ext_oids_3(void)
+{
+    OBJECT_IDENTIFIER_t **oids = NULL;
+    size_t cnt = 0;
+
+    ASSERT_RET(RET_INVALID_PARAM, cert_get_non_critical_ext_oids(NULL, &oids, &cnt));
+    ASSERT_TRUE(oids == NULL);
+    ASSERT_TRUE(cnt == 0);
+
+cleanup:
+
+    return;
+}
+
+static void utest_cert_get_critical_ext_oids_3(void)
+{
+    OBJECT_IDENTIFIER_t **oids = NULL;
+    size_t cnt = 0;
+
+    ASSERT_RET(RET_INVALID_PARAM, cert_get_critical_ext_oids(NULL, &oids, &cnt));
+    ASSERT_TRUE(oids == NULL);
+    ASSERT_TRUE(cnt == 0);
+
+cleanup:
+
+    return;
+}
+
+static void utest_cert_init_by_sign_2(Certificate_t *cert)
+{
+    ASSERT_RET(RET_INVALID_PARAM, cert_init_by_sign(NULL, &cert->tbsCertificate, &cert->signatureAlgorithm, &cert->signature));
+    ASSERT_RET(RET_INVALID_PARAM, cert_init_by_sign(cert, NULL, &cert->signatureAlgorithm, &cert->signature));
+    ASSERT_RET(RET_INVALID_PARAM, cert_init_by_sign(cert, &cert->tbsCertificate, NULL, &cert->signature));
+    ASSERT_RET(RET_INVALID_PARAM, cert_init_by_sign(cert, &cert->tbsCertificate, &cert->signatureAlgorithm, NULL));
+
+cleanup:
+
+    return;
+}
+
+static void utest_cert_init_by_adapter(Certificate_t *cert)
+{
+    Certificate_t *cert_tmp = cert_alloc();
+    SignAdapter *sa = NULL;
+    ByteArray *private_key =
+            ba_alloc_from_le_hex_string("7B66B62C23673C1299B84AE4AACFBBCA1C50FC134A846EF2E24A37407D01D32A");
+    ByteArray *buffer = NULL;
+
+    ASSERT_RET_OK(ba_alloc_from_file("src/pkixUtest/resources/certificate257.cer", &buffer));
+    ASSERT_RET_OK(cert_decode(cert_tmp, buffer));
+    ASSERT_RET_OK(sign_adapter_init_by_cert(private_key, cert_tmp, &sa));
+
+    ASSERT_RET(RET_INVALID_PARAM, cert_init_by_adapter(NULL, &cert->tbsCertificate, sa));
+    ASSERT_RET(RET_INVALID_PARAM, cert_init_by_adapter(cert, NULL, sa));
+    ASSERT_RET(RET_INVALID_PARAM, cert_init_by_adapter(cert, &cert->tbsCertificate, NULL));
+
+cleanup:
+
+    sign_adapter_free(sa);
+    BA_FREE(private_key, buffer);
+    cert_free(cert_tmp);
+}
+
 void utest_cert(void)
 {
     Certificate_t *cert = NULL;
@@ -810,6 +886,8 @@ void utest_cert(void)
         utest_get_ext_value_3(cert);
         utest_cert_check_sid(cert);
         utest_cert_check_pubkey_and_usage_2(cert);
+        utest_cert_init_by_sign_2(cert);
+        utest_cert_init_by_adapter(cert);
     }
 
     utest_get_version_2();
@@ -834,6 +912,9 @@ void utest_cert(void)
     utest_cert_get_not_before_3();
     utest_cert_get_not_after_2();
     utest_cert_check_validity_with_date_4();
+    utest_get_sn_2();
+    utest_cert_get_non_critical_ext_oids_3();
+    utest_cert_get_critical_ext_oids_3();
 
     cert_free(cert);
 }

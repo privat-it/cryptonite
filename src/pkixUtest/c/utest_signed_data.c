@@ -495,6 +495,91 @@ cleanup:
     sdata_free(sdata);
 }
 
+static void test_get_digest_aids_2(void)
+{
+    DigestAlgorithmIdentifiers_t *aids = NULL;
+
+    ASSERT_RET(RET_INVALID_PARAM, sdata_get_digest_aids(NULL, &aids));
+    ASSERT_TRUE(aids == NULL);
+
+cleanup:
+
+    ASN_FREE(&DigestAlgorithmIdentifiers_desc, aids);
+}
+
+static void test_get_content_2(void)
+{
+    EncapsulatedContentInfo_t *content = NULL;
+
+    ASSERT_RET(RET_INVALID_PARAM, sdata_get_content(NULL, &content));
+    ASSERT_TRUE(content == NULL);
+
+cleanup:
+
+    ASN_FREE(&EncapsulatedContentInfo_desc, content);
+}
+
+static void test_get_certs_2(void)
+{
+    CertificateSet_t *certs = NULL;
+
+    ASSERT_RET(RET_INVALID_PARAM, sdata_get_certs(NULL, &certs));
+    ASSERT_TRUE(certs == NULL);
+
+cleanup:
+
+    ASN_FREE(&CertificateSet_desc, certs);
+}
+
+static void test_set_certs_3(SignedData_t *sdata)
+{
+    ASSERT_RET(RET_INVALID_PARAM, sdata_set_certs(NULL, sdata->certificates));
+
+cleanup:
+
+    return;
+}
+
+static void test_set_crls_2(void)
+{
+    SignedData_t *test_sdata = sdata_alloc();
+    ByteArray *buffer = NULL;
+    CertificateList_t *crl = crl_alloc();
+    RevocationInfoChoice_t *revoc_info_choice = NULL;
+    RevocationInfoChoices_t *revoc_info_choices = NULL;
+
+    ASSERT_RET_OK(ba_alloc_from_file("src/pkixUtest/resources/crl.dat", &buffer));
+    ASSERT_RET_OK(crl_decode(crl, buffer));
+
+    ASSERT_ASN_ALLOC(revoc_info_choice);
+    revoc_info_choice->present = RevocationInfoChoice_PR_crl;
+    ASSERT_RET_OK(asn_copy(&CertificateList_desc, crl, &revoc_info_choice->choice.crl));
+    ASSERT_ASN_ALLOC(revoc_info_choices);
+    ASN_SET_ADD(revoc_info_choices, revoc_info_choice);
+
+    ASSERT_RET(RET_INVALID_PARAM, sdata_set_crls(NULL, revoc_info_choices));
+    ASSERT_RET(RET_INVALID_PARAM, sdata_set_crls(test_sdata, NULL));
+
+cleanup:
+
+    ba_free(buffer);
+    sdata_free(test_sdata);
+    ASN_FREE(&RevocationInfoChoices_desc, revoc_info_choices);
+    crl_free(crl);
+}
+
+static void test_sdata_init(SignedData_t *sdata)
+{
+    ASSERT_RET(RET_INVALID_PARAM, sdata_init(NULL, 0, &sdata->digestAlgorithms, &sdata->encapContentInfo, &sdata->signerInfos));
+    ASSERT_RET(RET_INVALID_PARAM, sdata_init(sdata, 0, NULL, &sdata->encapContentInfo, &sdata->signerInfos));
+    ASSERT_RET(RET_INVALID_PARAM, sdata_init(sdata, 0, &sdata->digestAlgorithms, NULL, &sdata->signerInfos));
+    ASSERT_RET(RET_INVALID_PARAM, sdata_init(sdata, 0, &sdata->digestAlgorithms, &sdata->encapContentInfo, NULL));
+
+cleanup:
+
+    return;
+}
+
 void utest_signed_data(void)
 {
     PR("%s\n", __FILE__);
@@ -535,6 +620,12 @@ void utest_signed_data(void)
     test_sdata_verify_signing_cert_by_adapter();
     test_sdata_get_content_time_stamp_2();
     test_sdata_get_data();
+    test_get_digest_aids_2();
+    test_get_content_2();
+    test_get_certs_2();
+    test_set_certs_3(sdata);
+    test_set_crls_2();
+    test_sdata_init(sdata);
 
 cleanup:
 
