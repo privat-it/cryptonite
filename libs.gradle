@@ -1,0 +1,53 @@
+model {
+    repositories {
+        libs(PrebuiltLibraries) {
+            libressl {
+                headers.srcDir "libs/libressl/include"
+                binaries.withType(StaticLibraryBinary) {
+                    staticLibraryFile = file("libs/libressl/" + getStaticLibForPlatform(targetPlatform, "crypto"))
+                }
+            }
+
+            gcrypt {
+                headers.srcDir "libs/gcrypt/include"
+                binaries.withType(StaticLibraryBinary) {
+                    staticLibraryFile = file("libs/gcrypt/" + getStaticLibForPlatform(targetPlatform, "gcrypt"))
+                }
+            }
+
+            gpgError {
+                binaries.withType(StaticLibraryBinary) {
+                    staticLibraryFile = file("libs/gcrypt/" + getStaticLibForPlatform(targetPlatform, "gpg-error"))
+                }
+            }
+
+            cppcrypto {
+                headers.srcDir "libs/cppcrypto/include"
+                binaries.withType(StaticLibraryBinary) {
+                    staticLibraryFile = file("libs/cppcrypto/" + getStaticLibForPlatform(targetPlatform, "cppcrypto"))
+                }
+            }
+            
+            bee2 {
+                headers.srcDir "libs/bee2/include"
+                binaries.withType(StaticLibraryBinary) {
+                    staticLibraryFile = file("libs/bee2/" + getStaticLibForPlatform(targetPlatform, "bee2"))
+                }
+            }
+        }
+    }
+}
+
+def getStaticLibForPlatform(Platform platform, String name) {
+    def platformName = "${platform.operatingSystem.name}_${platform.architecture.name}"
+
+    if (platform.operatingSystem.windows) {
+        if (name == "gcrypt" || name == "gpg-error") {
+            return "${platformName}/lib${name}.dll.a"
+        }
+
+        return "${platformName}/lib${name}.lib"
+    } else {
+        return "${platformName}/lib${name}.a"
+    }
+}

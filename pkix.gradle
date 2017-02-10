@@ -1,0 +1,314 @@
+model {
+    components {
+        cryptonite_pki(NativeLibrarySpec) {
+            if (project.hasProperty('targetPlatform')) {
+                targetPlatform project.getProperty('targetPlatform')
+            }
+
+            sources {
+                c {
+                    source {
+                        srcDir  "src/asn1/c"
+                        srcDir  "src/pkix/c/struct"
+                        srcDir  "src/pkix/c/api"
+                        srcDir  "src/pkix/c/crypto"
+                        srcDir  "src/pkix/c/engine"
+                        srcDir  "src/storage/c"
+                        srcDir  "src/storage/c/struct"
+                        srcDir  "src/storage/c/file"
+
+                        include "*.c"
+                    }
+
+                    exportedHeaders {
+                        srcDir  "src/asn1/c"
+                        srcDir  "src/pkix/c/struct"
+                        srcDir  "src/pkix/c/api"
+                        srcDir  "src/pkix/c/crypto"
+                        srcDir  "src/pkix/c/engine"
+                        srcDir  "src/storage/c"
+                        srcDir  "src/storage/c/struct"
+                        srcDir  "src/storage/c/file"
+
+                        include "*.h"
+                    }
+
+                    lib library: 'cryptonite', linkage: 'shared'
+                    lib library: 'pthread', linkage: 'static'
+                }
+            }
+
+            binaries{
+                all {
+                    if (toolChain in VisualCpp) {
+                        /* conversion from 'SSIZE_T' to 'int', possible loss of data */
+                        cCompiler.args "/wd4244"
+                        /* conversion from 'size_t' to 'int', possible loss of data */
+                        cCompiler.args "/wd4267"
+                    }
+
+                    if (toolChain in Clang) {
+                        cCompiler.args "-Wno-extended-offsetof"  
+                    }
+
+                    /* Issue all the warnings demanded by strict ISO C. */
+                    if (!noWarnings && ((toolChain in Gcc) || (toolChain in Clang))) {
+                        cCompiler.args "-Wextra"
+                    }
+                }
+            }
+        }
+
+        pkixTestUtils(NativeLibrarySpec) {
+            if (project.hasProperty('targetPlatform')) {
+                targetPlatform project.getProperty('targetPlatform')
+            }
+
+            sources {
+                c {
+                    source {
+                        srcDirs "src/pkixTestUtils/c"
+                        include "*.c"
+                    }
+
+                    exportedHeaders {
+                        srcDirs "src/pkixTestUtils/c"
+                        include "*.h"
+                    }
+
+                    lib library: 'cryptoniteTestUtils', linkage: 'static'
+                    lib library: 'cryptonite_pki', linkage: 'static'
+                    lib library: 'cryptonite', linkage: 'static'
+                    lib library: 'pthread', linkage: 'static'
+                }
+            }
+        }
+
+        pkixUtest(NativeExecutableSpec) {
+            if (project.hasProperty('targetPlatform')) {
+                targetPlatform project.getProperty('targetPlatform')
+            }
+
+            sources {
+                c {
+                    source {
+                        srcDir  "src/pkixUtest/c"
+                        include "*.c"
+                    }
+
+                    lib library: 'pkixTestUtils', linkage: 'static'
+                    lib library: 'cryptonite_pki', linkage: 'static'
+                    lib library: 'cryptoniteTestUtils', linkage: 'static'
+                    lib library: 'cryptonite', linkage: 'static'
+                    lib library: 'pthread', linkage: 'static'
+                }
+            }
+        }
+
+        pkiExample(NativeExecutableSpec) {
+            if (project.hasProperty('targetPlatform')) {
+                targetPlatform project.getProperty('targetPlatform')
+            }
+
+            sources {
+                c {
+                    source {
+                        srcDir  "src/pkiExample/c"
+                        include "*.c"
+                    }
+
+                    lib library: 'cryptonite_pki', linkage: 'shared'
+                    lib library: 'cryptonite', linkage: 'shared'
+                    lib library: 'pthread', linkage: 'static'
+                }
+            }
+
+            binaries {
+                all {
+                    cCompiler.define "EXECUTABLE_BUILD"
+                    if (targetPlatform.operatingSystem.linux) {
+                        linker.args "-Wl,-rpath", "."
+                    }
+                }
+            }
+
+        }
+
+        asn1Utest(NativeExecutableSpec) {
+            if (project.hasProperty('targetPlatform')) {
+                targetPlatform project.getProperty('targetPlatform')
+            }
+
+            sources {
+                c {
+                    source {
+                        srcDir  "src/asn1Utest/c"
+                        include "*.c"
+                    }
+
+                    exportedHeaders {
+                        srcDirs "src/asn1Utest/c"
+                        include "*.h"
+                    }
+
+                    lib library: 'cryptoniteTestUtils', linkage: 'static'
+                    lib library: 'cryptonite_pki', linkage: 'static'
+                    lib library: 'cryptonite', linkage: 'static'
+                    lib library: 'pkixTestUtils', linkage: 'static'
+                    lib library: 'pthread', linkage: 'static'
+                }
+            }
+        }
+
+        storageUtest(NativeExecutableSpec) {
+            if (project.hasProperty('targetPlatform')) {
+                targetPlatform project.getProperty('targetPlatform')
+            }
+
+            sources {
+                c {
+                    source {
+                        srcDir  "src/storageUtest/c"
+                        include "*.c"
+                    }
+
+                    lib library: 'pkixTestUtils', linkage: 'static'
+                    lib library: 'cryptonite_pki', linkage: 'static'
+                    lib library: 'cryptoniteTestUtils', linkage: 'static'
+                    lib library: 'cryptonite', linkage: 'static'
+                    lib library: 'pthread', linkage: 'static'
+                }
+            }
+        }
+    }
+
+    tasks {
+        pkix(Task) {
+            dependsOn $.binaries.findAll { it.component.baseName in "cryptonite_pki" && it.buildType == buildTypes.release }
+        }
+
+        pkixDebug(Task) {
+            dependsOn $.binaries.findAll { it.component.baseName in "cryptonite_pki" && it.buildType == buildTypes.debug }
+        }
+
+        pkixUtest(Task) {
+            def depends = $.binaries.findAll { it.component.baseName in name && it.buildType == buildTypes.release}
+
+            dependsOn depends
+
+            doLast {
+                runTest(depends.get(0))
+            }
+        }
+
+        pkixUtestDebug(Task) {
+            def depends = $.binaries.findAll { it.component.baseName in "pkixUtest" && it.buildType == buildTypes.debug }
+
+            dependsOn depends
+
+            doLast {
+                runTest(depends.get(0))
+            }
+        }
+
+        asn1Utest(Task) {
+            def depends = $.binaries.findAll { it.component.baseName in "asn1Utest" && it.buildType == buildTypes.release}
+
+            dependsOn depends
+
+            doLast {
+                runTest(depends.get(0))
+            }
+        }
+
+        asn1UtestDebug(Task) {
+            def depends = $.binaries.findAll { it.component.baseName in "asn1Utest" && it.buildType == buildTypes.debug}
+
+            dependsOn depends
+
+            doLast {
+                runTest(depends.get(0))
+            }
+        }
+
+        pkiExample(Task) {
+            def depends = $.binaries.findAll { it.component.baseName in name && it.buildType == buildTypes.release}
+
+            dependsOn depends
+
+            doLast {
+                runTest(depends.get(0))
+            }
+        }
+
+        pkiExampleDebug(Task) {
+            def depends = $.binaries.findAll { it.component.baseName in "pkiExample" && it.buildType == buildTypes.debug }
+
+            dependsOn depends
+
+            doLast {
+                runTest(depends.get(0))
+            }
+        }
+
+        storageUtest(Task) {
+            def depends = $.binaries.findAll { it.component.baseName in name && it.buildType == buildTypes.release}
+
+            dependsOn depends
+
+            doLast {
+                runTest(depends.get(0))
+            }
+        }
+
+        storageUtestDebug(Task) {
+            def depends = $.binaries.findAll { it.component.baseName in "storageUtest" && it.buildType == buildTypes.debug }
+
+            dependsOn depends
+
+            doLast {
+                runTest(depends.get(0))
+            }
+        }
+
+        pkixValgrind(Task) {
+            def pkix = $.binaries.findAll { it.component.baseName in "pkixUtest" && it.buildType == buildTypes.debug }
+            def asn1 = $.binaries.findAll { it.component.baseName in "asn1Utest" && it.buildType == buildTypes.debug }
+            def storage = $.binaries.findAll { it.component.baseName in "storageUtest" && it.buildType == buildTypes.debug }
+
+            if (!asn1.get(0).targetPlatform.operatingSystem.windows) {
+                dependsOn asn1
+
+                doLast {
+                    runTValgrind(asn1.get(0))
+                }
+            }
+
+            if (!pkix.get(0).targetPlatform.operatingSystem.windows) {
+                dependsOn pkix
+
+                doLast {
+                    runTValgrind(pkix.get(0))
+                }
+            }
+
+            if (!storage.get(0).targetPlatform.operatingSystem.windows) {
+                dependsOn storage
+
+                doLast {
+                    runTValgrind(storage.get(0))
+                }
+            }
+        }
+    }
+}
+
+task pkixDoxygen {
+    doLast {
+        mkdir('build')
+        exec {
+            executable "doxygen"
+            args       "src/pkix/resources/doxygenConfig"
+        }
+    }
+}

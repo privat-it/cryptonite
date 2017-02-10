@@ -1,0 +1,79 @@
+buildscript {
+    repositories {
+        jcenter()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle-experimental:0.8.+'
+    }
+}
+
+apply plugin: 'com.android.model.native'
+
+model {
+    android {
+        compileSdkVersion = 23
+        buildToolsVersion = '23.0.2'
+
+        ndk {
+            moduleName 'cryptonite_pki'
+
+            CFlags.add('-DCRYPTONITE_EXPORT=')
+            CFlags.add('-std=c99')
+
+        }
+
+        sources {
+            main {
+                jni {
+                    source {
+                        srcDir 'src/asn1/c'
+                        srcDir 'src/pkix/c/struct'
+                        srcDir 'src/pkix/c/api'
+                        srcDir 'src/pkix/c/crypto'
+                        srcDir 'src/pkix/c/engine'
+                        srcDir 'src/storage/c'
+                        srcDir 'src/storage/c/struct'
+                        srcDir 'src/storage/c/file'
+                    }
+
+                    exportedHeaders {
+                        srcDir 'src/pthread/c'
+                        srcDir 'src/cryptonite/c'
+                        srcDir 'src/asn1/c'
+                        srcDir 'src/pkix/c/struct'
+                        srcDir 'src/pkix/c/api'
+                        srcDir 'src/pkix/c/crypto'
+                        srcDir 'src/pkix/c/engine'
+                        srcDir 'src/storage/c'
+                        srcDir 'src/storage/c/struct'
+                        srcDir 'src/storage/c/file'
+                    }
+
+                    dependencies {
+                        library 'cryptonite' linkage 'shared'
+                        library 'iconv' linkage 'static'
+                    }
+                }
+            }
+        }
+    }
+}
+
+model {
+    repositories {
+        libs(PrebuiltLibraries) {
+            cryptonite {
+                binaries.withType(SharedLibraryBinary) {
+                    sharedLibraryFile = file("build/intermediates/binaries/release/lib/${targetPlatform.getName()}/libcryptonite-jni.so")
+                }
+            }
+
+            iconv {
+                headers.srcDir "libs/iconv/include"
+                binaries.withType(StaticLibraryBinary) {
+                    staticLibraryFile = file("libs/iconv/${targetPlatform.getName()}/libiconv.a")
+                }
+            }
+        }
+    }
+}

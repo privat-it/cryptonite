@@ -1,0 +1,4 @@
+#ifndef CRYPTONITE_H
+#define CRYPTONITE_H
+
+

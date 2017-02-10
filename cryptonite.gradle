@@ -1,0 +1,373 @@
+model {
+    components {
+        pthread(NativeLibrarySpec) {
+            if (project.hasProperty('targetPlatform')) {
+                targetPlatform project.getProperty('targetPlatform')
+            }
+
+            sources {
+                c {
+                    source {
+                        srcDirs "src/pthread/c"
+                        include "*.c"
+                    }
+
+                    exportedHeaders {
+                        srcDirs "src/pthread/c"
+                        include "*.h"
+                    }
+                }
+            }
+        }
+
+        cryptonite(NativeLibrarySpec) {
+            if (project.hasProperty('targetPlatform')) {
+                targetPlatform project.getProperty('targetPlatform')
+            }
+
+            sources {
+                c {
+                    source {
+                        srcDirs "src/cryptonite/c"
+                        include "*.c"
+
+                        lib library: 'pthread', linkage: 'static'
+                    }
+
+                    exportedHeaders {
+                        srcDirs "src/cryptonite/c"
+                        include "*.h"
+                    }
+                }
+            }
+
+            binaries{
+                all {
+                    /* Issue all the warnings demanded by strict ISO C. */
+                    if (!noWarnings && ((toolChain in Gcc) || (toolChain in Clang))) {
+                        cCompiler.args "-Wextra"
+                    }
+                }
+            }
+        }
+
+        cryptoniteTestUtils(NativeLibrarySpec) {
+            if (project.hasProperty('targetPlatform')) {
+                targetPlatform project.getProperty('targetPlatform')
+            }
+
+            sources {
+                c {
+                    source {
+                        srcDirs "src/cryptoniteTestUtils/c"
+                        include "*.c"
+
+                        lib library: 'cryptonite', linkage: 'static'
+                        lib library: 'pthread', linkage: 'static'
+                        
+                    }
+
+                    exportedHeaders {
+                        srcDirs "src/cryptoniteTestUtils/c"
+                        include "*.h"
+                    }
+                }
+            }
+        }
+
+        cryptoniteUtest(NativeExecutableSpec) {
+            if (project.hasProperty('targetPlatform')) {
+                targetPlatform project.getProperty('targetPlatform')
+            }
+
+            sources {
+                c {
+                    source {
+                        srcDirs "src/cryptoniteUtest/c"
+                        include "*.c"
+
+                        lib library: 'cryptoniteTestUtils', linkage: 'static'
+                        lib library: 'cryptonite', linkage: 'static'
+                        lib library: 'pthread', linkage: 'static'
+                    }
+                }
+            }
+        }
+
+        cryptoniteAtest(NativeExecutableSpec) {
+            if (project.hasProperty('targetPlatform')) {
+                targetPlatform project.getProperty('targetPlatform')
+            }
+
+            sources {
+                c {
+                    source {
+                        srcDirs "src/cryptoniteAtest/c"
+                        include "*.c"
+
+                        lib library: 'cryptoniteTestUtils', linkage: 'static'
+                        lib library: 'cryptonite', linkage: 'static'
+                        lib library: 'pthread', linkage: 'static'
+                    }
+                }
+            }
+        }
+
+        cryptonitePtest(NativeExecutableSpec) {
+            if (project.hasProperty('targetPlatform')) {
+                targetPlatform project.getProperty('targetPlatform')
+            }
+
+            sources {
+                c {
+                    source {
+                        srcDirs "src/cryptonitePtest/c"
+                        include "*.c"
+
+                        lib library: 'cryptoniteTestUtils', linkage: 'static'
+                        lib library: 'cryptonite', linkage: 'static'
+                        lib library: 'pthread', linkage: 'static'
+                    }
+                }
+            }
+        }
+
+        cryptoniteXtest(NativeExecutableSpec) {
+            if (project.hasProperty('targetPlatform')) {
+                targetPlatform project.getProperty('targetPlatform')
+            }
+
+            sources {
+                c {
+                    source {
+                        srcDirs "src/cryptoniteXtest/c"
+                        include "*.c"
+
+                        if (project.hasProperty('targetPlatform')
+                            && ((project.getProperty('targetPlatform') == 'ios_arm') || (project.getProperty('targetPlatform') == 'ios_x86'))) {
+                            exclude "*.c"
+
+                        } else {
+                            lib library: 'gcrypt', linkage: 'static'
+                            lib library: 'gpgError', linkage: 'static'
+                            lib library: 'libressl', linkage: 'static'
+                            lib library: 'bee2', linkage: 'static'
+                        }
+
+                        lib library: 'cryptoniteTestUtils', linkage: 'static'
+                        lib library: 'cryptonite', linkage: 'static'
+                        lib library: 'pthread', linkage: 'static'
+                    }
+                }
+
+                if ((currentOs.isLinux() && (currentOs.arch != 'arm')) || currentOs.isWindows()) {
+                    cpp {
+                        source {
+                            srcDirs "src/cryptoniteXtest/c"
+                            include "*.cpp"
+
+                            lib library: 'cryptonite', linkage: 'static'
+                            lib library: 'cryptoniteTestUtils', linkage: 'static'
+                            lib library: 'pthread', linkage: 'static'
+
+                            lib library: 'cppcrypto', linkage: 'static'
+                            lib library: 'libressl', linkage: 'api'
+                        }
+                    }
+                }
+            }
+
+            binaries{
+                all {
+                    //cCompiler.define "USE_COLOR"
+                    if (toolChain in Gcc) {
+                        cppCompiler.args "-std=c++11"
+                        cppCompiler.args "-Wno-write-strings"
+                        linker.args "-lrt", "-lstdc++"
+                    }
+
+                    if (toolChain in Clang) {
+                        cppCompiler.args "-stdlib=libc++"
+                        cppCompiler.args "-Wno-write-strings"
+                    }
+
+                    cppCompiler.define "CRYPTONITE_EXPORT", "extern"
+                }
+            }
+        }
+
+        cryptoniteExample(NativeExecutableSpec) {
+            if (project.hasProperty('targetPlatform')) {
+                targetPlatform project.getProperty('targetPlatform')
+            }
+
+            sources {
+                c {
+                    source {
+                        srcDirs "src/cryptoniteExample/c"
+                        include "*.c"
+
+                        lib library: 'cryptonite', linkage: 'shared'
+                    }
+                }
+            }
+        }
+    }
+
+    tasks {
+        cryptonite(Task) {
+            dependsOn $.binaries.findAll { it.component.baseName in name && it.buildType == buildTypes.release }
+        }
+
+        cryptoniteDebug(Task) {
+            dependsOn $.binaries.findAll { it.component.baseName in "cryptonite" && it.buildType == buildTypes.debug }
+        }
+
+        cryptoniteUtest(Task) {
+            def depends = $.binaries.findAll { it.component.baseName in name && it.buildType == buildTypes.release}
+
+            dependsOn depends
+
+            doLast {
+                runTest(depends.get(0))
+            }
+        }
+
+        cryptoniteUtestDebug(Task) {
+            def depends = $.binaries.findAll { it.component.baseName in "cryptoniteUtest" && it.buildType == buildTypes.debug }
+
+            dependsOn depends
+
+            doLast {
+                runTest(depends.get(0))
+            }
+        }
+
+        cryptoniteAtest(Task) {
+            def depends = $.binaries.findAll { it.component.baseName in name && it.buildType == buildTypes.release }
+
+            dependsOn depends
+
+            doLast {
+                runTest(depends.get(0))
+            }
+        }
+
+        cryptoniteAtestDebug(Task) {
+            def depends = $.binaries.findAll { it.component.baseName in "cryptoniteAtest" && it.buildType == buildTypes.debug }
+
+            dependsOn depends
+
+            doLast {
+                runTest(depends.get(0))
+            }
+        }
+
+        cryptonitePtest(Task) {
+            def depends = $.binaries.findAll { it.component.baseName in name && it.buildType == buildTypes.release }
+
+            dependsOn depends
+
+            doLast {
+                runTest(depends.get(0))
+            }
+        }
+
+        cryptonitePtestDebug(Task) {
+            def depends = $.binaries.findAll { it.component.baseName in "cryptonitePtest" && it.buildType == buildTypes.debug }
+
+            dependsOn depends
+
+            doLast {
+                runTest(depends.get(0))
+            }
+        }
+
+        cryptoniteXtest(Task) {
+
+            def depends = $.binaries.findAll { it.component.baseName in name && it.buildType == buildTypes.release }
+
+            dependsOn depends
+
+            doLast {
+                if (depends.get(0).targetPlatform.operatingSystem.windows) {
+                    copy {
+                        from "libs/gcrypt/${depends.get(0).targetPlatform.name}"
+                        into "${depends.get(0).executableFile.parent}"
+
+                        include "**/*.dll"
+                    }
+
+                    copy {
+                        from "libs/libressl/${depends.get(0).targetPlatform.name}"
+                        into "${depends.get(0).executableFile.parent}"
+
+                        include "**/*.dll"
+                    }
+
+                    copy {
+                        from "libs/cppcrypto/${depends.get(0).targetPlatform.name}"
+                        into "${depends.get(0).executableFile.parent}"
+
+                        include "**/*.dll"
+                    }
+                }
+
+                exec {
+                    executable depends.get(0).executableFile
+                }
+            }
+        }
+
+        cryptoniteExample(Task) {
+            def depends = $.binaries.findAll { it.component.baseName in name && it.buildType == buildTypes.release }
+
+            dependsOn depends
+
+            doLast {
+                runTest(depends.get(0))
+            }
+        }
+
+        cryptoniteExampleDebug(Task) {
+            def depends = $.binaries.findAll { it.component.baseName in "cryptoniteExample" && it.buildType == buildTypes.debug }
+
+            dependsOn depends
+
+            doLast {
+                runTest(depends.get(0))
+            }
+        }
+
+        cryptoniteValgrind(Task) {
+            def utest = $.binaries.findAll { it.component.baseName in "cryptoniteUtest" && it.buildType == buildTypes.debug }
+            def atest = $.binaries.findAll { it.component.baseName in "cryptoniteAtest" && it.buildType == buildTypes.debug }
+
+            if (!utest.get(0).targetPlatform.operatingSystem.windows) {
+                dependsOn utest
+                
+                doLast {
+                    runTValgrind(utest.get(0))
+                }
+            }
+
+            if (!atest.get(0).targetPlatform.operatingSystem.windows) {
+                dependsOn atest
+
+                doLast {
+                    runTValgrind(atest.get(0))
+                }
+            }
+        }
+    }
+}
+
+task cryptoniteDoxygen {
+    doLast {
+        mkdir('build')
+        exec {
+            executable "doxygen"
+            args       "src/cryptonite/resources/doxygenConfig"
+        }
+    }
+}

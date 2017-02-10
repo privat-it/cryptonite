@@ -1,0 +1,10 @@
+{
+   <use init memory in rs.c>
+   Memcheck:Value8
+   fun:mem_noise_func
+}
+{
+   <use init memory in rs.c>
+   Memcheck:Value4
+   fun:mem_noise_func
+}

@@ -1,0 +1,676 @@
+import org.gradle.internal.os.OperatingSystem;
+
+apply plugin: 'c'
+apply plugin: 'cpp'
+apply plugin: 'visual-studio'
+
+apply from: "libs.gradle"
+apply from: "cryptonite.gradle"
+apply from: "pkix.gradle"
+
+ext {
+    currentOs  = OperatingSystem.current();
+    noWarnings = (project.hasProperty('type') && (project.getProperty('type') == "noWerror"))
+
+    if (currentOs.isMacOsX()) {
+        iphoneSdkDir          = getResultExec("xcrun", "--sdk iphoneos --show-sdk-path")
+        iphoneSimulatorSdkDir = getResultExec("xcrun", "--sdk iphonesimulator --show-sdk-path")
+
+    } else {
+        iphoneSdkDir          = ''
+        iphoneSimulatorSdkDir = ''
+    }
+
+    if (!project.hasProperty('targetPlatform') && currentOs.isWindows()) {
+        def arch = System.getenv("PROCESSOR_ARCHITECTURE")
+        def wow64Arch = System.getenv("PROCESSOR_ARCHITEW6432")
+
+        if (arch.contains("64") || ((wow64Arch != null) && wow64Arch.contains("64"))) {
+            targetPlatform = "windows_x86-64"
+        }
+    }
+
+    if (currentOs.name == 'FreeBSD') {
+        targetPlatform = "unix_x86-64"
+    }
+}
+
+model {
+
+    platforms {
+        osx_ppc {
+            operatingSystem "osx"
+            architecture    "ppc"
+        }
+
+        ios_arm {
+            operatingSystem "ios"
+            architecture    "arm"
+        }
+
+        ios_x86 {
+            operatingSystem "ios"
+            architecture    "x86"
+        }
+
+        linux_aarch64 {
+            operatingSystem "linux"
+            architecture    "arm-v8"
+        }
+    }
+
+
+    toolChains {
+        visualCpp(VisualCpp)
+
+        if (!currentOs.isMacOsX()) {
+            gcc(Gcc) {
+                target("linux_arm-v7") {
+                    cCompiler.withArguments { args ->
+                        args.remove "-mno-stack-arg-probe"
+                    }
+                }
+
+                target("linux_aarch64") {
+                    cCompiler.withArguments { args ->
+                        args.remove "-mno-stack-arg-probe"
+                    }
+                }
+
+                target("osx_ppc") {
+                    cCompiler.withArguments { args ->
+                         args.remove "-mno-stack-arg-probe"
+                    }
+
+                    linker.withArguments { args ->
+                         args.remove "-lrt"
+                    }
+                }
+
+                target("unix_x86-64") {
+                    linker.withArguments { args ->
+                        args.add "-lintl"
+                    }
+                }
+            }
+        }
+
+        clang(Clang) {
+            target("osx_x86") {
+                cCompiler.withArguments { args ->
+                     args.add "-m32"
+                }
+
+                linker.withArguments { args ->
+                    args.add "-m32"
+                }
+
+                linker.withArguments { args ->
+                    args.remove "-lrt"
+                }
+            }
+
+            target("ios_arm") {
+                cCompiler.withArguments { args ->
+                    args.add "-arch"
+                    args.add "armv7"
+                    args.add "-arch"
+                    args.add "armv7s"
+                    args.add "-arch"
+                    args.add "arm64"
+
+                    args.add "-isysroot"
+                    args.add iphoneSdkDir
+                }
+
+                linker.withArguments { args ->
+                    args.add "-arch"
+                    args.add "armv7"
+                    args.add "-arch"
+                    args.add "armv7s"
+                    args.add "-arch"
+                    args.add "arm64"
+
+                    args.add "-isysroot"
+                    args.add iphoneSdkDir
+                }
+            }
+
+            target("ios_x86") {
+                cCompiler.withArguments { args ->
+                    args.add "-arch"
+                    args.add "i386"
+                    args.add "-arch"
+                    args.add "x86_64"
+
+                    args.add "-isysroot"
+                    args.add iphoneSimulatorSdkDir
+                }
+
+                linker.withArguments { args ->
+                    args.add "-arch"
+                    args.add "i386"
+                    args.add "-arch"
+                    args.add "x86_64"
+
+                    args.add "-isysroot"
+                    args.add iphoneSimulatorSdkDir
+                }
+            }
+        }
+    }
+
+    buildTypes {
+        release
+        debug
+    }
+
+    binaries {
+        all {
+            if (toolChain in Gcc) {
+                if ((component.name != 'asn1Generator') && (currentOs.name != 'HP-UX')) {
+                    /* Set C dialect ISO C99. */
+                    cCompiler.args "-std=c99"
+                }
+
+                if (currentOs.name != 'HP-UX') {
+                    cCompiler.args "-mno-stack-arg-probe"
+                }
+
+                /* Disable warn if long long type is used. */
+                cCompiler.args "-Wno-long-long"
+
+                if (!(noWarnings || (component.name == 'asn1Generator'))) {
+                    /* Warn if a function is declared or defined without specifying the argument types. */
+                    cCompiler.args "-Wstrict-prototypes"
+
+                    cCompiler.args "-pedantic"
+
+                    /* Make all warnings into errors. */
+                    cCompiler.args "-Werror"
+
+                    /* Enables all the warnings about constructions that some users consider questionable. */
+                    cCompiler.args "-Wall"
+                }
+
+                /* Generate position-independent code. */
+                cCompiler.args "-fPIC"
+
+                if (buildType == buildTypes.debug) {
+                    cCompiler.args "-g"
+                    cCompiler.define "EDEBUG"
+
+                    cCompiler.args "-coverage", "-O0"
+                    linker.args "-lgcov"
+                }
+
+                if (buildType == buildTypes.release) {
+                    /* Optimization flags. */
+                    cCompiler.args "-O2", "-finline", "-fomit-frame-pointer"
+                }
+
+                linker.args "-pthread"
+
+                cCompiler.define "CRYPTONITE_EXPORT", "extern"
+
+                /* add lib iconv */
+                if (currentOs.name == 'FreeBSD') {
+                    cCompiler.args "-I/usr/local/include/"
+                    linker.args "-L/usr/local/lib/"
+                    linker.args "-liconv"
+                }
+
+                if (targetPlatform.operatingSystem.macOsX) {
+                    linker.args "-liconv"
+                }
+
+                if (targetPlatform.operatingSystem.macOsX) {
+                    cCompiler.args "-mmacosx-version-min=10.6"
+                    linker.args    "-mmacosx-version-min=10.6"
+                }
+            }
+
+            if (toolChain in VisualCpp) {
+
+                /* No buffers security check. */
+                cCompiler.args "/GS-"
+
+                /* Removes default library name from. */
+                cCompiler.args"/Zl"
+
+
+                if (!noWarnings) {
+                    /* Treats all compiler warnings as errors. */
+                    cCompiler.args "/WX", "/W3", "/D_CRT_NONSTDC_NO_DEPRECATE"
+                }
+
+                /* Suppresses display of sign-on banner. */
+                cCompiler.args "/nologo"
+
+                /* Disable warning use secure visual studio functions. */
+                cCompiler.args "/D_CRT_SECURE_NO_WARNINGS"
+
+                /* Causes the application to use the multithread, static version of the run-time library. */
+                cCompiler.args "/MT"
+
+                linker.args "LIBCMT.lib", "advapi32.lib", "Shell32.lib"
+
+                if (buildType == buildTypes.debug) {
+                    cCompiler.args "/Z7"
+                    cCompiler.define "EDEBUG"
+                    linker.args "/DEBUG"
+                }
+
+                if (buildType == buildTypes.release) {
+                    /* Optimization flags. */
+                    cCompiler.args "/O2"
+                }
+
+                cCompiler.define "CRYPTONITE_EXPORT", "extern __declspec(dllexport)"
+            }
+
+            if (toolChain in Clang) {
+                if (!noWarnings) {
+                    /* Warn if a function is declared or defined without specifying the argument types. */
+                    cCompiler.args "-Wstrict-prototypes"
+
+                    /* Issue all the warnings demanded by strict ISO C. */
+                    cCompiler.args "-pedantic"
+
+                    /* Make all warnings into errors. */
+                    cCompiler.args "-Werror"
+
+                    /* Enables all the warnings about constructions that some users consider questionable. */
+                    cCompiler.args "-Wall"
+                }
+
+                /* Set C dialect ISO C99. */
+                cCompiler.args "-std=c99"
+
+                if (targetPlatform.operatingSystem.macOsX) {
+                    cCompiler.args "-mmacosx-version-min=10.6"
+                    linker.args    "-mmacosx-version-min=10.6"
+                }
+
+                if (targetPlatform.operatingSystem.name == "ios") {
+                    cCompiler.args "-mios-version-min=6.0"
+                    linker.args    "-mios-version-min=6.0"
+
+                    cCompiler.args "-fembed-bitcode"
+                }
+
+                if (buildType == buildTypes.debug) {
+                    cCompiler.define "EDEBUG"
+                    cCompiler.args "-g"
+
+                    cCompiler.args "-coverage", "-O0"
+                    linker.args "-coverage"
+                }
+
+                if (buildType == buildTypes.release) {
+                    /* Optimization flags. */
+                    cCompiler.args "-O2"
+                }
+
+                cCompiler.define "CRYPTONITE_EXPORT", "extern"
+
+                linker.args "-liconv"
+            }
+        }
+
+        withType(SharedLibraryBinarySpec) {
+            cCompiler.define "SHARED_LIBRARY_BUILD"
+
+            if (targetPlatform.operatingSystem.name == "ios") {
+                buildable = false
+            }
+        }
+    }
+
+    tasks {
+        dist(Task) {
+            def depends = $.binaries.findAll { it.buildType == buildTypes.release }
+            dependsOn depends
+
+            doLast {
+                /* Copy binares */
+                for (lib in depends) {
+                    def platformDir = getPlatformDir(lib.targetPlatform)
+                    def typeDir = (lib.displayName.startsWith("executable")) ? "executables" : "libs"
+
+                    copy {
+                        from lib.primaryOutput
+                        into "${buildDir}/dist/${typeDir}/${project.name}/${platformDir}"
+                    }
+                }
+            }
+        }
+
+        strip(Task) {
+            def depends = $.binaries.findAll { it.buildType == buildTypes.release }
+            dependsOn depends
+
+            doLast {
+                for (lib in depends) {
+                    if (lib.displayName.startsWith("shared") && !lib.targetPlatform.operatingSystem.isWindows()) {
+                        def inFile = lib.primaryOutput
+                        def outFile = inFile.path.replaceAll("release", "strip")
+                        def objcopy = (lib.targetPlatform.operatingSystem.isMacOsX()) ? "gobjcopy" : "objcopy"
+
+                        mkdir(file(outFile).parent)
+
+                        exec {
+                            commandLine objcopy
+                            args inFile, "-x", outFile
+                        }
+                    }
+                }
+            }
+        }
+
+        pkixHeader(Task) {
+            def distDir = mkdir("${buildDir}/dist/include")
+
+            doLast {
+                /* Copy headers */
+                copy {
+                    from "src/asn1/c"
+                    from "src/pkix/c/struct"
+                    from "src/pkix/c/api"
+                    from "src/pkix/c/crypto"
+                    from "src/pkix/c/engine"
+                    from "src/storage/c"
+                    from "src/storage/c/file"
+
+                    into "${distDir}/cryptonite"
+
+                    include "*.h"
+                    exclude "*internal.h"
+                }
+
+                def header = file("${distDir}/cryptonite_pki.h")
+
+                header.text = file("src/pkix/c/resources/header/top.txt").text
+
+                header.append("#include \"cryptonite/pkix_structs.h\"\n")
+
+                FileTree headers = fileTree(dir: 'src/pkix/c/api', include: '*.h', exclude: '*_internal.h')
+                headers.each {File file ->
+                    def text = "#include \"cryptonite/" + file.name + "\"\n"
+                    header.append(new String(text.getBytes("UTF-8")))
+                }
+
+                headers = fileTree(dir: 'src/pkix/c/crypto', include: '*.h')
+                headers.each {File file ->
+                    def text = "#include \"cryptonite/" + file.name + "\"\n"
+                    header.append(new String(text.getBytes("UTF-8")))
+                }
+
+                headers = fileTree(dir: 'src/pkix/c/engine', include: '*.h')
+                headers.each {File file ->
+                    def text = "#include \"cryptonite/" + file.name + "\"\n"
+                    header.append(new String(text.getBytes("UTF-8")))
+                }
+
+                headers = fileTree(dir: 'src/storage/c', include: '*.h', exclude: '*_internal.h')
+                headers.each {File file ->
+                    def text = "#include \"cryptonite/" + file.name + "\"\n"
+                    header.append(new String(text.getBytes("UTF-8")))
+                }
+
+                headers = fileTree(dir: 'src/storage/c/file', include: '*.h', exclude: '*_internal.h')
+                headers.each {File file ->
+                    def text = "#include \"cryptonite/" + file.name + "\"\n"
+                    header.append(new String(text.getBytes("UTF-8")))
+                }
+
+                header.append(new File("src/pkix/c/resources/header/bottom.txt").text)
+            }
+        }
+
+        cryptoniteHeader(Task) {
+            def distDir = mkdir("${buildDir}/dist/include")
+
+            doLast {
+                /* Copy headers */
+                copy {
+                    from "src/cryptonite/c"
+                    into "${distDir}/cryptonite"
+                    include "*.h"
+                    exclude "*internal.h"
+                }
+
+                def header = file("${distDir}/cryptonite.h")
+
+                FileTree headers = fileTree(dir: 'src/cryptonite/c', include: '*.h', exclude: '*_internal.h')
+
+                header.text = new File("src/cryptonite/resources/header/top.txt").text
+                headers.each {File file ->
+                    def text = "#include \"cryptonite/" + file.name + "\"\n"
+                    header.append(new String(text.getBytes("UTF-8")))
+                }
+
+                header.append(new File("src/cryptonite/resources/header/bottom.txt").text)
+            }
+        }
+
+        coverage(Task) {
+            if (currentOs.isLinux() || (currentOs.isMacOsX() && (currentOs.version != "10.7.5")) || currentOs.name == 'FreeBSD') {
+                doLast {
+                    exec {
+                        commandLine "lcov"
+
+                        args "--directory", "${buildDir}"
+                        args "--capture"
+                        args "--output-file", "${buildDir}/coverage.info"
+                    }
+
+                    exec {
+                        commandLine "genhtml"
+
+                        args "${buildDir}/coverage.info"
+                        args "--output-directory", "${buildDir}/tmp/coverage"
+                    }
+                }
+            }
+        }
+
+        formatSrc(Task) {
+            doLast {
+                println(formatSources(true));
+            }
+        }
+        checkFormatSrc(Task) {
+            doLast {
+                if (formatSources(false).contains("Formatted")) {
+                    println("Source code beautifier - FAILED!");
+                } else {
+                    println("Source code beautifier - OK!");
+                }
+            }
+        }
+    }
+}
+
+defaultTasks 'build'
+
+/* For build Visual Studio 2013 sln. */
+model {
+  visualStudio {
+    projects.all {
+      projectFile.withXml {
+        asNode().@ToolsVersion = "12.0"
+
+        // Set platform toolset so you don't end up using VS2010 directories
+        asNode().PropertyGroup.findAll({ it.@Label == 'Configuration' }).each { configNode ->
+          configNode.appendNode("PlatformToolset", "v120")
+        }
+      }
+    }
+  }
+}
+
+/** Utils */
+
+def getPlatformDir(def platform) {
+    def arch = (platform.architecture.name == 'x86') ? 'x86-32' : platform.architecture.name
+    def dir = "${platform.operatingSystem.name}_${arch}"
+
+    return dir
+}
+
+/**
+ * Get return result execute command.
+ *
+ * @param execute execute command
+ * @param cmdArgs array arguments
+ * @return result execute command
+ */
+def getResultExec(String execute, String cmdArgs) {
+    try {
+        new ByteArrayOutputStream().withStream { cmd ->
+            def result = exec {
+                executable = execute
+                args = cmdArgs.tokenize(" ")
+                standardOutput = cmd
+            }
+            return cmd.toString().trim()
+        }
+    }    catch (Exception e) {
+        return ""
+    }
+}
+
+void runTest(def binary) {
+    def dirTest = file(binary.executableFile).parent 
+
+    for(lib in binary.dependentBinaries) {
+        if (lib.name.contains('Shared') && lib.sharedLibraryFile != null) {
+            copy {
+                from lib.sharedLibraryFile.path.replace(".lib", ".dll")
+                into dirTest
+            }
+        }
+    }
+
+    if (binary.targetPlatform.operatingSystem.windows) {
+        exec {
+            executable binary.executableFile
+        }
+    } else if (binary.targetPlatform.operatingSystem.macOsX) {
+        exec {
+            executable "sh"
+            args "-c"
+            args "export DYLD_LIBRARY_PATH=${dirTest} && ${binary.executableFile}"
+        }
+    } else {
+        exec {
+            executable "sh"
+            args "-c", "export LD_LIBRARY_PATH=${dirTest} && ${binary.executableFile}"
+        }
+    }
+}
+
+void runTValgrind(def binary) {
+    def dirTest = file(binary.executableFile).parent 
+
+    for(lib in binary.dependentBinaries) {
+        if (lib.name.contains('Shared') && lib.sharedLibraryFile != null) {
+            copy {
+                from lib.sharedLibraryFile
+                into dirTest
+            }
+        }
+    }
+
+    if (binary.targetPlatform.operatingSystem.macOsX) {
+        exec {
+            executable "sh"
+            args "-c"
+            args "export DYLD_LIBRARY_PATH=${dirTest} && valgrind " +
+                 "--read-var-info=yes --track-origins=yes --leak-check=full --tool=memcheck " +
+                 "--xml=yes --xml-file=${binary.executableFile.name}_valgrind.xml " +
+                 "${binary.executableFile}"
+        }
+    } else {
+        exec {
+            executable "sh"
+            args "-c"
+            args "export LD_LIBRARY_PATH=${dirTest} && valgrind " +
+                 "--read-var-info=yes --track-origins=yes --leak-check=full --tool=memcheck " +
+                 "--xml=yes --xml-file=${buildDir}/tmp/${binary.executableFile.name}_valgrind.xml " +
+                 "${binary.executableFile}"
+        }
+    }
+}
+
+def formatSources(boolean changeSrc) {
+    String formatTool = ""
+    if (currentOs.isLinux() || currentOs.name == 'FreeBSD') {
+        formatTool = "./tools/astyle/linux_x86-64/astyle"
+    } else if (currentOs.isWindows()) {
+        formatTool = "./tools/astyle/windows_x86/AStyle.exe"
+    } else {
+        prinln("Unsupported platform for format sources!");
+        exit(1);
+    }
+
+    String formatArgs = "--options=tools/astyle/astyle.cfg"
+    formatArgs += " ./src/asn1/c/*.c"
+    formatArgs += " ./src/asn1/c/*.h"
+    formatArgs += " ./src/asn1Utest/c/*.c"
+    formatArgs += " ./src/asn1Utest/c/*.h"
+    formatArgs += " ./src/cryptonite/c/*.c"
+    formatArgs += " ./src/cryptonite/c/*.h"
+    formatArgs += " ./src/cryptoniteAtest/c/*.c"
+    formatArgs += " ./src/cryptoniteAtest/c/*.h"
+    formatArgs += " ./src/cryptoniteExample/c/*.c"
+    /* formatArgs += " ./src/cryptoniteExample/c/*.h" */
+    formatArgs += " ./src/cryptonitePtest/c/*.c"
+    formatArgs += " ./src/cryptonitePtest/c/*.h"
+    formatArgs += " ./src/cryptoniteTestUtils/c/*.c"
+    formatArgs += " ./src/cryptoniteTestUtils/c/*.h"
+    formatArgs += " ./src/cryptoniteUtest/c/*.c"
+    formatArgs += " ./src/cryptoniteUtest/c/*.h"
+    formatArgs += " ./src/pkiExample/c/*.c"
+    /* formatArgs += " ./src/pkiExample/c/*.h" */
+    formatArgs += " ./src/pkix/c/*.c"
+    formatArgs += " ./src/pkix/c/*.h"
+    formatArgs += " ./src/pkixTestUtils/c/*.c"
+    formatArgs += " ./src/pkixTestUtils/c/*.h"
+    formatArgs += " ./src/pkixUtest/c/*.c"
+    formatArgs += " ./src/pkixUtest/c/*.h"
+    formatArgs += " ./src/pthread/c/*.c"
+    formatArgs += " ./src/pthread/c/*.h"
+    formatArgs += " ./src/storage/c/*.c"
+    formatArgs += " ./src/storage/c/*.h"
+    formatArgs += " ./src/storageUtest/c/*.c"
+    formatArgs += " ./src/storageUtest/c/*.h"
+
+    if (!changeSrc) {
+        formatArgs += " --dry-run"
+    }
+
+    return getResultExec(formatTool, formatArgs);
+}
+
+task help() {
+    doLast {
+        def text = "Универсальная библиотека криптопреобразований «Cryptonite» предназначена для обеспечения программных \n" +
+                   "продуктов собственной разработки или продуктов сторонних разработчиков средствами криптозащиты\n\n" +
+                   "Список возможных выполняемых задач:\n" +
+                   " * build - собрать все\n" +
+                   " * cryptonite - собрать библиотеку cryptonite\n" + 
+                   "    - cryptoniteUtest - запустить unit тесты\n" +
+                   "    - cryptoniteAtest - запустить accept тесты\n" + 
+                   "    - cryptonitePtest - запустить performance тесты\n\n" + 
+                   " - pkix - собрать библиотеку cryptonite_pki\n" +
+                   "    - pkixUtest - запустить unit тесты\n" 
+
+        if (currentOs.isWindows()) {
+            println new String(text.getBytes("CP1251")) 
+        } else {
+            println text 
+        }
+    }
+}
