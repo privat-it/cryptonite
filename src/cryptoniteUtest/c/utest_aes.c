@@ -475,6 +475,97 @@ cleanup:
     aes_free(ctx);
 }
 
+static void test_aes16_cbc_data_is_divided_without_padding(void)
+{
+    AesCtx *ctx = NULL;
+    ByteArray *data = NULL;
+    ByteArray *data1 = ba_alloc_from_le_hex_string("f69f2445df4f9b17ad2b417be66c3710");
+    ByteArray *data2 = ba_alloc_from_le_hex_string("b2eb05e2c39be9fcda6c19078c6a9d1b");
+    ByteArray *key = ba_alloc_from_le_hex_string("603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4");
+    ByteArray *enc_data_exp = ba_alloc_from_le_hex_string("B2EB05E2C39BE9FCDA6C19078C6A9D1BE568F68194CF76D6174D4CC04310A854");
+    ByteArray *iv = ba_alloc_from_le_hex_string("39F23369A9D9BACFA530E26304231461");
+    ByteArray *enc_data = NULL;
+    ByteArray *enc_data1 = NULL;
+    ByteArray *enc_data2 = NULL;
+    ByteArray *dec_data1 = NULL;
+    ByteArray *dec_data2 = NULL;
+
+    ASSERT_NOT_NULL(data = ba_join(data1, data2));
+
+    ASSERT_NOT_NULL(ctx = aes_alloc());
+    ASSERT_RET_OK(aes_init_cbc(ctx, key, iv));
+    ASSERT_RET_OK(aes_encrypt(ctx, data, &enc_data));
+    ASSERT_EQUALS_BA(enc_data_exp, enc_data);
+    aes_free(ctx); ctx = NULL;
+
+    ASSERT_NOT_NULL(ctx = aes_alloc());
+    ASSERT_RET_OK(aes_init_cbc(ctx, key, iv));
+    ASSERT_RET_OK(aes_encrypt(ctx, data1, &enc_data1));
+    ASSERT_RET_OK(aes_encrypt(ctx, data2, &enc_data2));
+    ba_copy(enc_data1, 0, 0, enc_data, 0);
+    ba_copy(enc_data2, 0, 0, enc_data, 16);
+    ASSERT_EQUALS_BA(enc_data_exp, enc_data);
+    aes_free(ctx); ctx = NULL;
+
+    ASSERT_NOT_NULL(ctx = aes_alloc());
+    ASSERT_RET_OK(aes_init_cbc(ctx, key, iv));
+    ASSERT_RET_OK(aes_decrypt(ctx, enc_data1, &dec_data1));
+    ASSERT_RET_OK(aes_decrypt(ctx, enc_data2, &dec_data2));
+    ASSERT_RET_OK(ba_append(dec_data2, 0, 0, dec_data1));
+    ASSERT_EQUALS_BA(data, dec_data1);
+
+cleanup:
+
+    aes_free(ctx);
+    BA_FREE(key, data, data1, data2, enc_data_exp, enc_data, enc_data1, enc_data2, dec_data1, dec_data2);
+}
+
+static void test_aes16_cbc_data_is_divided_with_padding(void)
+{
+    AesCtx *ctx = NULL;
+    ByteArray *data = NULL;
+    ByteArray *data1 = ba_alloc_from_le_hex_string("f69f2445df4f9b17ad2b417be66c3710");
+    ByteArray *data2 = ba_alloc_from_le_hex_string("b2eb05e2c39be9fcda6c19078c6a");
+    ByteArray *data2_expected = ba_alloc_from_le_hex_string("b2eb05e2c39be9fcda6c19078c6a0202");
+    ByteArray *key = ba_alloc_from_le_hex_string("603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4");
+    ByteArray *enc_data_exp = ba_alloc_from_le_hex_string("B2EB05E2C39BE9FCDA6C19078C6A9D1B78AABE25027288DB0D76060A9A84D5EF");
+    ByteArray *iv = ba_alloc_from_le_hex_string("39F23369A9D9BACFA530E26304231461");
+    ByteArray *enc_data = NULL;
+    ByteArray *enc_data1 = NULL;
+    ByteArray *enc_data2 = NULL;
+    ByteArray *dec_data1 = NULL;
+    ByteArray *dec_data2 = NULL;
+
+    ASSERT_NOT_NULL(data = ba_join(data1, data2));
+
+    ASSERT_NOT_NULL(ctx = aes_alloc());
+    ASSERT_RET_OK(aes_init_cbc(ctx, key, iv));
+    ASSERT_RET_OK(aes_encrypt(ctx, data, &enc_data));
+    ASSERT_EQUALS_BA(enc_data_exp, enc_data);
+    aes_free(ctx); ctx = NULL;
+
+    ASSERT_NOT_NULL(ctx = aes_alloc());
+    ASSERT_RET_OK(aes_init_cbc(ctx, key, iv));
+    ASSERT_RET_OK(aes_encrypt(ctx, data1, &enc_data1));
+    ASSERT_RET_OK(aes_encrypt(ctx, data2, &enc_data2));
+    ba_copy(enc_data1, 0, 0, enc_data, 0);
+    ba_copy(enc_data2, 0, 0, enc_data, 16);
+    ASSERT_EQUALS_BA(enc_data_exp, enc_data);
+    aes_free(ctx); ctx = NULL;
+
+    ASSERT_NOT_NULL(ctx = aes_alloc());
+    ASSERT_RET_OK(aes_init_cbc(ctx, key, iv));
+    ASSERT_RET_OK(aes_decrypt(ctx, enc_data1, &dec_data1));
+    ASSERT_RET_OK(aes_decrypt(ctx, enc_data2, &dec_data2));
+    ASSERT_EQUALS_BA(data1, dec_data1);
+    ASSERT_EQUALS_BA(data2_expected, dec_data2);
+
+cleanup:
+
+    aes_free(ctx);
+    BA_FREE(key, data, data1, data2, enc_data_exp, enc_data, enc_data1, enc_data2, dec_data1, dec_data2, data2_expected);
+}
+
 static void utest_aes_cbc_core(size_t iteration, size_t key_mode)
 {
     AesCtx *ctx = NULL;
@@ -512,7 +603,7 @@ cleanup:
 
 #define AES_CBC(mode){             \
 int i = 0;                              \
-    for(i = 0; i < 64; i++) {           \
+    for(i = 1; i < 64; i++) {           \
         utest_aes_cbc_core(i, mode);   \
     }                                   \
 }
@@ -528,6 +619,8 @@ void utest_aes(void)
     test_aes16_ecb();
     test_aes24_ecb();
     test_aes32_ecb();
+    test_aes16_cbc_data_is_divided_without_padding();
+    test_aes16_cbc_data_is_divided_with_padding();
     AES_CBC(16);
     AES_CBC(24);
     AES_CBC(32);
