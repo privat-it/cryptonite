@@ -31,6 +31,7 @@ struct AesCtx_st {
     uint8_t gamma[AES_BLOCK_LEN];
     uint8_t feed[AES_BLOCK_LEN];
     uint32_t rkey[AES_KEY256_LEN * 2];
+    uint32_t revert_rkey[AES_KEY256_LEN * 2];
     uint8_t key[AES_KEY256_LEN];
     uint8_t iv[AES_BLOCK_LEN];
     size_t key_len;
@@ -813,30 +814,30 @@ static const uint32_t rcon[] = {
 #define t_round_decrypt(round)                                          \
     t0 = *(Td0 + (s0 >> 24        )) ^ *(Td1 + ((s3 >> 16) & 0xff)) ^   \
          *(Td2 + ((s2 >> 8) & 0xff)) ^ *(Td3 + (s1 & 0xff)        ) ^   \
-         *(ctx->rkey     + (round << 2));                               \
+         *(ctx->revert_rkey     + (round << 2));                        \
     t1 = *(Td0 + (s1 >> 24        )) ^ *(Td1 + ((s0 >> 16) & 0xff)) ^   \
          *(Td2 + ((s3 >> 8) & 0xff)) ^ *(Td3 + (s2 & 0xff)        ) ^   \
-         *(ctx->rkey + 1 + (round << 2));                               \
+         *(ctx->revert_rkey + 1 + (round << 2));                        \
     t2 = *(Td0 + (s2 >> 24        )) ^ *(Td1 + ((s1 >> 16) & 0xff)) ^   \
          *(Td2 + ((s0 >> 8) & 0xff)) ^ *(Td3 + (s3 & 0xff)        ) ^   \
-         *(ctx->rkey + 2 + (round << 2));                               \
+         *(ctx->revert_rkey + 2 + (round << 2));                        \
     t3 = *(Td0 + (s3 >> 24        )) ^ *(Td1 + ((s2 >> 16) & 0xff)) ^   \
          *(Td2 + ((s1 >> 8) & 0xff)) ^ *(Td3 + (s0 & 0xff)        ) ^   \
-         *(ctx->rkey + 3 + (round << 2))
+         *(ctx->revert_rkey + 3 + (round << 2))
 
 #define s_round_decrypt(round)                                        \
     s0 = *(Td0 + (t0 >> 24        )) ^ *(Td1 + ((t3 >> 16) & 0xff)) ^ \
          *(Td2 + ((t2 >> 8) & 0xff)) ^ *(Td3 + (t1 & 0xff        )) ^ \
-         *(ctx->rkey + 0 + (round << 2));                             \
+         *(ctx->revert_rkey + 0 + (round << 2));                      \
     s1 = *(Td0 + (t1 >> 24        )) ^ *(Td1 + ((t0 >> 16) & 0xff)) ^ \
          *(Td2 + ((t3 >> 8) & 0xff)) ^ *(Td3 + (t2 & 0xff        )) ^ \
-         *(ctx->rkey + 1 + (round << 2));                             \
+         *(ctx->revert_rkey + 1 + (round << 2));                      \
     s2 = *(Td0 + (t2 >> 24        )) ^ *(Td1 + ((t1 >> 16) & 0xff)) ^ \
          *(Td2 + ((t0 >> 8) & 0xff)) ^ *(Td3 + (t3 & 0xff        )) ^ \
-         *(ctx->rkey + 2 + (round << 2));                             \
+         *(ctx->revert_rkey + 2 + (round << 2));                      \
     s3 = *(Td0 + (t3 >> 24        )) ^ *(Td1 + ((t2 >> 16) & 0xff)) ^ \
          *(Td2 + ((t1 >> 8) & 0xff)) ^ *(Td3 + (t0 & 0xff        )) ^ \
-         *(ctx->rkey + 3 + (round << 2))
+         *(ctx->revert_rkey + 3 + (round << 2))
 
 #define expanded_key_192(round)     \
     expanded_key_head_192(round);   \
@@ -945,44 +946,45 @@ cleanup:
     return ret;
 }
 
-static void revert_rkey(AesCtx *ctx)
+static void init_revert_rkey(AesCtx *ctx)
 {
     size_t i, j;
     uint32_t temp;
 
+    memcpy(ctx->revert_rkey, ctx->rkey, sizeof(ctx->rkey));
     for (i = 0, j = ctx->rounds_num << 2; i < j; i += 4, j -= 4) {
-        temp = ctx->rkey[i];
-        ctx->rkey[i] = ctx->rkey[j];
-        ctx->rkey[j] = temp;
-        temp = ctx->rkey[i + 1];
-        ctx->rkey[i + 1] = ctx->rkey[j + 1];
-        ctx->rkey[j + 1] = temp;
-        temp = ctx->rkey[i + 2];
-        ctx->rkey[i + 2] = ctx->rkey[j + 2];
-        ctx->rkey[j + 2] = temp;
-        temp = ctx->rkey[i + 3];
-        ctx->rkey[i + 3] = ctx->rkey[j + 3];
-        ctx->rkey[j + 3] = temp;
+        temp = ctx->revert_rkey[i];
+        ctx->revert_rkey[i] = ctx->revert_rkey[j];
+        ctx->revert_rkey[j] = temp;
+        temp = ctx->revert_rkey[i + 1];
+        ctx->revert_rkey[i + 1] = ctx->revert_rkey[j + 1];
+        ctx->revert_rkey[j + 1] = temp;
+        temp = ctx->revert_rkey[i + 2];
+        ctx->revert_rkey[i + 2] = ctx->revert_rkey[j + 2];
+        ctx->revert_rkey[j + 2] = temp;
+        temp = ctx->revert_rkey[i + 3];
+        ctx->revert_rkey[i + 3] = ctx->revert_rkey[j + 3];
+        ctx->revert_rkey[j + 3] = temp;
     }
 
     temp = (uint32_t) (ctx->rounds_num << 2);
     for (i = 4; i < temp; i += 4) {
-        ctx->rkey[i + 0] = Td0[Te4[(ctx->rkey[i + 0] >> 24) ] & 0xff] ^
-                Td1[Te4[(ctx->rkey[i + 0] >> 16) & 0xff] & 0xff] ^
-                Td2[Te4[(ctx->rkey[i + 0] >> 8) & 0xff] & 0xff] ^
-                Td3[Te4[(ctx->rkey[i + 0]) & 0xff] & 0xff];
-        ctx->rkey[i + 1] = Td0[Te4[(ctx->rkey[i + 1] >> 24) ] & 0xff] ^
-                Td1[Te4[(ctx->rkey[i + 1] >> 16) & 0xff] & 0xff] ^
-                Td2[Te4[(ctx->rkey[i + 1] >> 8) & 0xff] & 0xff] ^
-                Td3[Te4[(ctx->rkey[i + 1]) & 0xff] & 0xff];
-        ctx->rkey[i + 2] = Td0[Te4[(ctx->rkey[i + 2] >> 24) ] & 0xff] ^
-                Td1[Te4[(ctx->rkey[i + 2] >> 16) & 0xff] & 0xff] ^
-                Td2[Te4[(ctx->rkey[i + 2] >> 8) & 0xff] & 0xff] ^
-                Td3[Te4[(ctx->rkey[i + 2]) & 0xff] & 0xff];
-        ctx->rkey[i + 3] = Td0[Te4[(ctx->rkey[i + 3] >> 24) ] & 0xff] ^
-                Td1[Te4[(ctx->rkey[i + 3] >> 16) & 0xff] & 0xff] ^
-                Td2[Te4[(ctx->rkey[i + 3] >> 8) & 0xff] & 0xff] ^
-                Td3[Te4[(ctx->rkey[i + 3]) & 0xff] & 0xff];
+        ctx->revert_rkey[i + 0] = Td0[Te4[(ctx->revert_rkey[i + 0] >> 24) ] & 0xff] ^
+                Td1[Te4[(ctx->revert_rkey[i + 0] >> 16) & 0xff] & 0xff] ^
+                Td2[Te4[(ctx->revert_rkey[i + 0] >> 8) & 0xff] & 0xff] ^
+                Td3[Te4[(ctx->revert_rkey[i + 0]) & 0xff] & 0xff];
+        ctx->revert_rkey[i + 1] = Td0[Te4[(ctx->revert_rkey[i + 1] >> 24) ] & 0xff] ^
+                Td1[Te4[(ctx->revert_rkey[i + 1] >> 16) & 0xff] & 0xff] ^
+                Td2[Te4[(ctx->revert_rkey[i + 1] >> 8) & 0xff] & 0xff] ^
+                Td3[Te4[(ctx->revert_rkey[i + 1]) & 0xff] & 0xff];
+        ctx->revert_rkey[i + 2] = Td0[Te4[(ctx->revert_rkey[i + 2] >> 24) ] & 0xff] ^
+                Td1[Te4[(ctx->revert_rkey[i + 2] >> 16) & 0xff] & 0xff] ^
+                Td2[Te4[(ctx->revert_rkey[i + 2] >> 8) & 0xff] & 0xff] ^
+                Td3[Te4[(ctx->revert_rkey[i + 2]) & 0xff] & 0xff];
+        ctx->revert_rkey[i + 3] = Td0[Te4[(ctx->revert_rkey[i + 3] >> 24) ] & 0xff] ^
+                Td1[Te4[(ctx->revert_rkey[i + 3] >> 16) & 0xff] & 0xff] ^
+                Td2[Te4[(ctx->revert_rkey[i + 3] >> 8) & 0xff] & 0xff] ^
+                Td3[Te4[(ctx->revert_rkey[i + 3]) & 0xff] & 0xff];
     }
 }
 
@@ -991,7 +993,7 @@ __inline static void block_decrypt(AesCtx *ctx, uint8_t *in, uint8_t *out)
     uint32_t *rk;
     uint32_t s0, s1, s2, s3, t0, t1, t2, t3;
 
-    rk = (uint32_t *) ctx->rkey;
+    rk = (uint32_t *) ctx->revert_rkey;
 
     s0 = GETU_32(out) ^ rk[0];
     s1 = GETU_32(out + 4) ^ rk[1];
@@ -1174,7 +1176,7 @@ static int encrypt_ofb(AesCtx *ctx, const ByteArray *src, ByteArray **dst)
 
     CHECK_NOT_NULL(out = ba_alloc_by_len(src->len));
 
-    /* Р�СЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РѕСЃС‚Р°РІС€РµР№СЃСЏ РіР°Р�?Р�?С‹. */
+    /* Р�СЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РѕСЃС‚Р°РІС€РµР№СЃСЏ РіР°Р�?Р�?С‹. */
     if (ctx->offset != 0) {
         while (ctx->offset < AES_BLOCK_LEN && data_off < src->len) {
             out->buf[data_off] = src->buf[data_off] ^ gamma[ctx->offset++];
@@ -1188,7 +1190,7 @@ static int encrypt_ofb(AesCtx *ctx, const ByteArray *src, ByteArray **dst)
     }
 
     if (data_off < src->len) {
-        /* РЁРёС„СЂРѕРІР°РЅРёРµ Р±Р»РѕРєР°Р�?Рё РїРѕ AES_BLOCK_LEN Р±Р°Р№С‚. */
+        /* РЁРёС„СЂРѕРІР°РЅРёРµ Р±Р»РѕРєР°Р�?Рё РїРѕ AES_BLOCK_LEN Р±Р°Р№С‚. */
         for (; data_off + AES_BLOCK_LEN <= src->len; data_off += AES_BLOCK_LEN) {
             aes_xor(&src->buf[data_off], ctx->gamma, &out->buf[data_off]);
             block_encrypt(ctx, ctx->gamma, ctx->gamma);
@@ -1221,7 +1223,7 @@ static int encrypt_cfb(AesCtx *ctx, const ByteArray *src, ByteArray **dst)
 
     CHECK_NOT_NULL(out = ba_alloc_by_len(src->len));
 
-    /* Р�СЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РѕСЃС‚Р°РІС€РµР№СЃСЏ РіР°Р�?Р�?С‹. */
+    /* Р�СЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РѕСЃС‚Р°РІС€РµР№СЃСЏ РіР°Р�?Р�?С‹. */
     if (ctx->offset != 0) {
         while (ctx->offset < AES_BLOCK_LEN && data_off < src->len) {
             out->buf[data_off] = src->buf[data_off] ^ gamma[ctx->offset];
@@ -1235,7 +1237,7 @@ static int encrypt_cfb(AesCtx *ctx, const ByteArray *src, ByteArray **dst)
     }
 
     if (data_off < src->len) {
-        /* РЁРёС„СЂРѕРІР°РЅРёРµ Р±Р»РѕРєР°Р�?Рё РїРѕ AES_BLOCK_LEN Р±Р°Р№С‚. */
+        /* РЁРёС„СЂРѕРІР°РЅРёРµ Р±Р»РѕРєР°Р�?Рё РїРѕ AES_BLOCK_LEN Р±Р°Р№С‚. */
         for (; data_off + AES_BLOCK_LEN <= src->len; data_off += AES_BLOCK_LEN) {
             aes_xor(&src->buf[data_off], gamma, &out->buf[data_off]);
             memcpy(feed, &out->buf[data_off], AES_BLOCK_LEN);
@@ -1271,7 +1273,7 @@ static int decrypt_cfb(AesCtx *ctx, const ByteArray *src, ByteArray **dst)
 
     CHECK_NOT_NULL(out = ba_alloc_by_len(src->len));
 
-    /* Р�СЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РѕСЃС‚Р°РІС€РµР№СЃСЏ РіР°Р�?Р�?С‹. */
+    /* Р�СЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РѕСЃС‚Р°РІС€РµР№СЃСЏ РіР°Р�?Р�?С‹. */
     if (ctx->offset != 0) {
         while (ctx->offset < AES_BLOCK_LEN && data_off < src->len) {
             feed[ctx->offset] = src->buf[data_off];
@@ -1286,7 +1288,7 @@ static int decrypt_cfb(AesCtx *ctx, const ByteArray *src, ByteArray **dst)
     }
 
     if (data_off < src->len) {
-        /* Р Р°СЃС€РёС„СЂРѕРІР°РЅРёРµ Р±Р»РѕРєР°Р�?Рё РїРѕ AES_BLOCK_LEN Р±Р°Р№С‚. */
+        /* Р Р°СЃС€РёС„СЂРѕРІР°РЅРёРµ Р±Р»РѕРєР°Р�?Рё РїРѕ AES_BLOCK_LEN Р±Р°Р№С‚. */
         for (; data_off + AES_BLOCK_LEN <= src->len; data_off += AES_BLOCK_LEN) {
             memcpy(feed, &src->buf[data_off], AES_BLOCK_LEN);
             aes_xor(&src->buf[data_off], gamma, &out->buf[data_off]);
@@ -1417,7 +1419,7 @@ static int encrypt_ctr(AesCtx *ctx, const ByteArray *src, ByteArray **dst)
 
     CHECK_NOT_NULL(out = ba_alloc_by_len(src->len));
 
-    /* Р�СЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РѕСЃС‚Р°РІС€РµР№СЃСЏ РіР°Р�?Р�?С‹. */
+    /* Р�СЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РѕСЃС‚Р°РІС€РµР№СЃСЏ РіР°Р�?Р�?С‹. */
     if (ctx->offset != 0) {
         while (ctx->offset < AES_BLOCK_LEN && data_off < src->len) {
             out->buf[data_off] = src->buf[data_off] ^ gamma[ctx->offset];
@@ -1433,7 +1435,7 @@ static int encrypt_ctr(AesCtx *ctx, const ByteArray *src, ByteArray **dst)
     }
 
     if (data_off < src->len) {
-        /* РЁРёС„СЂРѕРІР°РЅРёРµ Р±Р»РѕРєР°Р�?Рё РїРѕ 8 Р±Р°Р№С‚. */
+        /* РЁРёС„СЂРѕРІР°РЅРёРµ Р±Р»РѕРєР°Р�?Рё РїРѕ 8 Р±Р°Р№С‚. */
         for (; data_off + AES_BLOCK_LEN <= src->len; data_off += AES_BLOCK_LEN) {
             aes_xor(&src->buf[data_off], gamma, &out->buf[data_off]);
 
@@ -1493,6 +1495,7 @@ int aes_init_ecb(AesCtx *ctx, const ByteArray *key)
     int ret = RET_OK;
 
     DO(aes_base_init(ctx, key));
+    init_revert_rkey(ctx);
 
     ctx->mode_id = AES_MODE_ECB;
 
@@ -1506,6 +1509,8 @@ int aes_init_cbc(AesCtx *ctx, const ByteArray *key, const ByteArray *iv)
     int ret = RET_OK;
 
     DO(aes_base_init(ctx, key));
+
+    init_revert_rkey(ctx);
 
     DO(aes_iv_init(ctx, iv));
 
@@ -1619,7 +1624,6 @@ int aes_decrypt(AesCtx *ctx, const ByteArray *in, ByteArray **out)
     switch (ctx->mode_id) {
     case AES_MODE_ECB:
         CHECK_PARAM((in->len % AES_BLOCK_LEN) == 0);
-        revert_rkey(ctx);
         DO(decrypt_ecb(ctx, in, out));
         break;
     case AES_MODE_CTR:
@@ -1632,7 +1636,6 @@ int aes_decrypt(AesCtx *ctx, const ByteArray *in, ByteArray **out)
         DO(encrypt_ofb(ctx, in, out));
         break;
     case AES_MODE_CBC:
-        revert_rkey(ctx);
         DO(decrypt_cbc(ctx, in, out));
         break;
     default:

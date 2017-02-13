@@ -181,6 +181,50 @@ cleanup:
     aes_free(ctx);
 }
 
+static void test_aes16_ecb_data_is_divided(void)
+{
+    AesCtx *ctx = NULL;
+    ByteArray *data = NULL;
+    ByteArray *data1 = ba_alloc_from_le_hex_string("6bc1bee22e409f96e93d7e117393172a");
+    ByteArray *data2 = ba_alloc_from_le_hex_string("abababababababababababababababab");
+    ByteArray *key = ba_alloc_from_le_hex_string("2b7e151628aed2a6abf7158809cf4f3c");
+    ByteArray *enc_data_exp = ba_alloc_from_le_hex_string("3ad77bb40d7a3660a89ecaf32466ef975170c5add70eb053de216641a9aae9e4");
+    ByteArray *enc_data = NULL;
+    ByteArray *enc_data1 = NULL;
+    ByteArray *enc_data2 = NULL;
+    ByteArray *dec_data1 = NULL;
+    ByteArray *dec_data2 = NULL;
+
+    ASSERT_NOT_NULL(data = ba_join(data1, data2));
+
+    ASSERT_NOT_NULL(ctx = aes_alloc());
+    ASSERT_RET_OK(aes_init_ecb(ctx, key));
+    ASSERT_RET_OK(aes_encrypt(ctx, data, &enc_data));
+    ASSERT_EQUALS_BA(enc_data_exp, enc_data);
+    aes_free(ctx); ctx = NULL;
+
+    ASSERT_NOT_NULL(ctx = aes_alloc());
+    ASSERT_RET_OK(aes_init_ecb(ctx, key));
+    ASSERT_RET_OK(aes_encrypt(ctx, data1, &enc_data1));
+    ASSERT_RET_OK(aes_encrypt(ctx, data2, &enc_data2));
+    ba_copy(enc_data1, 0, 0, enc_data, 0);
+    ba_copy(enc_data2, 0, 0, enc_data, 16);
+    ASSERT_EQUALS_BA(enc_data_exp, enc_data);
+    aes_free(ctx); ctx = NULL;
+
+    ASSERT_NOT_NULL(ctx = aes_alloc());
+    ASSERT_RET_OK(aes_init_ecb(ctx, key));
+    ASSERT_RET_OK(aes_decrypt(ctx, enc_data1, &dec_data1));
+    ASSERT_RET_OK(aes_decrypt(ctx, enc_data2, &dec_data2));
+    ASSERT_RET_OK(ba_append(dec_data2, 0, 0, dec_data1));
+    ASSERT_EQUALS_BA(data, dec_data1);
+
+cleanup:
+
+    aes_free(ctx);
+    BA_FREE(key, data, data1, data2, enc_data_exp, enc_data, enc_data1, enc_data2, dec_data1, dec_data2);
+}
+
 static void test_aes16_ctr_data_is_divided(void)
 {
     AesCtx *ctx = NULL;
@@ -477,6 +521,7 @@ void utest_aes(void)
 {
     PR("%s\n", __FILE__);
     test_aes_key_gen();
+    test_aes16_ecb_data_is_divided();
     test_aes16_ctr_data_is_divided();
     test_aes16_cfb_data_is_divided();
     test_aes16_ofb_data_is_divided();
