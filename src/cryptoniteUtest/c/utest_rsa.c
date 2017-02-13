@@ -410,8 +410,8 @@ static void rsa_extended_validate(void)
             ba_alloc_from_le_hex_string("0345331dcb186bd7b4e56eb366476a94a04f2e92fdbc738fcf2b6f63c3fbf34287f9b6f68fafc3dbc45d6d4376446245338c12cdeae95ef8fc0c30e4eaad3d60");
     ByteArray *p = ba_alloc_from_le_hex_string("6fc76c2ea74f36394bc4302dc29876497f34172fc0bdc4c5cb75f7cbae11dcc0");
     ByteArray *q = ba_alloc_from_le_hex_string("4f7ec0f3ce63eeeda5a5de58343bd79d9b5cc5271ca0619c78b2b1c581b89fbf");
-    ByteArray *dmp1 = ba_alloc_from_le_hex_string("c130c8d13a9ddadc18bf363809e9141ded8f365a6dbeec7037822e041ee6d200");
-    ByteArray *dmq1 = ba_alloc_from_le_hex_string("904df82194c613118de6a7202b52c280aecc8ecdaee1742b413083c163d2ccbe");
+    ByteArray *dmp1 = ba_alloc_from_le_hex_string("9f2ff31e1a35242632d8757381104f86ff22ba74d5d32dd9874efa8774b69280");
+    ByteArray *dmq1 = ba_alloc_from_le_hex_string("dffe2a4ddf97494919193f3b78273a691293831a6815416850cccb8356d0bf7f");
     ByteArray *iqmp = ba_alloc_from_le_hex_string("331dbcdf114ae665e7beb5003b17a84e9bf7abd3e3544635016e5a8b0f2b194b");
 
     ASSERT_NOT_NULL(ctx = rsa_alloc());

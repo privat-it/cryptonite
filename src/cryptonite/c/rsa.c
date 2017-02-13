@@ -731,8 +731,6 @@ int rsa_generate_privkey_ext(RsaCtx *ctx, PrngCtx *prng, const size_t bits, cons
     wq->buf[0]--;
     wp->buf[0]--;
     int_mul(wq, wp, fi);
-    wq->buf[0]++;
-    wp->buf[0]++;
 
     /* e */
     CHECK_NOT_NULL(we = wa_alloc_from_ba(e));
@@ -750,6 +748,9 @@ int rsa_generate_privkey_ext(RsaCtx *ctx, PrngCtx *prng, const size_t bits, cons
     CHECK_NOT_NULL(wdmq1 = wa_alloc_with_zero(plen));
     CHECK_NOT_NULL(gfq1 = gfp_alloc(wq));
     gfp_mod(gfq1, wd, wdmq1);
+
+    wq->buf[0]++;
+    wp->buf[0]++;
 
     /* coefficient = (inverse of q) mod p */
     CHECK_NOT_NULL(gfp = gfp_alloc(wp));
@@ -820,20 +821,18 @@ bool rsa_validate_key(RsaCtx *ctx, const ByteArray *n, const ByteArray *e, const
     CHECK_NOT_NULL(wq = wa_alloc_from_ba(q));
 
     /* n = p * q */
-    int_mul(wq, wp, wn); //РњРѕРґСѓР»СЊ
+    int_mul(wq, wp, wn);
     CHECK_NOT_NULL(wa_exp = wa_alloc_from_ba(n));
     if (!int_equals(wa_exp, wn)) {
         SET_ERROR(RET_INVALID_RSA_N);
     }
     wa_free(wa_exp);
     wa_exp = NULL;
-    /* fi = (p - 1) * (q - 1) */
 
+    /* fi = (p - 1) * (q - 1) */
     wq->buf[0]--;
     wp->buf[0]--;
     int_mul(wq, wp, fi);
-    wq->buf[0]++;
-    wp->buf[0]++;
 
     /* e */
     CHECK_NOT_NULL(we = wa_alloc_from_ba(e));
@@ -869,6 +868,9 @@ bool rsa_validate_key(RsaCtx *ctx, const ByteArray *n, const ByteArray *e, const
     }
     wa_free(wa_exp);
     wa_exp = NULL;
+
+    wq->buf[0]++;
+    wp->buf[0]++;
 
     /* coefficient = (inverse of q) mod p */
     CHECK_NOT_NULL(gfp = gfp_alloc(wp));
