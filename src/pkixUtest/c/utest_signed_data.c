@@ -338,7 +338,7 @@ static void test_sdata_get_content_time_stamp(SignedData_t *sdata)
     DigestAlgorithmIdentifiers_t *aids = NULL;
     struct tm *timeinfo = NULL;
 
-    //РўСѓС‚ СЂР°Р·РЅРёС†Р° РІ РґРІР° С‡Р°СЃР°
+    //Тут разница в два часа
     timeinfo = calloc(1, sizeof(struct tm));
     timeinfo->tm_year = 116;
     timeinfo->tm_mon  = 1;

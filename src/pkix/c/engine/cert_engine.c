@@ -139,7 +139,7 @@ int ecert_generate(const CertificateEngine *ctx,
     CHECK_PARAM(not_after != NULL);
     CHECK_PARAM(cert != NULL);
 
-    /* �?нформация о сертификате. */
+    /* Информация о сертификате. */
     ASN_ALLOC(tbs_cert);
 
     issuer = &tbs_cert->issuer;
@@ -154,25 +154,25 @@ int ecert_generate(const CertificateEngine *ctx,
     DO(asn_ba2INTEGER(cert_sn, &tbs_cert->serialNumber));
 
     if (ctx->is_self_signed) {
-        /* �?дентификатор алгоритма. */
+        /* Идентификатор алгоритма. */
         DO(asn_copy(&AlgorithmIdentifier_desc, &req->signatureAlgorithm, &tbs_cert->signature));
 
-        /* �?мя подписывающей стороны. */
+        /* Имя подписывающей стороны. */
         DO(asn_copy(&Name_desc, &req->certificationRequestInfo.subject, issuer));
 
-        /* �?мя владельца сертификата. */
+        /* Имя владельца сертификата. */
         DO(asn_copy(&Name_desc, issuer, subject));
 
     } else {
-        /* �?дентификатор алгоритма. */
+        /* Идентификатор алгоритма. */
         DO(ctx->sign_adapter->get_sign_alg(ctx->sign_adapter, &aid));
         DO(asn_copy(&AlgorithmIdentifier_desc, aid, &tbs_cert->signature));
         DO(ctx->sign_adapter->get_cert(ctx->sign_adapter, &issuer_cert));
 
-        /* �?мя подписывающей стороны. */
+        /* Имя подписывающей стороны. */
         DO(asn_copy(&Name_desc, &issuer_cert->tbsCertificate.subject, issuer));
 
-        /* �?мя владельца сертификата. */
+        /* Имя владельца сертификата. */
         DO(asn_copy(&Name_desc, &req->certificationRequestInfo.subject, subject));
     }
 
@@ -185,7 +185,7 @@ int ecert_generate(const CertificateEngine *ctx,
     DO(asn_copy(&PKIXTime_desc, tptr_not_before, &validity->notBefore));
     DO(asn_copy(&PKIXTime_desc, tptr_not_after, &validity->notAfter));
 
-    /* �?нформация об открытом ключе владельца сертификата. */
+    /* Информация об открытом ключе владельца сертификата. */
     DO(asn_copy(&SubjectPublicKeyInfo_desc, &req->certificationRequestInfo.subjectPKInfo, spki));
 
     if (exts) {

@@ -272,7 +272,7 @@ int ecert_request_generate(CertificateRequestEngine *ctx, CertificationRequest_t
         DO(exts_add_extension(exts_new, ctx->subj_dir_attr));
     }
 
-    /* В заявке от �?�?Т всегда есть. */
+    /* В заявке от ИИТ всегда есть. */
     DO(ext_create_subj_key_id(false, &info->subjectPKInfo, &ext_subj_key_id));
     DO(exts_add_extension(exts_new, ext_subj_key_id));
 

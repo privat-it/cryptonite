@@ -622,7 +622,7 @@ static void test_cipher_adapter_copy_with_alloc(void)
     ASSERT_RET_OK(pkix_create_oid(oids_get_oid_numbers_by_id(OID_GOST28147_OFB_ID), &cipher_oid));
     ASSERT_NOT_NULL(prng = prng_alloc(PRNG_MODE_DSTU, seed));
 
-    ASSERT_RET_OK(ba_alloc_from_file("src/pkixUtest/resources/certificate257.cer", &buffer));
+    ASSERT_RET_OK(ba_alloc_from_file("src/pkixUtest/resources/Key-6_minyust(12345677)_enveloped.cer", &buffer));
     ASSERT_NOT_NULL(cert = cert_alloc());
     ASSERT_RET_OK(cert_decode(cert, buffer));
 

@@ -45,7 +45,7 @@ CRYPTONITE_EXPORT int asn_encode(asn_TYPE_descriptor_t *desc, const void *object
 CRYPTONITE_EXPORT int asn_encode_ba(asn_TYPE_descriptor_t *desc, const void *object, ByteArray **encoded);
 
 /**
- * �?нициализирует asn структуру объекта из байтового представления.
+ * Инициализирует asn структуру объекта из байтового представления.
  * Выделяемая память требует освобождения.
  *
  * @param desc        дескриптор объекта

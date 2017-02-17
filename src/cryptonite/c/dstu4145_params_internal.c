@@ -1514,7 +1514,7 @@ const int *dstu4145_get_defaut_f_onb(int m)
 }
 
 /**
- * �?нициализирует параметры для ОНБ (полином образующий ПБ,
+ * Инициализирует параметры для ОНБ (полином образующий ПБ,
  * матрицы преобразования ОНБ в ПБ и наоборот).
  *
  * @param params параметры криптосистемы
@@ -1550,14 +1550,14 @@ int init_onb_params(Dstu4145ParamsCtx *params, int m)
     CALLOC_CHECKED(to_pb_prec, m * sizeof(WordArray *));
     CALLOC_CHECKED(to_onb_prec, m * sizeof(WordArray *));
 
-    /* �?нициализация U. */
+    /* Инициализация U. */
     CHECK_NOT_NULL(to_pb_prec[0] = wa_copy_with_alloc(root1));
     for (i = 1; i < m; i++) {
         CHECK_NOT_NULL(to_pb_prec[i] = wa_alloc(words));
         gf2m_mod_sqr(params->ec2m->gf2m, to_pb_prec[i - 1], to_pb_prec[i]);
     }
 
-    /* �?нициализация V. */
+    /* Инициализация V. */
     CHECK_NOT_NULL(to_onb_prec[0] = wa_alloc(words));
     memset(to_onb_prec[0]->buf, 0xff, words * sizeof(word_t));
     int_truncate(to_onb_prec[0], m);

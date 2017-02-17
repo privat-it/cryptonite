@@ -389,7 +389,7 @@ WordArray *gfp_mod_inv(const GfpCtx *ctx, const WordArray *in)
             carry = c->buf[c->len - 1] >> (WORD_BIT_LENGTH - 1);
             int_lshift(c, 1, c);
         } else {
-            /* �?наче a = (a - b)/2, c = d + c, d = 2*d. */
+            /* Иначе a = (a - b)/2, c = d + c, d = 2*d. */
             int_sub(a, b, a);
             int_rshift(0, a, 1, a);
             int_add(d, c, c);

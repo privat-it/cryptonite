@@ -23,7 +23,7 @@ struct CrlEngine_st {
     *clist;              /**< Предыдущий CRL, используется для обновления списков */
     RevokedCertificates_t
     *rcs;                /**< Набор записей отозванных сертификатов */
-    char                  *crl_template_name;  /**< �?мя шаблона CRL */
+    char                  *crl_template_name;  /**< Имя шаблона CRL */
     CRLType                type;               /**< Тип CRL */
     Extensions_t          *crl_extensions;
     char                  *crl_description;    /**< Опис CRL */

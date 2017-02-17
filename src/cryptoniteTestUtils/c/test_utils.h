@@ -176,8 +176,8 @@ TableBuilder *table_builder_alloc(size_t lib_num);
 
 /*
  * value
- * РµСЃР»Рё default_measure_value == MB\sec - value = РЅР°С‡Р°Р»СЊРЅРѕРµ РІСЂРµР�?СЏ
- * РµСЃР»Рё default_measure_value == op\sec - value = РєРѕР»РёС‡РµСЃС‚РІРѕ РёС‚РµСЂР°С†РёР№
+ * если default_measure_value == MB\sec - value = начальное время
+ * если default_measure_value == op\sec - value = количество итераций
  * */
 void add_time(TableBuilder *ctx, double value, size_t lib_index);
 double get_time(void);

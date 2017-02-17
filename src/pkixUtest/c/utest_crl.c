@@ -222,7 +222,7 @@ static void test_crl_get_cert_info(const CertificateList_t *crl)
     ASSERT_NOT_NULL(cert = cert_alloc());
     ASSERT_RET_OK(cert_decode(cert, decoded));
 
-    //rc == NULL С‚Р°Рє РєР°Рє СЃРµСЂС‚РёС„РёРєР°С‚ РЅРµ РѕС‚РѕР·РІР°РЅРЅС‹Р№
+    //rc == NULL так как сертификат не отозванный
     ASSERT_RET(RET_PKIX_OBJ_NOT_FOUND, crl_get_cert_info(crl, cert, &rc));
     ASSERT_TRUE(rc == NULL);
 
@@ -247,7 +247,7 @@ static void test_crl_get_cert_info_by_sn(const CertificateList_t *crl)
 
     ASSERT_RET_OK(asn_create_integer_from_ba(sn, &serial_number));
 
-    //rc == NULL С‚Р°Рє РєР°Рє СЃРµСЂС‚РёС„РёРєР°С‚ РЅРµ РѕС‚РѕР·РІР°РЅРЅС‹Р№
+    //rc == NULL так как сертификат не отозванный
     ASSERT_RET(RET_PKIX_OBJ_NOT_FOUND, crl_get_cert_info_by_sn(crl, serial_number, &rc));
     ASSERT_TRUE(rc == NULL);
 

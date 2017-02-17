@@ -924,7 +924,7 @@ static void generate_root_certificate_core(const char *dstu_params_name,
     ba_free(encoded);
     encoded = NULL;
 
-    /* �?нициализация генератора сертификатов. */
+    /* Инициализация генератора сертификатов. */
     EXECUTE(ecert_alloc(sa, da, true, &cert_engine_ctx));
 
     /* Генерация сертификата по запросу на сертификат и серийному номеру. */
@@ -989,7 +989,7 @@ static void generate_cert_core(const CertificationRequest_t *cert_request,
     EXECUTE(pkcs12_get_sign_adapter(storage, &sa));
     EXECUTE(sa->set_cert(sa, issuer_cert));
 
-    /* �?нициализация генератора сертификатов. */
+    /* Инициализация генератора сертификатов. */
     EXECUTE(ecert_alloc(sa, da, false, &cert_engine_ctx));
 
     /* Генерация сертификата по запросу на сертификат и серийному номеру. */
@@ -1032,7 +1032,7 @@ void generate_root_certificate(void)
         0x00, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xff, 0x00
     };
 
-    /* �?нформация о получателе сертификата. */
+    /* Информация о получателе сертификата. */
     const char subject[] =
             "{O=ТЕСТ}"
             "{OU=ЦСК}"
@@ -1156,7 +1156,7 @@ void generate_user_fiz_certificate(void)
 
     char *res_folder;
 
-    /* �?нформация о получателе сертификата. */
+    /* Информация о получателе сертификата. */
     const char subject[] =
             "{O=Петров Василь Олександрович ФОП}"
             "{OU=Керiвництво}"
@@ -1311,10 +1311,10 @@ void generate_user_ur_certificate(void)
         0x00, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xff, 0x03
     };
 
-    /* �?нформация о получателе сертификата. */
+    /* Информация о получателе сертификата. */
     const char subject[] =
             "{O=ООО ТЕСТ}"
-            "{OU=КЗ�?}"
+            "{OU=КЗИ}"
             "{CN=ТЕСТ}"
             "{SN=1234567890555}"
             "{C=UA}"
@@ -1913,7 +1913,7 @@ void generate_signed_data_container(void)
 
         res_folder = (char *)dstu_params_name_map[i];
 
-        /* �?нициализация сертификата подписчика. */
+        /* Инициализация сертификата подписчика. */
         load_ba_from_file(&user_storage_body, res_folder, "userfiz/private.key");
         load_certificate(res_folder, "userfiz/certificate.cer", &user_cert);
 
@@ -2024,7 +2024,7 @@ void generate_signed_data_container(void)
 
         /** Генерация контейнера подписи формата CAdES-C. */
 
-        /* �?нициализация сертификата подписчика. */
+        /* Инициализация сертификата подписчика. */
         load_certificate(res_folder, "tsp/certificate.cer", &tsp_cert);
         load_ba_from_file(&storage_body, res_folder, "tsp/private.key");
         load_ba_from_file(&encoded, res_folder, "root/certificate.cer");
@@ -2039,7 +2039,7 @@ void generate_signed_data_container(void)
         ba_free(encoded);
         encoded = NULL;
 
-        /* �?нициализация полного списка отозванных сертификатов. */
+        /* Инициализация полного списка отозванных сертификатов. */
         load_ba_from_file(&encoded, res_folder, "crl/full.crl");
         full_crl = crl_alloc();
         IS_NULL(full_crl);
@@ -2489,7 +2489,7 @@ void generate_crl_container(void)
 
         res_folder = (char *)dstu_params_name_map[i];
 
-        /* �?нициализация сертификата подписчика. */
+        /* Инициализация сертификата подписчика. */
         load_ba_from_file(&storage_body, res_folder, "root/private.key");
         EXECUTE(pkcs12_decode(NULL, storage_body, DEFAULT_STORAGE_PASSWORD, &storage));
         EXECUTE(pkcs12_select_key(storage, NULL, DEFAULT_KEY_PASSWORD));
@@ -3139,7 +3139,7 @@ void generate_tsp_certificate(void)
         0x00, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xff, 0x04
     };
 
-    /* �?нформация о получателе сертификата. */
+    /* Информация о получателе сертификата. */
     const char subject[] =
             "{O=Test}"
             "{OU=ЦСК}"
@@ -3391,7 +3391,7 @@ void generate_ocsp_certificate(void)
 
     char *res_folder;
 
-    /* �?нформация о получателе сертификата. */
+    /* Информация о получателе сертификата. */
     const char subject[] =
             "{O=Test}"
             "{OU=ЦСК}"
@@ -3695,7 +3695,7 @@ cleanup:
 
 int main(void)
 {
-    tprintf("\n\n     ========== �?нициализация криптографических параметров ДСТУ 4145-2002 ==========\n\n");
+    tprintf("\n\n     ========== Инициализация криптографических параметров ДСТУ 4145-2002 ==========\n\n");
 
     dstu4145_cache_init_all_std_params();
 

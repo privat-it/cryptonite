@@ -156,7 +156,7 @@ static void xtest_verify_core(TableBuilder *builder, Dstu4145VerifyHelper *data)
     if (dstuStdParams(params, data->oid) != ERR_OK) {
         goto cleanup;
     }
-    // С‚РµСЃС‚ Р�?.1 [РіРµРЅРµСЂР°С†РёСЏ РєР»СЋС‡РµР№]
+    // тест Б.1 [генерация ключей]
 
     ASSERT_TRUE(sizeof(state) >= prngCOMBO_keep());
     prngCOMBOStart(state, utilNonce32());
@@ -165,14 +165,14 @@ static void xtest_verify_core(TableBuilder *builder, Dstu4145VerifyHelper *data)
 
     if (dstuGenKeypair(privkey, pubkey, params, prngCOMBOStepG, state) != ERR_OK)
         goto cleanup;
-    // С‚РµСЃС‚ Р�?.1 [РІС‹СЂР°Р±РѕС‚РєР° Р­Р¦Рџ]
+    // тест Б.1 [выработка ЭЦП]
     ld = B_OF_O(2 * DSTU_SIZE);;
     hexToRev(hash, "09c9c44277910c9aaee486883a2eb95b7180166ddf73532eeb76edaef52247ff");
 
     if (dstuSign(sig, params, ld, hash, 32, privkey, prngCOMBOStepG, state) != ERR_OK)
         goto cleanup;
 
-    // С‚РµСЃС‚ Р�?.1 [РїСЂРѕРІРµСЂРєР° Р­Р¦Рџ]
+    // тест Б.1 [проверка ЭЦП]
     op_count = 0;
     time = get_time();
     do {
@@ -260,14 +260,14 @@ static void xtest_sign_core(TableBuilder *builder, Dstu4145VerifyHelper *data)
     if (dstuStdParams(params, data->oid) != ERR_OK) {
         goto cleanup;
     }
-    // С‚РµСЃС‚ Р�?.1 [РіРµРЅРµСЂР°С†РёСЏ РєР»СЋС‡РµР№]
+    // тест Б.1 [генерация ключей]
 
     ASSERT_TRUE(sizeof(state) >= prngCOMBO_keep());
     prngCOMBOStart(state, utilNonce32());
 
     dstuGenPoint(params->P, params, prngCOMBOStepG, state);
 
-   // С‚РµСЃС‚ Р�?.1 [РІС‹СЂР°Р±РѕС‚РєР° Р­Р¦Рџ]
+   // тест Б.1 [выработка ЭЦП]
     ld = B_OF_O(2 * DSTU_SIZE);;
     hexToRev(hash, "09c9c44277910c9aaee486883a2eb95b7180166ddf73532eeb76edaef52247ff");
 

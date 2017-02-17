@@ -183,7 +183,7 @@ int cert_store_get_certificates_by_alias(CertStore_t *store, const char *alias_p
         free(cert_path);
         cert_path = NULL;
 
-        /* �?гнорируем файл, если не смогли его прочитать. */
+        /* Игнорируем файл, если не смогли его прочитать. */
         if (ret != RET_OK) {
             continue;
         }

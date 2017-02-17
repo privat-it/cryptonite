@@ -22,10 +22,10 @@
 /** Преобразование типов OID. */
 #define EXT2OID(oid, OID_) DO(OBJECT_IDENTIFIER_set_arcs(&(OID_), (oid)->numbers, sizeof(long), (unsigned int)(oid)->numbers_len));
 
-/** �?нициализирует заголовок расширения по константам из oids.h (без значения). */
+/** Инициализирует заголовок расширения по константам из oids.h (без значения). */
 #define INIT_EXTENSION(ext, oid_id, critical_) DO(init_extension_((ext), oids_get_oid_numbers_by_id(oid_id), (critical_)));
 
-/** �?нициализирует заголовок расширения (без значения). */
+/** Инициализирует заголовок расширения (без значения). */
 static int init_extension_(Extension_t **ext, const OidNumbers *oid, bool critical)
 {
     int ret = RET_OK;

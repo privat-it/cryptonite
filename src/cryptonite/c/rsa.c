@@ -725,7 +725,7 @@ int rsa_generate_privkey_ext(RsaCtx *ctx, PrngCtx *prng, const size_t bits, cons
     CHECK_NOT_NULL(fi = wa_alloc_with_zero(2 * plen));
 
     /* n = p * q */
-    int_mul(wq, wp, wn); //РњРѕРґСѓР»СЊ
+    int_mul(wq, wp, wn); //Модуль
 
     /* fi = (p - 1) * (q - 1) */
     wq->buf[0]--;
@@ -821,15 +821,15 @@ bool rsa_validate_key(RsaCtx *ctx, const ByteArray *n, const ByteArray *e, const
     CHECK_NOT_NULL(wq = wa_alloc_from_ba(q));
 
     /* n = p * q */
-    int_mul(wq, wp, wn);
+    int_mul(wq, wp, wn); //Модуль
     CHECK_NOT_NULL(wa_exp = wa_alloc_from_ba(n));
     if (!int_equals(wa_exp, wn)) {
         SET_ERROR(RET_INVALID_RSA_N);
     }
     wa_free(wa_exp);
     wa_exp = NULL;
-
     /* fi = (p - 1) * (q - 1) */
+
     wq->buf[0]--;
     wp->buf[0]--;
     int_mul(wq, wp, fi);

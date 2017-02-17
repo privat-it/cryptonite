@@ -376,7 +376,7 @@ static void dstu7624_cfb_16_16(void)
     ASSERT_RET_OK(dstu7624_decrypt(ctx, cipher, &encoded));
 
     ASSERT_EQUALS_BA(data, encoded);
-    //РЎС‚СЂРёР�?РѕРІС‹Р№ СЂРµР¶РёР�? РїРѕРєР° С‡С‚Рѕ РЅРµРґРѕСЃС‚СѓРїРЅС‹Р№.
+    //Стримовый режим пока что недоступный.
 //    dstu7624_free(ctx);
 //
 //    ASSERT_NOT_NULL(ctx = dstu7624_alloc(DSTU7624_SBOX_1));

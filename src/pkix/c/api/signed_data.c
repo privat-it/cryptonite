@@ -551,8 +551,8 @@ int sdata_verify_without_data_by_adapter(const SignedData_t *sdata,
     sinfo = sdata->signerInfos.list.array[index];
 
     /**
-     * РџСЂРѕРІРµСЂСЏРµР�? СЃРѕРІРїР°РґРµРЅРёРµ Р°С‚СЂРёР±СѓС‚Р° "content-type" СЃ "eContentType" СЃС‚СЂСѓРєС‚СѓСЂС‹
-     * "encapContentInfo" РІ "signed-data".
+     * Проверяем совпадение атрибута "content-type" с "eContentType" структуры
+     * "encapContentInfo" в "signed-data".
      */
     DO(pkix_create_oid(oids_get_oid_numbers_by_id(OID_CONTENT_TYPE_ID), &oid));
     DO(sinfo_get_signed_attr_by_oid(sinfo, oid, &attr));
@@ -628,7 +628,7 @@ int sdata_get_content_time_stamp(const SignedData_t *sdata, int index, TspStatus
     if (tsp_sdata->signerInfos.list.count > 0) {
         int usage_signature = 1 << KeyUsage_digitalSignature;
         ret = get_cert_by_sid_and_usage(&tsp_sdata->signerInfos.list.array[0]->sid, usage_signature, certs_set, &tsp_cert);
-        /* if ret != RET_OK - TSP СЃРµСЂС‚РёС„РёРєР°С‚ РЅРµ РЅР°Р№РґРµ. */
+        /* if ret != RET_OK - TSP сертификат не найде. */
     } else {
         LOG_ERROR();
         SET_ERROR(RET_PKIX_SDATA_NO_SIGNERS);
@@ -642,7 +642,7 @@ int sdata_get_content_time_stamp(const SignedData_t *sdata, int index, TspStatus
 
     CHECK_NOT_NULL(signer = asn_copy_with_alloc(&SignerIdentifier_desc, &tsp_sdata->signerInfos.list.array[0]->sid));
 
-    /* РџСЂРѕРІРµСЂСЏРµР�?, С‡С‚Рѕ Р�?РµС‚РєР° РІСЂРµР�?РµРЅРё РѕС‚ РЅСѓР¶РЅС‹С… РґР°РЅРЅС‹С…. */
+    /* Проверяем, что метка времени от нужных данных. */
     DO(asn_OCTSTRING2ba(&tst_info->messageImprint.hashedMessage, &hash_data_act));
     DO(sinfo_get_message_digest(sinfo, &hash_data_exp));
 
@@ -764,8 +764,8 @@ int sdata_verify_external_data_by_adapter(const SignedData_t *sdata, const Diges
     sinfo = sdata->signerInfos.list.array[index];
 
     /**
-     * РџСЂРѕРІРµСЂСЏРµР�? СЃРѕРІРїР°РґРµРЅРёРµ Р°С‚СЂРёР±СѓС‚Р° "content-type" СЃ "eContentType" СЃС‚СЂСѓРєС‚СѓСЂС‹
-     * "encapContentInfo" РІ "signed-data".
+     * Проверяем совпадение атрибута "content-type" с "eContentType" структуры
+     * "encapContentInfo" в "signed-data".
      */
     DO(pkix_create_oid(oids_get_oid_numbers_by_id(OID_CONTENT_TYPE_ID), &oid));
     DO(sinfo_get_signed_attr_by_oid(sinfo, oid, &attr));

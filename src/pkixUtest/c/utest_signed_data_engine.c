@@ -161,7 +161,7 @@ static void test_esigned_data_generate(void)
     ASSERT_RET_OK(sdata_verify_internal_data_by_adapter(sdata, da1, va1, 1));
 
     /* UTC time 2016-02-26 09:22:12. */
-    // РўСѓС‚ РїРѕР»СѓС‡Р°РµС‚СЃСЏ СЂР°Р·РЅРёС†Р° РІ 2 С‡Р°СЃР°
+    // Тут получается разница в 2 часа
     timeinfo.tm_year = 116;
     timeinfo.tm_mon  = 1;
     timeinfo.tm_mday = 26;

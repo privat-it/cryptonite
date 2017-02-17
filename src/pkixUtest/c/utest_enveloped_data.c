@@ -160,7 +160,7 @@ void utest_enveloped_data(void)
         test_env_data_init();
         test_env_data_init_2();
         test_env_get_content_encryption_aid();
-        //TODO: Р”РѕР±Р°РІРёС‚СЊ РґР°РЅРЅС‹Рµ СЃ OriginatorInfo
+        //TODO: Добавить данные с OriginatorInfo
     }
 
     env_data_free(envdata);

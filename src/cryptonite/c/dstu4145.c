@@ -152,7 +152,7 @@ static Dstu4145ParamsCtx *dstu4145_params_alloc(const int *f, size_t f_len, int 
         params->to_onb = NULL;
     }
 
-    /* �?нициализация базовой точки. */
+    /* Инициализация базовой точки. */
     if (py == NULL) {
         DO(dstu4145_decompress_pubkey_core(params, px, &qx, &qy));
         CHECK_NOT_NULL(px_wa = wa_alloc_from_ba(qx));
@@ -674,7 +674,7 @@ int dstu4145_get_pubkey(const Dstu4145Ctx *ctx, const ByteArray *d, ByteArray **
     }
     DO(ec2m_dual_mul_opt(params->ec2m, params->precomp_p, d_wa, NULL, NULL, Q));
 
-    /* �?нвертируем точку эллиптической кривой. */
+    /* Инвертируем точку эллиптической кривой. */
     gf2m_mod_add(Q->x, Q->y, Q->y);
 
     if (params->is_onb) {
@@ -1197,7 +1197,7 @@ int dstu4145_dh(const Dstu4145Ctx *ctx, bool with_cofactor, const ByteArray *d, 
     CHECK_NOT_NULL(cofactor = wa_alloc(len));
     dstu4145ec_get_cofactor(ctx->params, cofactor);
 
-    /* �?нициализация открытого ключа удаленной стороны. */
+    /* Инициализация открытого ключа удаленной стороны. */
     DO(public_key_to_ec_point(ctx->params, qx, qy, &rq));
 
     /* Проверка того что открытый ключ лежит в подгруппе порядка n. */
