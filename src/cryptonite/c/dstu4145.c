@@ -879,7 +879,8 @@ int dstu4145_sign(const Dstu4145Ctx *ctx, const ByteArray *hash, ByteArray **r, 
     size_t ln;
 
     CHECK_PARAM(ctx != NULL);
-    CHECK_PARAM(hash != NULL || hash->len == 32);
+    CHECK_PARAM(hash != NULL);
+    CHECK_PARAM(hash->len == 32);
     CHECK_PARAM(r != NULL);
     CHECK_PARAM(s != NULL);
 
