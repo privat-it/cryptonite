@@ -820,7 +820,7 @@ void gf2m_mul_opt(const Gf2mCtx *ctx, const WordArray *x1, const WordArray *y1, 
     word_t xPoly[32];
     word_t yPoly[32];
     word_t dtPoly[16 * 4];
-    int n = (int)ctx->len;
+    int n;
     int s;
     int i, j;
     int ret = RET_OK;
@@ -828,6 +828,16 @@ void gf2m_mul_opt(const Gf2mCtx *ctx, const WordArray *x1, const WordArray *y1, 
     WordArray *x = NULL;
     WordArray *y = NULL;
     WordArray *r = NULL;
+
+    ASSERT(ctx != NULL);
+    ASSERT(x1 != NULL);
+    ASSERT(y1 != NULL);
+    ASSERT(r1 != NULL);
+    ASSERT(x1->len == ctx->len);
+    ASSERT(y1->len == ctx->len);
+    ASSERT(r1->len == 2 * ctx->len);
+
+    n = (int)ctx->len;
 
     if (n > WA_LEN(64)) {
         int y_len = (int)int_bit_len(y1);

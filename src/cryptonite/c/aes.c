@@ -1052,7 +1052,7 @@ __inline static void block_encrypt(AesCtx *ctx, uint8_t *in, uint8_t *out)
     uint32_t s0, s1, s2, s3, t0, t1, t2, t3;
 
     rk = (uint32_t *) ctx->rkey;
-    
+
     s0 = GETU_32(in) ^ ctx->rkey[0];
     s1 = GETU_32(in + 4) ^ ctx->rkey[1];
     s2 = GETU_32(in + 8) ^ ctx->rkey[2];
@@ -1328,7 +1328,7 @@ static int aes_padding(const ByteArray *data, ByteArray **out)
     ByteArray *data_copy = NULL;
     ByteArray *ba_padded = NULL;
     int ret = RET_OK;
-    size_t padded_len = 0;
+    uint8_t padded_len = 0;
 
     CHECK_NOT_NULL(data_copy = ba_copy_with_alloc(data, 0, 0));
 

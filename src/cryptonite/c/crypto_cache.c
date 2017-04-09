@@ -218,6 +218,7 @@ int crypto_cache_add_dstu4145(Dstu4145ParamsId params_id, OptLevelId opt_level)
     int ret = RET_OK;
     Dstu4145Ctx *dstu_ctx = NULL;
     Dstu4145CacheById *dstu4145_cache_by_id_curr = NULL;
+    Dstu4145CacheById *dstu4145_cache_by_id_new = NULL;
 
     pthread_mutex_lock(&dstu4145_cache_by_id_mutex);
 
@@ -225,22 +226,23 @@ int crypto_cache_add_dstu4145(Dstu4145ParamsId params_id, OptLevelId opt_level)
     if (dstu4145_cache_by_id_curr != NULL) {
         SET_ERROR(RET_CTX_ALREADY_IN_CACHE);
     } else {
-        CALLOC_CHECKED(dstu4145_cache_by_id_curr, sizeof(Dstu4145CacheById));
+        CALLOC_CHECKED(dstu4145_cache_by_id_new, sizeof(Dstu4145CacheById));
 
         CHECK_NOT_NULL(dstu_ctx = dstu4145_alloc_new(params_id));
         DO(dstu4145_set_opt_level(dstu_ctx, opt_level));
 
-        dstu4145_cache_by_id_curr->ctx = dstu_ctx;
+        dstu4145_cache_by_id_new->ctx = dstu_ctx;
         dstu_ctx = NULL;
-        dstu4145_cache_by_id_curr->params_id = params_id;
+        dstu4145_cache_by_id_new->params_id = params_id;
 
-        dstu4145_cache_id_append(dstu4145_cache_by_id_curr);
+        dstu4145_cache_id_append(dstu4145_cache_by_id_new);
+        dstu4145_cache_by_id_new = NULL;
     }
 
 cleanup:
 
     pthread_mutex_unlock(&dstu4145_cache_by_id_mutex);
-
+    dstu4145_cache_id_free(dstu4145_cache_by_id_new);
     dstu4145_free(dstu_ctx);
 
     return ret;
@@ -292,6 +294,7 @@ int crypto_cache_add_dstu4145_pb(const int *f, size_t f_len, int a, const ByteAr
     int ret = RET_OK;
     Dstu4145Ctx *dstu_ctx = NULL;
     Dstu4145CacheByPb *dstu4145_cache_by_pb_curr = NULL;
+    Dstu4145CacheByPb *dstu4145_cache_by_pb_new = NULL;
 
     pthread_mutex_lock(&dstu4145_cache_by_pb_mutex);
 
@@ -299,28 +302,30 @@ int crypto_cache_add_dstu4145_pb(const int *f, size_t f_len, int a, const ByteAr
     if (dstu4145_cache_by_pb_curr != NULL) {
         SET_ERROR(RET_CTX_ALREADY_IN_CACHE);
     } else {
-        CALLOC_CHECKED(dstu4145_cache_by_pb_curr, sizeof(Dstu4145CacheByPb));
+        CALLOC_CHECKED(dstu4145_cache_by_pb_new, sizeof(Dstu4145CacheByPb));
 
         CHECK_NOT_NULL(dstu_ctx = dstu4145_alloc_pb_new(f, f_len, a, b, n, px, py));
         DO(dstu4145_set_opt_level(dstu_ctx, opt_level));
 
-        dstu4145_cache_by_pb_curr->ctx = dstu_ctx;
+        dstu4145_cache_by_pb_new->ctx = dstu_ctx;
         dstu_ctx = NULL;
-        CALLOC_CHECKED(dstu4145_cache_by_pb_curr->f, f_len * sizeof(int));
-        memcpy(dstu4145_cache_by_pb_curr->f, f, f_len * sizeof(int));
-        dstu4145_cache_by_pb_curr->f_len = f_len;
-        dstu4145_cache_by_pb_curr->a = a;
-        CHECK_NOT_NULL(dstu4145_cache_by_pb_curr->b = ba_copy_with_alloc(b, 0, 0));
-        CHECK_NOT_NULL(dstu4145_cache_by_pb_curr->n = ba_copy_with_alloc(n, 0, 0));
-        CHECK_NOT_NULL(dstu4145_cache_by_pb_curr->px = ba_copy_with_alloc(px, 0, 0));
-        CHECK_NOT_NULL(dstu4145_cache_by_pb_curr->py = ba_copy_with_alloc(py, 0, 0));
+        CALLOC_CHECKED(dstu4145_cache_by_pb_new->f, f_len * sizeof(int));
+        memcpy(dstu4145_cache_by_pb_new->f, f, f_len * sizeof(int));
+        dstu4145_cache_by_pb_new->f_len = f_len;
+        dstu4145_cache_by_pb_new->a = a;
+        CHECK_NOT_NULL(dstu4145_cache_by_pb_new->b = ba_copy_with_alloc(b, 0, 0));
+        CHECK_NOT_NULL(dstu4145_cache_by_pb_new->n = ba_copy_with_alloc(n, 0, 0));
+        CHECK_NOT_NULL(dstu4145_cache_by_pb_new->px = ba_copy_with_alloc(px, 0, 0));
+        CHECK_NOT_NULL(dstu4145_cache_by_pb_new->py = ba_copy_with_alloc(py, 0, 0));
 
-        dstu4145_cache_pb_append(dstu4145_cache_by_pb_curr);
+        dstu4145_cache_pb_append(dstu4145_cache_by_pb_new);
+        dstu4145_cache_by_pb_new = NULL;
     }
 
 cleanup:
 
     pthread_mutex_unlock(&dstu4145_cache_by_pb_mutex);
+    dstu4145_cache_pb_free(dstu4145_cache_by_pb_new);
     dstu4145_free(dstu_ctx);
 
     return ret;
@@ -369,6 +374,7 @@ int crypto_cache_add_dstu4145_onb(const int m, int a, const ByteArray *b, const 
     int ret = RET_OK;
     Dstu4145Ctx *dstu_ctx = NULL;
     Dstu4145CacheByOnb *dstu4145_cache_by_onb_curr = NULL;
+    Dstu4145CacheByOnb *dstu4145_cache_by_onb_new = NULL;
 
     pthread_mutex_lock(&dstu4145_cache_by_onb_mutex);
 
@@ -376,26 +382,28 @@ int crypto_cache_add_dstu4145_onb(const int m, int a, const ByteArray *b, const 
     if (dstu4145_cache_by_onb_curr != NULL) {
         SET_ERROR(RET_CTX_ALREADY_IN_CACHE);
     } else {
-        CALLOC_CHECKED(dstu4145_cache_by_onb_curr, sizeof(Dstu4145CacheByOnb));
+        CALLOC_CHECKED(dstu4145_cache_by_onb_new, sizeof(Dstu4145CacheByOnb));
 
         CHECK_NOT_NULL(dstu_ctx = dstu4145_alloc_onb_new(m, a, b, n, px, py));
         DO(dstu4145_set_opt_level(dstu_ctx, opt_level));
 
-        dstu4145_cache_by_onb_curr->ctx = dstu_ctx;
+        dstu4145_cache_by_onb_new->ctx = dstu_ctx;
         dstu_ctx = NULL;
-        dstu4145_cache_by_onb_curr->m = m;
-        dstu4145_cache_by_onb_curr->a = a;
-        CHECK_NOT_NULL(dstu4145_cache_by_onb_curr->b = ba_copy_with_alloc(b, 0, 0));
-        CHECK_NOT_NULL(dstu4145_cache_by_onb_curr->n = ba_copy_with_alloc(n, 0, 0));
-        CHECK_NOT_NULL(dstu4145_cache_by_onb_curr->px = ba_copy_with_alloc(px, 0, 0));
-        CHECK_NOT_NULL(dstu4145_cache_by_onb_curr->py = ba_copy_with_alloc(py, 0, 0));
+        dstu4145_cache_by_onb_new->m = m;
+        dstu4145_cache_by_onb_new->a = a;
+        CHECK_NOT_NULL(dstu4145_cache_by_onb_new->b = ba_copy_with_alloc(b, 0, 0));
+        CHECK_NOT_NULL(dstu4145_cache_by_onb_new->n = ba_copy_with_alloc(n, 0, 0));
+        CHECK_NOT_NULL(dstu4145_cache_by_onb_new->px = ba_copy_with_alloc(px, 0, 0));
+        CHECK_NOT_NULL(dstu4145_cache_by_onb_new->py = ba_copy_with_alloc(py, 0, 0));
 
-        dstu4145_cache_onb_append(dstu4145_cache_by_onb_curr);
+        dstu4145_cache_onb_append(dstu4145_cache_by_onb_new);
+        dstu4145_cache_by_onb_new = NULL;
     }
 
 cleanup:
 
     pthread_mutex_unlock(&dstu4145_cache_by_onb_mutex);
+    dstu4145_cache_onb_free(dstu4145_cache_by_onb_new);
     dstu4145_free(dstu_ctx);
 
     return ret;
@@ -421,6 +429,7 @@ int crypto_cache_add_ecdsa(const ByteArray *p, const ByteArray *a, const ByteArr
     int ret = RET_OK;
     EcdsaCtx *ecdsa_ctx = NULL;
     EcdsaCache *ecdsa_cache_curr = NULL;
+    EcdsaCache *ecdsa_cache_new = NULL;
 
     pthread_mutex_lock(&ecdsa_cache_mutex);
 
@@ -428,27 +437,28 @@ int crypto_cache_add_ecdsa(const ByteArray *p, const ByteArray *a, const ByteArr
     if (ecdsa_cache_curr != NULL) {
         SET_ERROR(RET_CTX_ALREADY_IN_CACHE);
     } else {
-        CALLOC_CHECKED(ecdsa_cache_curr, sizeof(EcdsaCache));
+        CALLOC_CHECKED(ecdsa_cache_new, sizeof(EcdsaCache));
 
         CHECK_NOT_NULL(ecdsa_ctx = ecdsa_alloc_ext_new(p, a, b, q, px, py));
         DO(ecdsa_set_opt_level(ecdsa_ctx, opt_level));
 
-        ecdsa_cache_curr->ctx = ecdsa_ctx;
+        ecdsa_cache_new->ctx = ecdsa_ctx;
         ecdsa_ctx = NULL;
-        CHECK_NOT_NULL(ecdsa_cache_curr->p = ba_copy_with_alloc(p, 0, 0));
-        CHECK_NOT_NULL(ecdsa_cache_curr->a = ba_copy_with_alloc(a, 0, 0));
-        CHECK_NOT_NULL(ecdsa_cache_curr->b = ba_copy_with_alloc(b, 0, 0));
-        CHECK_NOT_NULL(ecdsa_cache_curr->q = ba_copy_with_alloc(q, 0, 0));
-        CHECK_NOT_NULL(ecdsa_cache_curr->px = ba_copy_with_alloc(px, 0, 0));
-        CHECK_NOT_NULL(ecdsa_cache_curr->py = ba_copy_with_alloc(py, 0, 0));
+        CHECK_NOT_NULL(ecdsa_cache_new->p = ba_copy_with_alloc(p, 0, 0));
+        CHECK_NOT_NULL(ecdsa_cache_new->a = ba_copy_with_alloc(a, 0, 0));
+        CHECK_NOT_NULL(ecdsa_cache_new->b = ba_copy_with_alloc(b, 0, 0));
+        CHECK_NOT_NULL(ecdsa_cache_new->q = ba_copy_with_alloc(q, 0, 0));
+        CHECK_NOT_NULL(ecdsa_cache_new->px = ba_copy_with_alloc(px, 0, 0));
+        CHECK_NOT_NULL(ecdsa_cache_new->py = ba_copy_with_alloc(py, 0, 0));
 
-        ecdsa_cache_append(ecdsa_cache_curr);
+        ecdsa_cache_append(ecdsa_cache_new);
+        ecdsa_cache_new = NULL;
     }
 
 cleanup:
 
     pthread_mutex_unlock(&ecdsa_cache_mutex);
-
+    ecdsa_cache_free(ecdsa_cache_new);
     ecdsa_free(ecdsa_ctx);
 
     return ret;

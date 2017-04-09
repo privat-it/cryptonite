@@ -1688,6 +1688,10 @@ int dstu4145_decompress_pubkey_core(const Dstu4145ParamsCtx *params, const ByteA
         SET_ERROR(RET_INVALID_PUBLIC_KEY);
     }
 
+    if (x->len != params->ec2m->len) {
+        wa_change_len(x, params->ec2m->len);
+    }
+
     q_len = (params->m + 7) / 8;
 
     /* Восстановление точки эллиптической кривой. */
