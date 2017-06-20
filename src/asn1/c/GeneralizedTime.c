@@ -719,6 +719,14 @@ asn_time2GT_frac(GeneralizedTime_t *opt_gt, const struct tm *_tm, int frac_value
 
     gmtoff = GMTOFF(*tm);
 
+    /* Коррекция летнего времени. */
+    if (tm->tm_isdst > 0) {
+        tm_s = *tm;
+        tm_s.tm_sec -= 3600;
+        timegm(&tm_s);  /* Fix the time */
+        tm = &tm_s;
+    }
+
     if (force_gmt && gmtoff) {
         tm_s = *tm;
         tm_s.tm_sec -= gmtoff;
@@ -729,14 +737,6 @@ asn_time2GT_frac(GeneralizedTime_t *opt_gt, const struct tm *_tm, int frac_value
 #else   /* !HAVE_TM_GMTOFF */
         gmtoff = 0;
 #endif
-    }
-
-    /* Коррекция летнего времени. */
-    if (tm->tm_isdst > 0) {
-        tm_s = *tm;
-        tm_s.tm_sec -= 3600;
-        timegm(&tm_s);  /* Fix the time */
-        tm = &tm_s;
     }
 
     size = snprintf(buf, buf_size, "%04d%02d%02d%02d%02d%02d",
