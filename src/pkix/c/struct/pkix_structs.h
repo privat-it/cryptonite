@@ -95,6 +95,7 @@
 #include "GeneralName.h"
 #include "GeneralNames.h"
 #include "GOST28147Params.h"
+#include "GOST28147ParamsOptionalDke.h"
 #include "Gost34310Params.h"
 #include "GOST34310Sign.h"
 #include "Hash.h"

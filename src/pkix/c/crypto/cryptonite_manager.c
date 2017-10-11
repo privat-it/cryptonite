@@ -20,7 +20,6 @@
 #include "cert.h"
 #include "aid.h"
 #include "spki.h"
-#include "GOST28147ParamsOptionalDke.h"
 
 #define SBOX_SIZE           128
 #define DSTU4145_KEY_SIZE   64
