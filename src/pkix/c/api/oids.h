@@ -168,15 +168,16 @@ typedef enum OidId_st {
     OID_ECDSA_SECP_224_R1_ID                                = 141,    /* 1.3.132.0.33 */
     OID_ECDSA_SECP_384_R1_ID                                = 142,    /* 1.3.132.0.34 */
     OID_ECDSA_SECP_521_R1_ID                                = 143,    /* 1.3.132.0.35 */
-    OID_ECDSA_WITH_SHA1_ID                                  = 144,    /* 1.2.840.10045.4.1 */
-    OID_ECDSA_WITH_SHA224_ID                                = 145,    /* 1.2.840.10045.4.3.1 */
-    OID_ECDSA_WITH_SHA256_ID                                = 146,    /* 1.2.840.10045.4.3.2 */
-    OID_ECDSA_WITH_SHA384_ID                                = 147,    /* 1.2.840.10045.4.3.3 */
-    OID_ECDSA_WITH_SHA512_ID                                = 148,    /* 1.2.840.10045.4.3.4 */
-    OID_AES256_CBC_ID                                       = 149,    /* 2.16.840.1.101.3.4.1.42 */
-    OID_PKI_HMAC_SHA1_ID                                    = 150,    /* 1.2.840.113549.2.7 */
-    OID_ETSI_QCS_ID                                         = 151,    /* 0.4.0.1862.1 */
-    OID_ETSI_QCS_QC_LIMIT_VALUE_ID                          = 152,    /* 0.4.0.1862.1.2 */
+    OID_ECDSA_SECP_256_K1_ID                                = 144,    /* 1.3.132.0.10 */
+    OID_ECDSA_WITH_SHA1_ID                                  = 150,    /* 1.2.840.10045.4.1 */
+    OID_ECDSA_WITH_SHA224_ID                                = 151,    /* 1.2.840.10045.4.3.1 */
+    OID_ECDSA_WITH_SHA256_ID                                = 152,    /* 1.2.840.10045.4.3.2 */
+    OID_ECDSA_WITH_SHA384_ID                                = 153,    /* 1.2.840.10045.4.3.3 */
+    OID_ECDSA_WITH_SHA512_ID                                = 154,    /* 1.2.840.10045.4.3.4 */
+    OID_AES256_CBC_ID                                       = 155,    /* 2.16.840.1.101.3.4.1.42 */
+    OID_PKI_HMAC_SHA1_ID                                    = 156,    /* 1.2.840.113549.2.7 */
+    OID_ETSI_QCS_ID                                         = 157,    /* 0.4.0.1862.1 */
+    OID_ETSI_QCS_QC_LIMIT_VALUE_ID                          = 158,    /* 0.4.0.1862.1.2 */
 } OidId;
 
 typedef struct OidNumbers_st {

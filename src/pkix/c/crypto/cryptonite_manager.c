@@ -3141,6 +3141,8 @@ int create_ecdsa_spki(const OBJECT_IDENTIFIER_t *signature_alg_oid,
         param = ECDSA_PARAMS_ID_SEC_P384_R1;
     } else if (pkix_check_oid_equal(pub_key_alg, oids_get_oid_numbers_by_id(OID_ECDSA_SECP_521_R1_ID))) {
         param = ECDSA_PARAMS_ID_SEC_P521_R1;
+    } else if (pkix_check_oid_equal(pub_key_alg, oids_get_oid_numbers_by_id(OID_ECDSA_SECP_256_K1_ID))) {
+        param = ECDSA_PARAMS_ID_SEC_P256_K1;
     } else {
         SET_ERROR(RET_PKIX_UNSUPPORTED_SIGN_ALG);
     }

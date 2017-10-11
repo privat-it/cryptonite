@@ -874,6 +874,9 @@ int aid_create_ecdsa_pubkey(const EcdsaParamsId param, AlgorithmIdentifier_t **a
     case ECDSA_PARAMS_ID_SEC_P521_R1:
         DO(pkix_set_oid(oids_get_oid_numbers_by_id(OID_ECDSA_SECP_521_R1_ID), &ecdsa_params->choice.namedCurve));
         break;
+    case ECDSA_PARAMS_ID_SEC_P256_K1:
+        DO(pkix_set_oid(oids_get_oid_numbers_by_id(OID_ECDSA_SECP_256_K1_ID), &ecdsa_params->choice.namedCurve));
+        break;
     default:
         SET_ERROR(RET_UNSUPPORTED_ECDSA_PARAMS);
     }
@@ -913,6 +916,8 @@ int aid_get_ecdsa_params(const AlgorithmIdentifier_t *aid, EcdsaCtx **ctx)
         CHECK_NOT_NULL(ecdsa = ecdsa_alloc(ECDSA_PARAMS_ID_SEC_P384_R1));
     } else if (pkix_check_oid_equal(oid, oids_get_oid_numbers_by_id(OID_ECDSA_SECP_521_R1_ID))) {
         CHECK_NOT_NULL(ecdsa = ecdsa_alloc(ECDSA_PARAMS_ID_SEC_P521_R1));
+    } else if (pkix_check_oid_equal(oid, oids_get_oid_numbers_by_id(OID_ECDSA_SECP_256_K1_ID))) {
+        CHECK_NOT_NULL(ecdsa = ecdsa_alloc(ECDSA_PARAMS_ID_SEC_P256_K1));
     } else {
         SET_ERROR(RET_UNSUPPORTED_ECDSA_PARAMS);
     }

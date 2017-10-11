@@ -277,6 +277,8 @@ int pkcs8_get_privatekey(const PrivateKeyInfo_t *key, ByteArray **privatekey)
             CHECK_NOT_NULL(*privatekey = ba_copy_with_alloc(tmp, 8, 48));
         } else if (pkix_check_oid_equal(oid, oids_get_oid_numbers_by_id(OID_ECDSA_SECP_521_R1_ID))) {
             CHECK_NOT_NULL(*privatekey = ba_copy_with_alloc(tmp, 8, 66));
+        } else if (pkix_check_oid_equal(oid, oids_get_oid_numbers_by_id(OID_ECDSA_SECP_256_K1_ID))) {
+            CHECK_NOT_NULL(*privatekey = ba_copy_with_alloc(tmp, 8, 32));
         }
         DO(ba_swap(*privatekey));
         ba_free(tmp);
