@@ -277,7 +277,7 @@ static void test_sa(void)
     sign_adapter_free(sa);
     sa = NULL;
     ASSERT_RET_OK(sa_copy->get_cert(sa_copy, &act_cert));
-    ASSERT_EQUALS_ASN(&Certificate_desc, cert, act_cert);
+    ASSERT_EQUALS_ASN(get_Certificate_desc(), cert, act_cert);
 
     ASSERT_RET_OK(sa_copy->get_digest_alg(sa_copy, &digest_aid));
     ASSERT_RET_OK(aid_encode(digest_aid, &act_digest_aid_bytes));
@@ -414,13 +414,13 @@ static void test_va_init_by_cert(void)
     ASSERT_TRUE(has_cert);
 
     ASSERT_RET_OK(va->get_cert(va, &act_cert));
-    ASSERT_EQUALS_ASN(&Certificate_desc, cert, act_cert);
+    ASSERT_EQUALS_ASN(get_Certificate_desc(), cert, act_cert);
 
     ASSERT_RET_OK(va->get_pub_key(va, &act_pub_key_info));
     ASSERT_EQUALS_ASN(&SubjectPublicKeyInfo_desc, &cert->tbsCertificate.subjectPublicKeyInfo, act_pub_key_info);
 
     ASSERT_RET_OK(va->get_digest_alg(va, &digest_alg_id));
-    ASSERT_EQUALS_ASN(&Certificate_desc, cert, act_cert);
+    ASSERT_EQUALS_ASN(get_Certificate_desc(), cert, act_cert);
 
     ASSERT_RET_OK(va->verify_data(va, data, sign));
 
@@ -465,13 +465,13 @@ static void test_va_init_by_cert_copy_with_alloc(void)
     ASSERT_TRUE(has_cert);
 
     ASSERT_RET_OK(va_copy->get_cert(va_copy, &act_cert));
-    ASSERT_EQUALS_ASN(&Certificate_desc, cert, act_cert);
+    ASSERT_EQUALS_ASN(get_Certificate_desc(), cert, act_cert);
 
     ASSERT_RET_OK(va_copy->get_pub_key(va_copy, &act_pub_key_info));
     ASSERT_EQUALS_ASN(&SubjectPublicKeyInfo_desc, &cert->tbsCertificate.subjectPublicKeyInfo, act_pub_key_info);
 
     ASSERT_RET_OK(va_copy->get_digest_alg(va_copy, &digest_alg_id));
-    ASSERT_EQUALS_ASN(&Certificate_desc, cert, act_cert);
+    ASSERT_EQUALS_ASN(get_Certificate_desc(), cert, act_cert);
 
     ASSERT_RET_OK(va_copy->verify_data(va_copy, data, sign));
 
@@ -622,7 +622,7 @@ static void test_cipher_adapter_copy_with_alloc(void)
     ASSERT_RET_OK(pkix_create_oid(oids_get_oid_numbers_by_id(OID_GOST28147_OFB_ID), &cipher_oid));
     ASSERT_NOT_NULL(prng = prng_alloc(PRNG_MODE_DSTU, seed));
 
-    ASSERT_RET_OK(ba_alloc_from_file("src/pkixUtest/resources/Key-6_minyust(12345677)_enveloped.cer", &buffer));
+    ASSERT_RET_OK(ba_alloc_from_file("src/pkixUtest/resources/certificate257.cer", &buffer));
     ASSERT_NOT_NULL(cert = cert_alloc());
     ASSERT_RET_OK(cert_decode(cert, buffer));
 
@@ -632,7 +632,7 @@ static void test_cipher_adapter_copy_with_alloc(void)
     ASSERT_NOT_NULL(ca_copy = cipher_adapter_copy_with_alloc(ca));
 
     ASSERT_RET_OK(ca_copy->get_alg(ca, &act_cipher_aid));
-    ASSERT_EQUALS_ASN(&AlgorithmIdentifier_desc, cipher_aid, act_cipher_aid);
+    ASSERT_EQUALS_ASN(get_AlgorithmIdentifier_desc(), cipher_aid, act_cipher_aid);
 
     ASSERT_RET_OK(gost28147_generate_key(prng, &session_secret_key));
     ASSERT_RET_OK(ca_copy->encrypt(ca_copy, session_secret_key, data, &encrypted_data));
@@ -759,7 +759,7 @@ static void test_va_init_by_cert_2(void)
     ASSERT_TRUE(has_cert);
 
     ASSERT_RET_OK(va->get_cert(va, &act_cert));
-    ASSERT_EQUALS_ASN(&Certificate_desc, cert, act_cert);
+    ASSERT_EQUALS_ASN(get_Certificate_desc(), cert, act_cert);
 
     ASSERT_RET_OK(va->get_pub_key(va, &act_pub_key_info));
     ASSERT_EQUALS_ASN(&SubjectPublicKeyInfo_desc, &cert->tbsCertificate.subjectPublicKeyInfo, act_pub_key_info);
@@ -767,10 +767,10 @@ static void test_va_init_by_cert_2(void)
     ASSERT_NOT_NULL(oids = oids_get_oid_numbers_by_id(OID_PKI_SHA256_ID));
     ASSERT_RET_OK(aid_init_by_oid(exp_digest_alg_id, oids));
     ASSERT_RET_OK(va->get_digest_alg(va, &act_digest_alg_id));
-    ASSERT_EQUALS_ASN(&DigestAlgorithmIdentifier_desc, exp_digest_alg_id, act_digest_alg_id);
+    ASSERT_EQUALS_ASN(get_DigestAlgorithmIdentifier_desc(), exp_digest_alg_id, act_digest_alg_id);
 
     ASSERT_RET_OK(va->get_sign_alg(va, &act_sign_alg_id));
-    ASSERT_EQUALS_ASN(&AlgorithmIdentifier_desc, &cert->signatureAlgorithm, act_sign_alg_id);
+    ASSERT_EQUALS_ASN(get_AlgorithmIdentifier_desc(), &cert->signatureAlgorithm, act_sign_alg_id);
 
 cleanup:
 

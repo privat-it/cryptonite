@@ -1121,7 +1121,7 @@ static void test_aid_create_ecdsa_pubkey(void)
 {
     AlgorithmIdentifier_t *aid = NULL;
 
-    ASSERT_RET(RET_UNSUPPORTED_ECDSA_PARAMS, aid_create_ecdsa_pubkey(ECDSA_PARAMS_ID_SEC_P521_R1 + 1, &aid));
+    ASSERT_RET(RET_UNSUPPORTED_ECDSA_PARAMS, aid_create_ecdsa_pubkey(ECDSA_PARAMS_ID_SEC_P256_K1 + 1, &aid));
     ASSERT_TRUE(aid == NULL);
 
 cleanup:
