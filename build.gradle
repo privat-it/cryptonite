@@ -379,11 +379,14 @@ model {
                     from "src/pkix/c/engine"
                     from "src/storage/c"
                     from "src/storage/c/file"
+                    from "src/storage/c/struct"
 
                     into "${distDir}/cryptonite"
 
                     include "*.h"
                     exclude "*internal.h"
+
+                    filter{String line -> line.replaceAll('CRYPTONITE_EXPORT ', '')}
                 }
 
                 def header = file("${distDir}/cryptonite_pki.h")
@@ -422,6 +425,12 @@ model {
                     header.append(new String(text.getBytes("UTF-8")))
                 }
 
+                headers = fileTree(dir: 'src/storage/c/struct', include: '*.h', exclude: '*_internal.h')
+                headers.each {File file ->
+                    def text = "#include \"cryptonite/" + file.name + "\"\n"
+                    header.append(new String(text.getBytes("UTF-8")))
+                }
+
                 header.append(new File("src/pkix/c/resources/header/bottom.txt").text)
             }
         }
@@ -436,6 +445,8 @@ model {
                     into "${distDir}/cryptonite"
                     include "*.h"
                     exclude "*internal.h"
+
+                    filter{String line -> line.replaceAll('CRYPTONITE_EXPORT ', '')}
                 }
 
                 def header = file("${distDir}/cryptonite.h")
