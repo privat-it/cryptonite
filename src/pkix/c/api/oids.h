@@ -178,6 +178,8 @@ typedef enum OidId_st {
     OID_PKI_HMAC_SHA1_ID                                    = 156,    /* 1.2.840.113549.2.7 */
     OID_ETSI_QCS_ID                                         = 157,    /* 0.4.0.1862.1 */
     OID_ETSI_QCS_QC_LIMIT_VALUE_ID                          = 158,    /* 0.4.0.1862.1.2 */
+    OID_PKI_GOST3410_ID                                     = 159,    /* 1.2.398.3.10.1.1.1.1 */
+
 } OidId;
 
 typedef struct OidNumbers_st {
