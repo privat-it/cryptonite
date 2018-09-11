@@ -223,11 +223,6 @@ int gost3410_init_sign(Gost3410Ctx *ctx, const ByteArray *d, PrngCtx *prng)
         ctx->pub_key = NULL;
     }
 
-//    if (ctx->precomp_p != NULL) {
-//        ec_precomp_free(ctx->precomp_p);
-//        ctx->precomp_p = NULL;
-//    }
-
     CHECK_NOT_NULL(d_wa = wa_alloc_from_ba(d));
     if (int_is_zero(d_wa) || int_cmp(d_wa, ctx->params->q) >= 0) {
         SET_ERROR(RET_INVALID_PRIVATE_KEY);
@@ -301,6 +296,8 @@ int gost3410_sign(Gost3410Ctx *ctx, const ByteArray *hash, ByteArray **rOut, Byt
         do {
             wa_free(k);
             wa_free(r);
+            ec_point_free(C);
+
             CHECK_NOT_NULL(k = wa_alloc_with_zero(ctx->params->q->len));
 
             DO(int_rand(ctx->prng, ctx->params->q, k));
