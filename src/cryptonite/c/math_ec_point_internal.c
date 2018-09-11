@@ -85,11 +85,17 @@ void ec_point_zero(ECPoint *p)
 
 void ec_point_copy(const ECPoint *a, ECPoint *out)
 {
-    if (a != NULL) {
-        wa_copy(a->x, out->x);
-        wa_copy(a->y, out->y);
-        wa_copy(a->z, out->z);
+    int ret = RET_OK;
+
+    if (a != NULL && out != NULL) {
+        DO(wa_copy(a->x, out->x));
+        DO(wa_copy(a->y, out->y));
+        DO(wa_copy(a->z, out->z));
     }
+
+cleanup:
+
+    return;
 }
 
 ECPoint *ec_point_copy_with_alloc(const ECPoint *a)

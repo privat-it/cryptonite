@@ -514,7 +514,12 @@ void ecp_mul(EcGfpCtx *ctx, const ECPoint *p, const WordArray *k, ECPoint *r)
 
     ASSERT(ctx != NULL);
     ASSERT(p != NULL);
+    ASSERT(p->x != NULL);
+    ASSERT(p->y != NULL);
     ASSERT(k != NULL);
+    ASSERT(r != NULL);
+    ASSERT(r->x != NULL);
+    ASSERT(r->y != NULL);
     ASSERT(ctx->len == p->x->len);
     ASSERT(ctx->len == r->x->len);
 
