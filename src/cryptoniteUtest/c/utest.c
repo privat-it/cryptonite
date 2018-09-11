@@ -36,6 +36,7 @@ int main(void)
     utest_ecdsa();
     utest_rsa();
     utest_dsa();
+    utest_gost3410();
 
     utest_crypto_cache();
 

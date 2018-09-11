@@ -33,6 +33,8 @@ void utest_stacktrace(void);
 void utest_byte_array(void);
 void utest_rs(void);
 void utest_crypto_cache(void);
+void utest_gost3410(void);
+
 
 
 #endif
