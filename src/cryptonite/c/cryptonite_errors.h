@@ -42,6 +42,7 @@ extern "C" {
 #define RET_INVALID_DSTU_PARAMS          29
 #define RET_UNSUPPORTED_ECDSA_PARAMS     30
 #define RET_CTX_ALREADY_IN_CACHE         31
+#define RET_POINT_NOT_ON_CURVE           32
 
 #ifdef  __cplusplus
 }
