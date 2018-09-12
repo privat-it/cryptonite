@@ -186,6 +186,7 @@ int sign_ba_to_bs(const ByteArray *sign, const AlgorithmIdentifier_t *aid, BIT_S
     CHECK_PARAM(sign != NULL);
     CHECK_PARAM(aid != NULL);
     CHECK_PARAM(sign_bitstring != NULL);
+
     if (is_dstu_le_params(&aid->algorithm)) {
         ASN_ALLOC(octet_sign);
         DO(asn_create_octstring_from_ba(sign, &octet_sign));

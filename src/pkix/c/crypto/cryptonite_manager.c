@@ -479,6 +479,10 @@ int digest_adapter_init_by_aid(const AlgorithmIdentifier_t *aid, DigestAdapter *
         CHECK_NOT_NULL(digest_parameters_str->mode.sha2 = sha2_alloc(SHA2_VARIANT_512));
         ASN_ALLOC(digest_parameters_str->digest_aid);
         DO(pkix_set_oid(oids_get_oid_numbers_by_id(OID_PKI_SHA512_ID), &digest_parameters_str->digest_aid->algorithm));
+    } else if (pkix_check_oid_equal(&aid->algorithm, oids_get_oid_numbers_by_id(OID_GOST3410_KZ_ID))) {
+        CHECK_NOT_NULL(digest_parameters_str->mode.gost = gost34_311_alloc(GOST28147_SBOX_ID_11, sync));
+        ASN_ALLOC(digest_parameters_str->digest_aid);
+        DO(pkix_set_oid(oids_get_oid_numbers_by_id(OID_GOST3410_KZ_ID), &digest_parameters_str->digest_aid->algorithm));
     } else {
         //Стандартное значение.
         digest_parameters_str->mode_id = DIGEST_MODE_SHA1;

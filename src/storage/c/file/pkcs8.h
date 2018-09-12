@@ -18,7 +18,8 @@ typedef enum {
     PRIVATEKEY_RSA = 1,
     PRIVATEKEY_DSA = 2,
     PRIVATEKEY_ECDSA = 3,
-    PRIVATEKEY_UNKNOWN = 4
+    PRIVATEKEY_GOST3410 = 4,
+    PRIVATEKEY_UNKNOWN = 5
 } Pkcs8PrivatekeyType;
 
 /**

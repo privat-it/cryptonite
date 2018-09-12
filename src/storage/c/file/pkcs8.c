@@ -232,6 +232,9 @@ int pkcs8_type(const PrivateKeyInfo_t *key, Pkcs8PrivatekeyType *type)
     } else if (pkix_check_oid_equal(&key->privateKeyAlgorithm.algorithm,
             oids_get_oid_numbers_by_id(OID_EC_PUBLIC_KEY_TYPE_ID))) {
         *type = PRIVATEKEY_ECDSA;
+    } else if (pkix_check_oid_equal(&key->privateKeyAlgorithm.algorithm,
+            oids_get_oid_numbers_by_id(OID_PKI_GOST3410_ID))) {
+        *type = PRIVATEKEY_GOST3410;
     } else {
         *type = PRIVATEKEY_UNKNOWN;
     }
