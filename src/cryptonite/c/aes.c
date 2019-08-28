@@ -1122,6 +1122,10 @@ static int encrypt_ecb(AesCtx *ctx, const ByteArray *pdata, ByteArray **cdata)
     size_t i;
     int ret = RET_OK;
 
+    if (pdata->len % AES_BLOCK_LEN != 0) {
+        SET_ERROR(RET_INVALID_DATA_LEN);
+    }
+
     DO(ba_to_uint8_with_alloc(pdata, &pdata_buf, &pdata_len));
 
     for (i = 0; i < pdata_len; i += AES_BLOCK_LEN) {
@@ -1146,6 +1150,10 @@ static int decrypt_ecb(AesCtx *ctx, const ByteArray *pdata, ByteArray **cdata)
     size_t pdata_len;
     size_t i;
     int ret = RET_OK;
+
+    if (pdata->len % AES_BLOCK_LEN != 0) {
+        SET_ERROR(RET_INVALID_DATA_LEN);
+    }
 
     DO(ba_to_uint8_with_alloc(pdata, &pdata_buf, &pdata_len));
 
@@ -1322,32 +1330,6 @@ cleanup:
     return ret;
 }
 
-//PKCS5 padding
-static int aes_padding(const ByteArray *data, ByteArray **out)
-{
-    ByteArray *data_copy = NULL;
-    ByteArray *ba_padded = NULL;
-    int ret = RET_OK;
-    uint8_t padded_len = 0;
-
-    CHECK_NOT_NULL(data_copy = ba_copy_with_alloc(data, 0, 0));
-
-    padded_len = (AES_BLOCK_LEN - data->len % AES_BLOCK_LEN) % AES_BLOCK_LEN;
-    CHECK_NOT_NULL(ba_padded = ba_alloc_by_len(padded_len));
-    DO(ba_set(ba_padded, padded_len));
-    DO(ba_append(ba_padded, 0, 0, data_copy));
-
-    *out = data_copy;
-    data_copy = NULL;
-
-cleanup:
-
-    ba_free(ba_padded);
-    ba_free(data_copy);
-
-    return ret;
-}
-
 static int encrypt_cbc(AesCtx *ctx, const ByteArray *src, ByteArray **dst)
 {
     ByteArray *out = NULL;
@@ -1358,14 +1340,14 @@ static int encrypt_cbc(AesCtx *ctx, const ByteArray *src, ByteArray **dst)
     CHECK_PARAM(src != NULL);
     CHECK_PARAM(dst != NULL);
 
-    if (src->len % AES_BLOCK_LEN == 0) {
-        CHECK_NOT_NULL(out = ba_copy_with_alloc(src, 0, 0));
-    } else {
-        DO(aes_padding(src, &out));
+    if (src->len % AES_BLOCK_LEN != 0) {
+        SET_ERROR(RET_INVALID_DATA_LEN);
     }
 
+    CHECK_NOT_NULL(out = ba_alloc_by_len(src->len));
+
     for (; data_off + AES_BLOCK_LEN <= out->len; data_off += AES_BLOCK_LEN) {
-        aes_xor(&out->buf[data_off], ctx->gamma, ctx->gamma);
+        aes_xor(&src->buf[data_off], ctx->gamma, ctx->gamma);
         block_encrypt(ctx, ctx->gamma, ctx->gamma);
         memcpy(&out->buf[data_off], ctx->gamma, AES_BLOCK_LEN);
     }
@@ -1604,7 +1586,6 @@ int aes_encrypt(AesCtx *ctx, const ByteArray *in, ByteArray **out)
 
     switch (ctx->mode_id) {
     case AES_MODE_ECB:
-        CHECK_PARAM((in->len % AES_BLOCK_LEN) == 0);
         DO(encrypt_ecb(ctx, in, out));
         break;
     case AES_MODE_CTR:
@@ -1638,7 +1619,6 @@ int aes_decrypt(AesCtx *ctx, const ByteArray *in, ByteArray **out)
 
     switch (ctx->mode_id) {
     case AES_MODE_ECB:
-        CHECK_PARAM((in->len % AES_BLOCK_LEN) == 0);
         DO(decrypt_ecb(ctx, in, out));
         break;
     case AES_MODE_CTR:

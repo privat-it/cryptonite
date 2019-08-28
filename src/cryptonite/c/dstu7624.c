@@ -56,7 +56,7 @@ typedef struct Dstu7624OfbCtx_st {
 } Dstu7624OfbCtx;
 
 typedef struct Dstu7624CbcCtx_st {
-    uint8_t iv[64];
+    uint8_t gamma[64];
 } Dstu7624CbcCtx;
 
 typedef struct Dstu7624CfbCtx_st {
@@ -2915,8 +2915,11 @@ static int encrypt_ecb(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **out)
 
     CHECK_PARAM(ctx != NULL);
     CHECK_PARAM(in != NULL);
-    CHECK_PARAM((in->len % ctx->block_len) == 0);
     CHECK_PARAM(out != NULL);
+
+    if (in->len % ctx->block_len != 0) {
+        SET_ERROR(RET_INVALID_DATA_LEN);
+    }
 
     DO(ba_to_uint64_with_alloc(in, &plain_data, &plain_data_size_word));
 
@@ -2944,8 +2947,11 @@ static int decrypt_ecb(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **out)
 
     CHECK_PARAM(ctx != NULL);
     CHECK_PARAM(in != NULL);
-    CHECK_PARAM((in->len % ctx->block_len) == 0);
     CHECK_PARAM(out != NULL);
+
+    if (in->len % ctx->block_len != 0) {
+        SET_ERROR(RET_INVALID_DATA_LEN);
+    }
 
     DO(ba_to_uint64_with_alloc(in, &plain_data, &plain_data_size_word));
 
@@ -3158,19 +3164,21 @@ static int encrypt_cbc(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **out)
     CHECK_PARAM(out != NULL);
 
     block_len = ctx->block_len;
+
+    if (in->len % block_len != 0) {
+        SET_ERROR(RET_INVALID_DATA_LEN);
+    }
+
     plain_data_size_byte = in->len;
 
     CALLOC_CHECKED(cipher_data, (plain_data_size_byte + (block_len - plain_data_size_byte % block_len)));
     memcpy(cipher_data, in->buf, in->len);
-    padding(ctx, cipher_data, &plain_data_size_byte, cipher_data);
-    memcpy(gamma, ctx->mode.cbc.iv, ctx->block_len);
 
     for (i = 0; i < plain_data_size_byte; i += block_len) {
-        kalina_xor(&cipher_data[i], gamma, block_len, gamma);
-        crypt_basic_transform(ctx, gamma, gamma);
-        memcpy(&cipher_data[i], gamma, block_len);
+        kalina_xor(&cipher_data[i], ctx->mode.cbc.gamma, block_len, ctx->mode.cbc.gamma);
+        crypt_basic_transform(ctx, ctx->mode.cbc.gamma, ctx->mode.cbc.gamma);
+        memcpy(&cipher_data[i], ctx->mode.cbc.gamma, block_len);
     }
-
 
     CHECK_NOT_NULL(*out = ba_alloc());
     (*out)->buf = cipher_data;
@@ -3902,17 +3910,14 @@ static int decrypt_cbc(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **out)
     cipher_data = in->buf;
     data_len = in->len;
     MALLOC_CHECKED(plain_data, data_len);
-    memcpy(gamma, ctx->mode.cbc.iv, block_len);
 
     for (i = 0; i < data_len; i += block_len) {
         decrypt_basic_transform(ctx, &cipher_data[i], &plain_data[i]);
-        kalina_xor(gamma, &plain_data[i], block_len, &plain_data[i]);
-        memcpy(gamma, &cipher_data[i], ctx->block_len);
+        kalina_xor(ctx->mode.cbc.gamma, &plain_data[i], block_len, &plain_data[i]);
+        memcpy(ctx->mode.cbc.gamma, &cipher_data[i], ctx->block_len);
     }
 
-    i = unpadding(plain_data, &data_len, plain_data);
-
-    CHECK_NOT_NULL(*out = ba_alloc_from_uint8(plain_data, data_len - i));
+    CHECK_NOT_NULL(*out = ba_alloc_from_uint8(plain_data, data_len));
 
 cleanup:
 
@@ -3947,7 +3952,7 @@ int dstu7624_init_cbc(Dstu7624Ctx *ctx, const ByteArray *key, const ByteArray *i
 
     DO(dstu7624_init(ctx, key, iv->len));
 
-    memcpy(ctx->mode.cbc.iv, iv->buf, ctx->block_len);
+    memcpy(ctx->mode.cbc.gamma, iv->buf, ctx->block_len);
 
     ctx->mode_id = DSTU7624_MODE_CBC;
 

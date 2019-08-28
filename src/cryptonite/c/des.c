@@ -1601,6 +1601,10 @@ static int des_encrypt_ecb(uint32_t *key_shedule, const ByteArray *in, ByteArray
     int ret = RET_OK;
     ByteArray *cip = NULL;
 
+    if (in->len % DES_BLOCK_LEN != 0) {
+        SET_ERROR(RET_INVALID_DATA_LEN);
+    }
+
     CHECK_NOT_NULL(cip = ba_alloc_by_len(in->len));
 
     for (i = 0; i < in->len; i += DES_BLOCK_LEN) {
@@ -1620,6 +1624,10 @@ static __inline int des3_encrypt_ecb(uint32_t *key_shedule, const ByteArray *in,
     int ret = RET_OK;
     ByteArray *cip = NULL;
 
+    if (in->len % DES_BLOCK_LEN != 0) {
+        SET_ERROR(RET_INVALID_DATA_LEN);
+    }
+
     CHECK_NOT_NULL(cip = ba_alloc_by_len(in->len));
 
     for (i = 0; i < in->len; i += DES_BLOCK_LEN) {
@@ -1633,91 +1641,58 @@ cleanup:
     return ret;
 }
 
-//PKCS5 padding
-static int des_padding(const ByteArray *data, uint8_t **buf, size_t *buf_len)
+static int des_encrypt_cbc(DesCtx *ctx, const ByteArray *in, ByteArray **dst)
 {
-    uint8_t *out_buf = *buf;
-    size_t len = 0;
-    size_t padded_len = 0;
-    size_t i = 0;
+    ByteArray *out = NULL;
     int ret = RET_OK;
+    int data_off = 0;
 
-    padded_len = (DES_BLOCK_LEN - data->len % DES_BLOCK_LEN) % DES_BLOCK_LEN;
-
-    len = data->len + padded_len;
-    MALLOC_CHECKED(out_buf, len);
-
-    memcpy(out_buf, data->buf, data->len);
-
-    for (i = data->len ; i < len; i++) {
-        out_buf[i] = padded_len & 0xff;
+    if (in->len % DES_BLOCK_LEN != 0) {
+        SET_ERROR(RET_INVALID_DATA_LEN);
     }
 
-    *buf = out_buf;
-    *buf_len = len;
-    out_buf = NULL;
+    CHECK_NOT_NULL(out = ba_alloc_by_len(in->len));
+
+    for (; data_off + DES_BLOCK_LEN <= in->len; data_off += DES_BLOCK_LEN) {
+        des_xor(&in->buf[data_off], ctx->gamma_des3, ctx->gamma_des3);
+        des_crypt(ctx->gamma_des3, &out->buf[data_off], ctx->enc_key);
+        memcpy(ctx->gamma_des3, &out->buf[data_off], DES_BLOCK_LEN);
+    }
+
+    *dst = out;
+    out = NULL;
 
 cleanup:
 
-    free(out_buf);
+    ba_free(out);
 
     return ret;
 }
 
-static int des_encrypt_cbc(DesCtx *ctx, const ByteArray *in, ByteArray **out)
+static int des3_encrypt_cbc(DesCtx *ctx, const ByteArray *in, ByteArray **dst)
 {
-    size_t i;
+    ByteArray *out = NULL;
     int ret = RET_OK;
-    uint8_t *in_buf = NULL;
-    size_t in_len;
+    int data_off = 0;
 
-    DO(des_padding(in, &in_buf, &in_len));
-
-    des_xor(ctx->gamma_des3, in_buf, ctx->gamma_des3);
-
-    for (i = 0; i < in->len;) {
-        des_crypt(ctx->gamma_des3, &in_buf[i], ctx->enc_key);
-        memcpy(ctx->gamma_des3, &in_buf[i], DES_BLOCK_LEN);
-        if ((i += DES_BLOCK_LEN) < in_len) {
-            des_xor(ctx->gamma_des3, &in_buf[i], ctx->gamma_des3);
-        }
+    if (in->len % DES_BLOCK_LEN != 0) {
+        SET_ERROR(RET_INVALID_DATA_LEN);
     }
 
-    CHECK_NOT_NULL(*out = ba_alloc());
-    (*out)->buf = in_buf;
-    (*out)->len = in_len;
-    in_buf = NULL;
+    CHECK_NOT_NULL(out = ba_alloc_by_len(in->len));
+
+    for (; data_off + DES_BLOCK_LEN <= in->len; data_off += DES_BLOCK_LEN) {
+        des_xor(&in->buf[data_off], ctx->gamma_des3, ctx->gamma_des3);
+        des3_crypt(ctx->gamma_des3, &in->buf[data_off], ctx->enc_key);
+        memcpy(ctx->gamma_des3, &in->buf[data_off], DES_BLOCK_LEN);
+    }
+
+    *dst = out;
+    out = NULL;
 
 cleanup:
 
-    return ret;
-}
-
-static int des3_encrypt_cbc(DesCtx *ctx, const ByteArray *in, ByteArray **out)
-{
-    size_t i;
-    int ret = RET_OK;
-    uint8_t *in_buf = NULL;
-    size_t in_len;
-
-    DO(des_padding(in, &in_buf, &in_len));
-
-    des_xor(ctx->gamma_des3, in_buf, ctx->gamma_des3);
-
-    for (i = 0; i < in_len;) {
-        des3_crypt(ctx->gamma_des3, &in_buf[i], ctx->enc_key);
-        memcpy(ctx->gamma_des3, &in_buf[i], 8);
-        if ((i += 8) < in_len) {
-            des_xor(ctx->gamma_des3, &in_buf[i], ctx->gamma_des3);
-        }
-    }
-
-    CHECK_NOT_NULL(*out = ba_alloc());
-    (*out)->buf = in_buf;
-    (*out)->len = in_len;
-    in_buf = NULL;
-
-cleanup:
+    ba_free(out);
 
     return ret;
 }
@@ -2197,7 +2172,6 @@ int des3_encrypt(DesCtx *ctx, const ByteArray *in, ByteArray **out)
 
     switch (ctx->mode) {
     case ECB:
-        CHECK_PARAM((in->len % DES_BLOCK_LEN) == 0);
         DO(des3_encrypt_ecb(ctx->enc_key, in, out));
         break;
     case CTR:
@@ -2231,7 +2205,6 @@ int des_encrypt(DesCtx *ctx, const ByteArray *in, ByteArray **out)
 
     switch (ctx->mode) {
     case ECB:
-        CHECK_PARAM((in->len % DES_BLOCK_LEN) == 0);
         DO(des_encrypt_ecb(ctx->enc_key, in, out));
         break;
     case CTR:
@@ -2265,7 +2238,6 @@ int des_decrypt(DesCtx *ctx, const ByteArray *in, ByteArray **out)
 
     switch (ctx->mode) {
     case ECB:
-        CHECK_PARAM((in->len % DES_BLOCK_LEN) == 0);
         DO(des_encrypt_ecb(&ctx->dec_key[64], in, out));
         break;
     case CTR:
@@ -2300,7 +2272,6 @@ int des3_decrypt(DesCtx *ctx, const ByteArray *in, ByteArray **out)
 
     switch (ctx->mode) {
     case ECB:
-        CHECK_PARAM((in->len % DES_BLOCK_LEN) == 0);
         DO(des3_encrypt_ecb(ctx->dec_key, in, out));
         break;
     case CTR:
