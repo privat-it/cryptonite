@@ -1653,7 +1653,7 @@ static int des_encrypt_cbc(DesCtx *ctx, const ByteArray *in, ByteArray **dst)
 
     CHECK_NOT_NULL(out = ba_alloc_by_len(in->len));
 
-    for (; data_off + DES_BLOCK_LEN <= in->len; data_off += DES_BLOCK_LEN) {
+    for (; data_off + DES_BLOCK_LEN <= (int)in->len; data_off += DES_BLOCK_LEN) {
         des_xor(&in->buf[data_off], ctx->gamma_des3, ctx->gamma_des3);
         des_crypt(ctx->gamma_des3, &out->buf[data_off], ctx->enc_key);
         memcpy(ctx->gamma_des3, &out->buf[data_off], DES_BLOCK_LEN);
@@ -1681,7 +1681,7 @@ static int des3_encrypt_cbc(DesCtx *ctx, const ByteArray *in, ByteArray **dst)
 
     CHECK_NOT_NULL(out = ba_alloc_by_len(in->len));
 
-    for (; data_off + DES_BLOCK_LEN <= in->len; data_off += DES_BLOCK_LEN) {
+    for (; data_off + DES_BLOCK_LEN <= (int)in->len; data_off += DES_BLOCK_LEN) {
         des_xor(&in->buf[data_off], ctx->gamma_des3, ctx->gamma_des3);
         des3_crypt(ctx->gamma_des3, &in->buf[data_off], ctx->enc_key);
         memcpy(ctx->gamma_des3, &in->buf[data_off], DES_BLOCK_LEN);

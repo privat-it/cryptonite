@@ -586,7 +586,7 @@ int safebag_get_alias(const SafeBag_t *bag, int idx, char **alias)
         DO(utf16be_to_utf8(alias_bs->buf, alias_bs->size, &name));
     } else {
         MALLOC_CHECKED(name, strlen(PKCS12_DEFAULT_NAME) + 3 + 1);
-        sprintf(name, "%s%i", PKCS12_DEFAULT_NAME, (idx + 1));
+        sprintf(name, "%s%i", PKCS12_DEFAULT_NAME, (uint8_t)(idx + 1));
     }
 
     *alias = name;

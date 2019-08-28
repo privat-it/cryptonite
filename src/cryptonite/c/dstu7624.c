@@ -3153,7 +3153,6 @@ cleanup:
 static int encrypt_cbc(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **out)
 {
     uint8_t *cipher_data = NULL;
-    uint8_t gamma[KALINA_512_BLOCK_LEN];
     size_t block_len;
     size_t plain_data_size_byte;
     size_t i;
@@ -3895,7 +3894,6 @@ static int decrypt_cbc(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **out)
 {
     uint8_t *cipher_data = NULL;
     uint8_t *plain_data = NULL;
-    uint8_t gamma[64];
     size_t block_len;
     size_t data_len;
     size_t i;
