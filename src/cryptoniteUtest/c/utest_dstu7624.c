@@ -4,6 +4,7 @@
  */
 
 #include "utest.h"
+#include "paddings.h"
 
 #include "dstu7624.h"
 
@@ -484,6 +485,7 @@ cleanup:
 static void dstu7624_cbc_16_16(void)
 {
     Dstu7624Ctx *ctx = NULL;
+    ByteArray *result = NULL;
     ByteArray *data = ba_alloc_from_le_hex_string(
             "202122232425262728292A2B2C2D2E2F303132333435363738393A3B3C3D3E3F404142434445464748");
     ByteArray *key = ba_alloc_from_le_hex_string("000102030405060708090A0B0C0D0E0F");
@@ -494,18 +496,23 @@ static void dstu7624_cbc_16_16(void)
 
     ASSERT_NOT_NULL(ctx = dstu7624_alloc(DSTU7624_SBOX_1));
     ASSERT_RET_OK(dstu7624_init_cbc(ctx, key, iv));
-    ASSERT_RET_OK(dstu7624_encrypt(ctx, data, &cipher));
+
+    ASSERT_RET_OK(make_iso_7816_4_padding(data, (uint8_t)ba_get_len(iv), &result))
+    ASSERT_RET_OK(dstu7624_encrypt(ctx, result, &cipher));
 
     ASSERT_EQUALS_BA(exp, cipher);
     ba_free(cipher);
+    ba_free(result);
     cipher = NULL;
+    result = NULL;
     dstu7624_free(ctx);
 
     ASSERT_NOT_NULL(ctx = dstu7624_alloc(DSTU7624_SBOX_1));
     ASSERT_RET_OK(dstu7624_init_cbc(ctx, key, iv));
     ASSERT_RET_OK(dstu7624_decrypt(ctx, exp, &cipher));
 
-    ASSERT_EQUALS_BA(data, cipher);
+    ASSERT_RET_OK(make_iso_7816_4_unpadding(cipher, &result))
+    ASSERT_EQUALS_BA(data, result);
 
 cleanup:
 
@@ -515,6 +522,7 @@ cleanup:
     ba_free(data);
     ba_free(exp);
     ba_free(cipher);
+    ba_free(result);
 }
 
 static void dstu7624_cbc_32_32(void)
@@ -527,21 +535,26 @@ static void dstu7624_cbc_32_32(void)
     ByteArray *cipher = NULL;
     ByteArray *exp = ba_alloc_from_le_hex_string(
             "0ae0780c2eaf54065d181e5339fc94a50dbeca17069769e5c23cdc7bdad6adfcd93e59097469be420c164d90aae17ec0dc8e9b11412e5b3c812fbb0204313abe0d5b0adfb5187be6868f6bfddc096ffa1a5294cc90b49605b7f3cc3532d4604c");
+    ByteArray *data_padd = NULL;
 
     ASSERT_NOT_NULL(ctx = dstu7624_alloc(DSTU7624_SBOX_1));
     ASSERT_RET_OK(dstu7624_init_cbc(ctx, key, iv));
-    ASSERT_RET_OK(dstu7624_encrypt(ctx, data, &cipher));
+    ASSERT_RET_OK(make_iso_7816_4_padding(data, (uint8_t)ba_get_len(iv), &data_padd));
+    ASSERT_RET_OK(dstu7624_encrypt(ctx, data_padd, &cipher));
 
     ASSERT_EQUALS_BA(exp, cipher);
     ba_free(cipher);
+    ba_free(data_padd);
+    data_padd = NULL;
     cipher = NULL;
     dstu7624_free(ctx);
 
     ASSERT_NOT_NULL(ctx = dstu7624_alloc(DSTU7624_SBOX_1));
     ASSERT_RET_OK(dstu7624_init_cbc(ctx, key, iv));
     ASSERT_RET_OK(dstu7624_decrypt(ctx, exp, &cipher));
+    ASSERT_RET_OK(make_iso_7816_4_unpadding(cipher, &data_padd));
 
-    ASSERT_EQUALS_BA(data, cipher);
+    ASSERT_EQUALS_BA(data, data_padd);
 
 cleanup:
 
@@ -550,6 +563,7 @@ cleanup:
     ba_free(iv);
     ba_free(data);
     ba_free(exp);
+    ba_free(data_padd);
     ba_free(cipher);
 }
 
@@ -565,21 +579,26 @@ static void dstu7624_cbc_64_64(void)
     ByteArray *cipher = NULL;
     ByteArray *exp = ba_alloc_from_le_hex_string(
             "4f3a325c87bba4a82333123604fe1e506a99bfdec970a3d5deeef5c51181674309c7b8beddbdfeeddc414913d2c4cfba17ea80767b588f70a4cbb2b3acef3ed2bdab23f45a7bc8dc89167eede2d7480950ab19eae1368113c18df1b01fdeec1f82973463c1e8a09c09151388e5fa5ca21b23daa2403c971d421d5473d4f5ab1c6358861372f5987b76c88a3bff9cd71c0d0006d58fca8afa095922a49029d1ab6ea28ba136c6368fbae9847587873f8d1318296f1c49d153e6680b21f36ec881");
+    ByteArray *data_padd = NULL;
 
     ASSERT_NOT_NULL(ctx = dstu7624_alloc(DSTU7624_SBOX_1));
     ASSERT_RET_OK(dstu7624_init_cbc(ctx, key, iv));
-    ASSERT_RET_OK(dstu7624_encrypt(ctx, data, &cipher));
+    ASSERT_RET_OK(make_iso_7816_4_padding(data, (uint8_t)ba_get_len(iv), &data_padd));
+    ASSERT_RET_OK(dstu7624_encrypt(ctx, data_padd, &cipher));
 
     ASSERT_EQUALS_BA(exp, cipher);
     ba_free(cipher);
     cipher = NULL;
+    ba_free(data_padd);
+    data_padd = NULL;
     dstu7624_free(ctx);
 
     ASSERT_NOT_NULL(ctx = dstu7624_alloc(DSTU7624_SBOX_1));
     ASSERT_RET_OK(dstu7624_init_cbc(ctx, key, iv));
     ASSERT_RET_OK(dstu7624_decrypt(ctx, exp, &cipher));
+    ASSERT_RET_OK(make_iso_7816_4_unpadding(cipher, &data_padd));
 
-    ASSERT_EQUALS_BA(data, cipher);
+    ASSERT_EQUALS_BA(data, data_padd);
 
 cleanup:
 
@@ -588,6 +607,7 @@ cleanup:
     ba_free(data);
     ba_free(exp);
     ba_free(iv);
+    ba_free(data_padd);
     ba_free(cipher);
 }
 

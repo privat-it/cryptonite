@@ -120,8 +120,8 @@ void atest_padding(void)
     ATEST_CORE(iso_7816_4_data, test_padding_iso_7816_4, sizeof(PaddingHelper));
 
     if (err_count == error_count) {
-        msg_print_atest("padding", "[pkcs7,iso7816_4]", "OK");
+        msg_print_atest("PADDING", "[pkcs7,iso7816_4]", "OK");
     } else {
-        msg_print_atest("padding", "", "FAILED");
+        msg_print_atest("PADDING", "", "FAILED");
     }
 }

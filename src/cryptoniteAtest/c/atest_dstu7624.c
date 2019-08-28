@@ -5,6 +5,7 @@
 
 #include "atest.h"
 #include "dstu7624.h"
+#include "paddings.h"
 
 
 typedef struct {
@@ -564,11 +565,19 @@ static void test_cbc_loop(Dstu7624CbcHelper *data)
     ByteArray *iv_ba = ba_alloc_from_le_hex_string(data->iv);
     ByteArray *expected_ba = ba_alloc_from_le_hex_string(data->exp);
     ByteArray *actual_ba = NULL;
+    ByteArray *padded_ba = NULL;
+    ByteArray *unpadded_ba = NULL;
     Dstu7624Ctx *ctx = NULL;
     size_t count = error_count;
 
     ASSERT_NOT_NULL(ctx = dstu7624_alloc(DSTU7624_SBOX_1));
     ASSERT_RET_OK(dstu7624_init_cbc(ctx, key_ba, iv_ba));
+    if (ba_get_len(data_ba) % ba_get_len(iv_ba) != 0) {
+        ASSERT_RET_OK(make_iso_7816_4_padding(data_ba, (uint8_t) ba_get_len(iv_ba), &padded_ba));
+        ba_free(data_ba);
+        data_ba = padded_ba;
+        padded_ba = NULL;
+    }
     ASSERT_RET_OK(dstu7624_encrypt(ctx, data_ba, &actual_ba));
 
     CHECK_EQUALS_BA(expected_ba, actual_ba);
@@ -579,6 +588,7 @@ static void test_cbc_loop(Dstu7624CbcHelper *data)
     ASSERT_NOT_NULL(ctx = dstu7624_alloc(DSTU7624_SBOX_1));
     ASSERT_RET_OK(dstu7624_init_cbc(ctx, key_ba, iv_ba));
     ASSERT_RET_OK(dstu7624_decrypt(ctx, expected_ba, &actual_ba));
+    ASSERT_RET_OK(make_iso_7816_4_unpadding(actual_ba, &unpadded_ba));
 
     CHECK_EQUALS_BA(data_ba, actual_ba);
 
@@ -587,7 +597,7 @@ cleanup:
     PRINT_ERROR(print_cipher_error("DSTU7624 CBC", key_ba, iv_ba, data_ba), count);
 
     dstu7624_free(ctx);
-    BA_FREE(data_ba, key_ba, iv_ba, expected_ba, actual_ba);
+    BA_FREE(data_ba, key_ba, iv_ba, expected_ba, actual_ba, padded_ba, unpadded_ba);
 }
 
 static Dstu7624KwHelper kw_data[] = {
@@ -1102,5 +1112,6 @@ void atest_dstu7624(void)
     } else {
         msg_print_atest("DSTU7624", "", "FAILED");
     }
+
     return;
 }

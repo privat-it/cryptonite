@@ -5,6 +5,7 @@
 
 #include "aes.h"
 #include "utest.h"
+#include "paddings.h"
 
 static void test_aes_key_gen(void)
 {
@@ -517,7 +518,7 @@ static void test_aes16_cbc_data_is_divided_without_padding(void)
 cleanup:
 
     aes_free(ctx);
-    BA_FREE(key, data, data1, data2, enc_data_exp, enc_data, enc_data1, enc_data2, dec_data1, dec_data2);
+    BA_FREE(key, data, data1, data2, enc_data_exp, enc_data, enc_data1, enc_data2, dec_data1, dec_data2, iv);
 }
 
 static void test_aes16_cbc_data_is_divided_with_padding(void)
@@ -531,6 +532,7 @@ static void test_aes16_cbc_data_is_divided_with_padding(void)
     ByteArray *enc_data_exp = ba_alloc_from_le_hex_string("B2EB05E2C39BE9FCDA6C19078C6A9D1B78AABE25027288DB0D76060A9A84D5EF");
     ByteArray *iv = ba_alloc_from_le_hex_string("39F23369A9D9BACFA530E26304231461");
     ByteArray *enc_data = NULL;
+    ByteArray *data_padd = NULL;
     ByteArray *enc_data1 = NULL;
     ByteArray *enc_data2 = NULL;
     ByteArray *dec_data1 = NULL;
@@ -540,18 +542,27 @@ static void test_aes16_cbc_data_is_divided_with_padding(void)
 
     ASSERT_NOT_NULL(ctx = aes_alloc());
     ASSERT_RET_OK(aes_init_cbc(ctx, key, iv));
-    ASSERT_RET_OK(aes_encrypt(ctx, data, &enc_data));
+
+    ASSERT_RET_OK(make_pkcs7_padding(data, (uint8_t)ba_get_len(iv), &data_padd));
+    ASSERT_RET_OK(aes_encrypt(ctx, data_padd, &enc_data));
     ASSERT_EQUALS_BA(enc_data_exp, enc_data);
-    aes_free(ctx); ctx = NULL;
+    aes_free(ctx);
+    ctx = NULL;
+    ba_free(data_padd);
+    data_padd = NULL;
 
     ASSERT_NOT_NULL(ctx = aes_alloc());
     ASSERT_RET_OK(aes_init_cbc(ctx, key, iv));
     ASSERT_RET_OK(aes_encrypt(ctx, data1, &enc_data1));
-    ASSERT_RET_OK(aes_encrypt(ctx, data2, &enc_data2));
+    ASSERT_RET_OK(make_pkcs7_padding(data2, (uint8_t)ba_get_len(iv), &data_padd));
+    ASSERT_RET_OK(aes_encrypt(ctx, data_padd, &enc_data2));
     ba_copy(enc_data1, 0, 0, enc_data, 0);
     ba_copy(enc_data2, 0, 0, enc_data, 16);
     ASSERT_EQUALS_BA(enc_data_exp, enc_data);
-    aes_free(ctx); ctx = NULL;
+    aes_free(ctx);
+    ctx = NULL;
+    ba_free(data_padd);
+    data_padd = NULL;
 
     ASSERT_NOT_NULL(ctx = aes_alloc());
     ASSERT_RET_OK(aes_init_cbc(ctx, key, iv));
@@ -563,7 +574,7 @@ static void test_aes16_cbc_data_is_divided_with_padding(void)
 cleanup:
 
     aes_free(ctx);
-    BA_FREE(key, data, data1, data2, enc_data_exp, enc_data, enc_data1, enc_data2, dec_data1, dec_data2, data2_expected);
+    BA_FREE(key, data, data1, data2, enc_data_exp, enc_data, enc_data1, enc_data2, dec_data1, dec_data2, data2_expected, data_padd, iv);
 }
 
 static void utest_aes_cbc_core(size_t iteration, size_t key_mode)
@@ -576,6 +587,7 @@ static void utest_aes_cbc_core(size_t iteration, size_t key_mode)
     ByteArray *cipher = NULL;
     ByteArray *plain = NULL;
     ByteArray *data = NULL;
+    ByteArray *data_padd = NULL;
     ByteArray *key = NULL;
 
     ASSERT_NOT_NULL(data = ba_copy_with_alloc(tmp_data, iteration, 0));
@@ -583,7 +595,8 @@ static void utest_aes_cbc_core(size_t iteration, size_t key_mode)
 
     ASSERT_NOT_NULL(ctx = aes_alloc());
     ASSERT_RET_OK(aes_init_cbc(ctx, key, iv));
-    ASSERT_RET_OK(aes_encrypt(ctx, data, &cipher));
+    ASSERT_RET_OK(make_pkcs7_padding(data, (uint8_t)ba_get_len(iv), &data_padd));
+    ASSERT_RET_OK(aes_encrypt(ctx, data_padd, &cipher));
 
     aes_free(ctx);
 
@@ -597,7 +610,7 @@ static void utest_aes_cbc_core(size_t iteration, size_t key_mode)
 
 cleanup:
 
-    BA_FREE(key, data, plain, iv, cipher, tmp_data, tmp_key);
+    BA_FREE(key, data, plain, iv, cipher, tmp_data, tmp_key, data_padd);
     aes_free(ctx);
 }
 

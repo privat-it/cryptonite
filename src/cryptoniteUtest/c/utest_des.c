@@ -5,9 +5,9 @@
 
 #include "des.h"
 #include "utest.h"
+#include "paddings.h"
 
-static void des_key_gen(void)
-{
+static void des_key_gen(void) {
     DesCtx *ctx = NULL;
     ByteArray *data = ba_alloc_from_le_hex_string("00000000000000000000000000000000");
     ByteArray *key = NULL;
@@ -38,8 +38,7 @@ cleanup:
     ba_free(cipher);
 }
 
-static void test_key8_gen(void)
-{
+static void test_key8_gen(void) {
     DesCtx *ctx = NULL;
     ByteArray *data = ba_alloc_from_le_hex_string("0000000000000000");
     ByteArray *key = NULL;
@@ -70,8 +69,7 @@ cleanup:
     ba_free(cipher);
 }
 
-static void des3_ecb(void)
-{
+static void des3_ecb(void) {
     DesCtx *ctx = NULL;
     ByteArray *data = ba_alloc_from_le_hex_string("00000000000000000000000000000000");
     ByteArray *key = ba_alloc_from_le_hex_string("800000000000000000000000000000000000000000000000");
@@ -99,8 +97,7 @@ cleanup:
     ba_free(cipher);
 }
 
-static void des_ecb(void)
-{
+static void des_ecb(void) {
     DesCtx *ctx = NULL;
     ByteArray *data = ba_alloc_from_le_hex_string("00000000000000000000000000000000");
     ByteArray *key = ba_alloc_from_le_hex_string("800000000000000000000000000000000000000000000000");
@@ -128,8 +125,7 @@ cleanup:
     ba_free(cipher);
 }
 
-static void des_cbc(void)
-{
+static void des_cbc(void) {
     DesCtx *ctx = NULL;
     ByteArray *data = ba_alloc_from_le_hex_string("c45ed470da71572aa86afeedbfc279e9b8ba4f021a20a7e968fbc380e8dd29ac");
     ByteArray *key = ba_alloc_from_le_hex_string("b8417680b959409958ff376bd5238b7d42575e0e24e4dc74");
@@ -159,8 +155,7 @@ cleanup:
     ba_free(cipher);
 }
 
-static void des_cfb(void)
-{
+static void des_cfb(void) {
     DesCtx *ctx = NULL;
     ByteArray *data = ba_alloc_from_le_hex_string("37363534333231204E6F77206973207468652074696D6520666F722000");
     ByteArray *data1 = ba_alloc_from_le_hex_string("37363534333231204E6F772069732074686520");
@@ -219,8 +214,7 @@ cleanup:
     des_free(ctx);
 }
 
-static void des3_cfb(void)
-{
+static void des3_cfb(void) {
     DesCtx *ctx = NULL;
     ByteArray *data = ba_alloc_from_le_hex_string("37363534333231204E6F77206973207468652074696D6520666F722000");
     ByteArray *data1 = ba_alloc_from_le_hex_string("37363534333231204E6F772069732074686520");
@@ -279,8 +273,7 @@ cleanup:
     des_free(ctx);
 }
 
-static void des_ofb(void)
-{
+static void des_ofb(void) {
     DesCtx *ctx = NULL;
     ByteArray *data = ba_alloc_from_le_hex_string("37363534333231204E6F77206973207468652074696D6520666F722000");
     ByteArray *data1 = ba_alloc_from_le_hex_string("37363534333231204E6F772069732074686520");
@@ -341,13 +334,13 @@ static void des_ofb(void)
 
 cleanup:
 
-    BA_FREE(key, data, plain, iv, cipher, plain1, plain2, plain3, cipher1, cipher2, cipher3, cipher_stream, plain_stream,
+    BA_FREE(key, data, plain, iv, cipher, plain1, plain2, plain3, cipher1, cipher2, cipher3, cipher_stream,
+            plain_stream,
             data1, data2, data3);
     des_free(ctx);
 }
 
-static void des3_ofb(void)
-{
+static void des3_ofb(void) {
     DesCtx *ctx = NULL;
     ByteArray *data = ba_alloc_from_le_hex_string("37363534333231204E6F77206973207468652074696D6520666F722000");
     ByteArray *data1 = ba_alloc_from_le_hex_string("37363534333231204E6F772069732074686520");
@@ -408,14 +401,13 @@ static void des3_ofb(void)
 
 cleanup:
 
-    BA_FREE(key, data,  data1, data2, data3, plain, iv, cipher, plain1, plain2, plain3, cipher1, cipher2, cipher3,
+    BA_FREE(key, data, data1, data2, data3, plain, iv, cipher, plain1, plain2, plain3, cipher1, cipher2, cipher3,
             cipher_stream, plain_stream);
     des_free(ctx);
 }
 
 
-static void des_ctr(void)
-{
+static void des_ctr(void) {
     DesCtx *ctx = NULL;
     ByteArray *data = ba_alloc_from_le_hex_string("37363534333231204E6F77206973207468652074696D6520666F722000");
     ByteArray *data1 = ba_alloc_from_le_hex_string("37363534333231204E6F772069732074686520");
@@ -474,8 +466,7 @@ cleanup:
     des_free(ctx);
 }
 
-static void des3_ctr(void)
-{
+static void des3_ctr(void) {
     DesCtx *ctx = NULL;
     ByteArray *data = ba_alloc_from_le_hex_string("37363534333231204E6F77206973207468652074696D6520666F722000");
     ByteArray *data1 = ba_alloc_from_le_hex_string("37363534333231204E6F772069732074686520");
@@ -534,8 +525,7 @@ cleanup:
     des_free(ctx);
 }
 
-static void utest_des3_cbc_core(size_t iteration, size_t key_mode)
-{
+static void utest_des3_cbc_core(size_t iteration, size_t key_mode) {
     DesCtx *ctx = NULL;
     ByteArray *tmp_data = ba_alloc_from_le_hex_string(
             "6bc1bee22e409f96e93d7e117393172aae2d8a571e03ac9c9eb76fac45af8e5130c81c46a35ce411e5fbc1191a0a52eff69f2445df4f9b17ad2b417be66c3710");
@@ -545,15 +535,26 @@ static void utest_des3_cbc_core(size_t iteration, size_t key_mode)
     ByteArray *plain = NULL;
     ByteArray *data = NULL;
     ByteArray *key = NULL;
+    ByteArray *data_pad = NULL;
+    bool is_padded = false;
 
     ASSERT_NOT_NULL(data = ba_copy_with_alloc(tmp_data, iteration, 0));
     ASSERT_NOT_NULL(key = ba_copy_with_alloc(tmp_key, 0, key_mode));
 
     ASSERT_NOT_NULL(ctx = des_alloc());
     ASSERT_RET_OK(des_init_cbc(ctx, key, iv));
-    ASSERT_RET_OK(des_encrypt(ctx, data, &cipher));
+
+    is_padded = (ba_get_len(data) % ba_get_len(iv) != 0);
+    if (is_padded) {
+        ASSERT_RET_OK(make_pkcs7_padding(data, (uint8_t) ba_get_len(iv), &data_pad))
+    } else {
+        data_pad = ba_copy_with_alloc(data, 0, 0);
+    }
+    ASSERT_RET_OK(des_encrypt(ctx, data_pad, &cipher));
 
     des_free(ctx);
+    ba_free(data_pad);
+    data_pad = NULL;
 
     ASSERT_NOT_NULL(ctx = des_alloc());
     ASSERT_RET_OK(des_init_cbc(ctx, key, iv));
@@ -565,7 +566,7 @@ static void utest_des3_cbc_core(size_t iteration, size_t key_mode)
 
 cleanup:
 
-    BA_FREE(key, tmp_key, data, plain, iv, cipher, tmp_data);
+    BA_FREE(key, tmp_key, data, plain, iv, cipher, tmp_data, data_pad);
     des_free(ctx);
 }
 
@@ -576,8 +577,7 @@ int i = 0;                              \
     }                                   \
 }
 
-void utest_des()
-{
+void utest_des() {
     PR("%s\n", __FILE__);
     des_key_gen();
     test_key8_gen();
