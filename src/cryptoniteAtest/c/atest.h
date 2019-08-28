@@ -22,5 +22,6 @@ void atest_dsa(void);
 void atest_dstu4145(void);
 void atest_ecdsa(void);
 void atest_gost34_311(void);
+void atest_padding(void);
 
 #endif

@@ -11,6 +11,7 @@ int main(void)
     PR("|                               ACCEPT TESTS                                   |\n");
     PR("+------------------------------------------------------------------------------+\n");
 
+    atest_padding();
     atest_dstu7624();
     atest_dstu7564();
     atest_gost28147();
