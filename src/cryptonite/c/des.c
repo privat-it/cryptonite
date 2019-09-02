@@ -1683,8 +1683,8 @@ static int des3_encrypt_cbc(DesCtx *ctx, const ByteArray *in, ByteArray **dst)
 
     for (; data_off + DES_BLOCK_LEN <= (int)in->len; data_off += DES_BLOCK_LEN) {
         des_xor(&in->buf[data_off], ctx->gamma_des3, ctx->gamma_des3);
-        des3_crypt(ctx->gamma_des3, &in->buf[data_off], ctx->enc_key);
-        memcpy(ctx->gamma_des3, &in->buf[data_off], DES_BLOCK_LEN);
+        des3_crypt(ctx->gamma_des3, &out->buf[data_off], ctx->enc_key);
+        memcpy(ctx->gamma_des3, &out->buf[data_off], DES_BLOCK_LEN);
     }
 
     *dst = out;
