@@ -20,6 +20,7 @@
 #include "cert.h"
 #include "aid.h"
 #include "spki.h"
+#include "paddings.h"
 
 #define SBOX_SIZE           128
 #define DSTU4145_KEY_SIZE   64
@@ -655,7 +656,7 @@ static int ca_cipher_encrypt(const CipherAdapter *ca, const ByteArray *key, cons
     AesCtx *aes_ctx = NULL;
     Gost28147Ctx *params = NULL;
     CryptoniteCipherParams *cipher_params_str = NULL;
-
+    ByteArray *src_with_padding = NULL;
     LOG_ENTRY();
 
     CHECK_PARAM(ca != NULL);
@@ -680,7 +681,8 @@ static int ca_cipher_encrypt(const CipherAdapter *ca, const ByteArray *key, cons
             oids_get_oid_numbers_by_id(OID_AES256_CBC_ID))) {
         CHECK_NOT_NULL(aes_ctx = aes_alloc());
         DO(aes_init_cbc(aes_ctx, key, cipher_params_str->cipher_init_vector));
-        DO(aes_encrypt(aes_ctx, src, dst));
+        DO(make_pkcs7_padding(src, (uint8_t)ba_get_len(cipher_params_str->cipher_init_vector), &src_with_padding));
+        DO(aes_encrypt(aes_ctx, src_with_padding, dst));
     } else {
         SET_ERROR(RET_PKIX_UNSUPPORTED_CIPHER_ALG);
     }
@@ -689,6 +691,7 @@ cleanup:
 
     gost28147_free(params);
     aes_free(aes_ctx);
+    ba_free(src_with_padding);
 
     return ret;
 }
@@ -710,6 +713,7 @@ static int ca_cipher_decrypt(const CipherAdapter *ca, const ByteArray *key, cons
     AesCtx *aes_params = NULL;
     Gost28147Ctx *gost_params = NULL;
     CryptoniteCipherParams *cipher_params_str = NULL;
+    ByteArray *dst_with_padding = NULL;
 
     LOG_ENTRY();
 
@@ -740,7 +744,9 @@ static int ca_cipher_decrypt(const CipherAdapter *ca, const ByteArray *key, cons
             oids_get_oid_numbers_by_id(OID_AES256_CBC_ID))) {
         CHECK_NOT_NULL(aes_params = aes_alloc());
         DO(aes_init_cbc(aes_params, key, cipher_params_str->cipher_init_vector));
-        DO(aes_decrypt(aes_params, src, dst));
+        DO(aes_decrypt(aes_params, src, &dst_with_padding));
+        DO(make_pkcs7_unpadding(dst_with_padding, dst));
+
     } else {
         SET_ERROR(RET_PKIX_UNSUPPORTED_CIPHER_ALG);
     }
@@ -750,6 +756,7 @@ cleanup:
 
     gost28147_free(gost_params);
     aes_free(aes_params);
+    ba_free(dst_with_padding);
 
     return ret;
 }
