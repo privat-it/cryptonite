@@ -22,7 +22,7 @@ extern "C" {
 typedef struct DSTU4145Params {
     DSTUEllipticCurve_t     ellipticCurve;
     OCTET_STRING_t    *dke    /* OPTIONAL */;
-
+    OCTET_STRING_t    *dke2    /* OPTIONAL */;
     /* Context for parsing across buffer boundaries */
     asn_struct_ctx_t _asn_ctx;
 } DSTU4145Params_t;

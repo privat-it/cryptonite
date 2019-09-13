@@ -22,6 +22,7 @@ int main(void)
     atest_des();
     atest_md5();
     atest_ripemd();
+    atest_kdf();
     atest_dsa();
     atest_ecdsa();
     atest_dstu4145();

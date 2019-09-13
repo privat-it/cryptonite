@@ -283,6 +283,20 @@ cleanup:
     BA_FREE(expected, actual);
 }
 
+static void utest_get_ocsp_url(Certificate_t *cert)
+{
+    ByteArray *actual = NULL;
+    ByteArray *expected = ba_alloc_from_str("http://acskidd.gov.ua/services/ocsp/");
+
+    ASSERT_RET_OK(cert_get_ocsp_url(cert, &actual));
+
+    ASSERT_EQUALS_BA(expected, actual);
+
+cleanup:
+
+    BA_FREE(expected, actual);
+}
+
 static void utest_cert_init_by_sign(Certificate_t *cert)
 {
     Certificate_t *cert_tmp = cert_alloc();
@@ -819,7 +833,8 @@ cleanup:
 
 static void utest_cert_init_by_sign_2(Certificate_t *cert)
 {
-    ASSERT_RET(RET_INVALID_PARAM, cert_init_by_sign(NULL, &cert->tbsCertificate, &cert->signatureAlgorithm, &cert->signature));
+    ASSERT_RET(RET_INVALID_PARAM, cert_init_by_sign(NULL, &cert->tbsCertificate, &cert->signatureAlgorithm,
+            &cert->signature));
     ASSERT_RET(RET_INVALID_PARAM, cert_init_by_sign(cert, NULL, &cert->signatureAlgorithm, &cert->signature));
     ASSERT_RET(RET_INVALID_PARAM, cert_init_by_sign(cert, &cert->tbsCertificate, NULL, &cert->signature));
     ASSERT_RET(RET_INVALID_PARAM, cert_init_by_sign(cert, &cert->tbsCertificate, &cert->signatureAlgorithm, NULL));
@@ -877,6 +892,7 @@ void utest_cert(void)
         utest_get_auth_key_id(cert);
         utest_get_ext_value(cert);
         utest_get_tsp_url(cert);
+        utest_get_ocsp_url(cert);
         utest_cert_init_by_sign(cert);
         utest_cert_get_critical_ext_oids(cert);
         utest_cert_get_non_critical_ext_oids(cert);

@@ -1010,3 +1010,38 @@ cleanup:
     return ret;
 }
 
+int cert_get_ocsp_url(const Certificate_t *cert, ByteArray **data)
+{
+    int ret = RET_OK;
+    int i;
+
+    SubjectInfoAccess_t *access = NULL;
+    ByteArray *encoded = NULL;
+
+    CHECK_PARAM(cert != NULL);
+    CHECK_PARAM(data != NULL);
+
+    ASN_ALLOC(access);
+
+    DO(cert_get_ext_value(cert, oids_get_oid_numbers_by_id(OID_AUTHORITY_INFO_ACCESS_EXTENSION_ID), &encoded));
+
+    if (encoded) {
+        DO(asn_decode_ba(&AuthorityInfoAccessSyntax_desc, access, encoded));
+
+        for (i = 0; i < access->list.count; i++) {
+            if (pkix_check_oid_equal(&access->list.array[i]->accessMethod, oids_get_oid_numbers_by_id(OID_OCSP_OID_ID))) {
+                if (access->list.array[i]->accessLocation.present == GeneralName_PR_uniformResourceIdentifier) {
+                    DO(asn_OCTSTRING2ba(&access->list.array[i]->accessLocation.choice.uniformResourceIdentifier, data));
+                }
+            }
+        }
+    }
+
+cleanup:
+
+    ASN_FREE(&AuthorityInfoAccessSyntax_desc, access);
+
+    ba_free(encoded);
+
+    return ret;
+}

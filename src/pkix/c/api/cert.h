@@ -296,6 +296,8 @@ CRYPTONITE_EXPORT int cert_check_pubkey_and_usage(const Certificate_t *cert, con
 
 CRYPTONITE_EXPORT int cert_get_tsp_url(const Certificate_t *cert, ByteArray **data);
 
+CRYPTONITE_EXPORT int cert_get_ocsp_url(const Certificate_t *cert, ByteArray **data);
+
 #ifdef __cplusplus
 }
 #endif

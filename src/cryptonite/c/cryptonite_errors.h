@@ -44,6 +44,7 @@ extern "C" {
 #define RET_CTX_ALREADY_IN_CACHE         31
 #define RET_POINT_NOT_ON_CURVE           32
 #define RET_INVALID_DATA_LEN             33
+#define RET_UNSUPPORTED_PBKDF2_HMAC_ID   34
 
 #ifdef  __cplusplus
 }

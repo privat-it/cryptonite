@@ -10,4 +10,5 @@ void utest_pkcs8(void);
 void utest_pkcs12_dstu(void);
 void utest_pkcs12_ecdsa(void);
 void utest_pkcs5(void);
+void utest_key6(void);
 #endif
