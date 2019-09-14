@@ -17,7 +17,7 @@ typedef enum Pbkdf2HmacId_st {
 } Pbkdf2HmacId;
 
 CRYPTONITE_EXPORT int kdf_pbkdf2(const char* pass, const ByteArray* salt, unsigned long iterations, 
-                                 size_t key_len, Pbkdf2HmacId id,	ByteArray** dk);
+                                 size_t key_len, Pbkdf2HmacId id, ByteArray** dk);
 
 #ifdef  __cplusplus
 }
