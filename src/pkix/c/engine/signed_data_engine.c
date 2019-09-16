@@ -228,7 +228,7 @@ int esigned_data_add_signer(SignedDataEngine *ctx, SignerInfoEngine *signer)
     CHECK_PARAM(ctx != NULL);
     CHECK_PARAM(signer != NULL);
 
-    REALLOC_CHECKED(ctx->sinfos.sinfo, ++ctx->sinfos.size * sizeof(long), ctx->sinfos.sinfo);
+    REALLOC_CHECKED(ctx->sinfos.sinfo, ++ctx->sinfos.size * sizeof(SignerInfoEngine *), ctx->sinfos.sinfo);
     ctx->sinfos.sinfo[ctx->sinfos.size - 1] = signer;
 
 cleanup:
