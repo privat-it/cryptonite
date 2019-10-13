@@ -663,7 +663,7 @@ def formatSources(boolean changeSrc) {
     return getResultExec(formatTool, formatArgs);
 }
 
-task help() {
+task help(overwrite: true) {
     doLast {
         def text = "Cryptonite - universal library of cryptotransformations.\n" +
                    "Cryptonite is intended for providing software products of own " + 
