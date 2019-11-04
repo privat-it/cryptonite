@@ -325,7 +325,7 @@ static int env_get_info_for_unwrap(const EnvelopedData_t *env_data, const Certif
                     CHECK_NOT_NULL(subjectKeyIdentifier = asn_decode_ba_with_alloc(&OCTET_STRING_desc, subj_key_id_ext));
                 }
 
-                if (asn_equals(&OCTET_STRING_desc, subj_key_id_ext, &rekey->rid.choice.rKeyId.subjectKeyIdentifier)) {
+                if (asn_equals(&OCTET_STRING_desc, subjectKeyIdentifier, &rekey->rid.choice.rKeyId.subjectKeyIdentifier)) {
                     goto recipient_found;
                 }
 
@@ -344,8 +344,9 @@ static int env_get_info_for_unwrap(const EnvelopedData_t *env_data, const Certif
 recipient_found:
 
     DO(asn_OCTSTRING2ba(&rekey->encryptedKey, &encrypted_session_key_ptr));
-    DO(asn_OCTSTRING2ba(kari->ukm, &rnd_bytes_ptr));
-
+    if (kari->ukm != NULL) {
+        DO(asn_OCTSTRING2ba(kari->ukm, &rnd_bytes_ptr));
+    }
     ret = kari_get_originator_public_key(kari, originator_cert_opt, &originator_pub_key_ptr);
     if (ret != RET_OK && ret != RET_PKIX_ENVDATA_WRONG_ORIGINATOR_CERT && ret != RET_PKIX_ENVDATA_NEED_ORIGINATOR_CERT) {
         SET_ERROR(ret);
