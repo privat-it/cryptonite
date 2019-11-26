@@ -3013,8 +3013,9 @@ int unwrap_session_key(const DhAdapter *dha, const ByteArray *wrapped_key, const
 
     CHECK_PARAM(dha != NULL);
     CHECK_PARAM(wrapped_key != NULL);
-    CHECK_PARAM(rnd_bytes != NULL);
-    CHECK_PARAM(ba_get_len(rnd_bytes) == 64);
+    if (rnd_bytes != NULL) {
+        CHECK_PARAM(ba_get_len(rnd_bytes) == 64);
+    }
     CHECK_PARAM(issuer_pub_key != NULL);
     CHECK_PARAM(session_key != NULL);
 
