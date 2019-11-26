@@ -12,7 +12,10 @@
 #undef FILE_MARKER
 #define FILE_MARKER "asn1/GeneralizedTime.c"
 
-#define _BSD_SOURCE     /* for timegm(3) */
+//for timegm in glibc > 2.19
+#define _DEFAULT_SOURCE
+//for timegm in glibc <= 2.19
+#define _BSD_SOURCE
 
 #include <stdlib.h>
 #include "asn_internal.h"
