@@ -423,6 +423,44 @@ cleanup:
     rsa_free(ctx);
 }
 
+#ifdef FULL_UTEST
+static void rsa_possible_bits_test(void)
+{
+    RsaCtx *ctx = NULL;
+    PrngCtx *prng = NULL;
+    ByteArray *seed = NULL;
+    ByteArray *n = NULL;
+    ByteArray *priv_key = NULL;
+    uint8_t e_u8 = 3;
+    ByteArray *e = ba_alloc_from_uint8(&e_u8, 1);
+
+    seed = ba_alloc_by_len(40);
+    ba_set(seed, 0xba);
+
+    prng = prng_alloc(PRNG_MODE_DEFAULT, seed);
+
+    ctx = rsa_alloc();
+
+    for(int i = 0; i < 2; i++) {
+        size_t bit_num = 256 + i;
+        ASSERT_RET_OK(rsa_generate_privkey(ctx, prng, bit_num, e, &n, &priv_key));
+
+        ba_free(n);
+        ba_free(priv_key);
+        n = NULL;
+        priv_key = NULL;
+    }
+
+cleanup:
+
+    ba_free(seed);
+    ba_free(e);
+    prng_free(prng);
+    rsa_free(ctx);
+
+}
+#endif
+
 void utest_rsa(void)
 {
     PR("%s\n", __FILE__);
@@ -440,4 +478,8 @@ void utest_rsa(void)
     test_rsa_oaep_with_not_null_label();
     test_rsa_pkcs1_v1_5();
     rsa_extended_validate();
+#ifdef FULL_UTEST
+    rsa_possible_bits_test();
+#endif
+
 }

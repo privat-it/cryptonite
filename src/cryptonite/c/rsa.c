@@ -82,6 +82,7 @@ const uint8_t LHASH_SHA512[64] = {
     0x63, 0xb9, 0x31, 0xbd, 0x47, 0x41, 0x7a, 0x81, 0xa5, 0x38, 0x32, 0x7a,
     0xf9, 0x27, 0xda, 0x3e
 };
+
 const uint8_t md5_empty_string[] = {0xd4, 0x1d, 0x8c, 0xd9, 0x8f, 0x00, 0xb2, 0x04, 0xe9, 0x80, 0x09, 0x98, 0xec, 0xf8, 0x42, 0x7e};
 const uint8_t ripemd160_empty_string[] = {0x9c, 0x11, 0x85, 0xa5, 0xc5, 0xe9, 0xfc, 0x54, 0x61, 0x28, 0x08, 0x97, 0x7e, 0xe8, 0xf5, 0x48, 0xb2, 0x25, 0x8d, 0x31};
 const uint8_t ripemd128_empty_string[] = {0xcd, 0xf2, 0x62, 0x13, 0xa1, 0x50, 0xdc, 0x3e, 0xcb, 0x61, 0x0f, 0x18, 0xf6, 0xb3, 0x8b, 0x46};
@@ -529,10 +530,6 @@ static int rsa_decrypt_oaep(RsaCtx *ctx, const ByteArray *msg, ByteArray **out)
     masked_seed = em + 1;
     masked_db = em + 1 + hlen;
 
-    if (em[0]) {
-        SET_ERROR(RET_VERIFY_FAILED);
-    }
-
     DO(mgf(ctx->hash_type, masked_db, dblen, seed, hlen));
 
     for (i = 0; i < hlen; i++) {
@@ -545,7 +542,7 @@ static int rsa_decrypt_oaep(RsaCtx *ctx, const ByteArray *msg, ByteArray **out)
         db[i] ^= masked_db[i];
     }
 
-    if (memcmp(db, lhash, hlen)) {
+    if (memcmp(db, lhash, hlen) || em[0]) {
         SET_ERROR(RET_VERIFY_FAILED);
     }
 
@@ -610,23 +607,42 @@ int rsa_generate_privkey(RsaCtx *ctx, PrngCtx *prng, const size_t bits, const By
     WordArray *we = NULL;
     WordArray *wn = NULL;
     WordArray *wd = NULL;
+    WordArray *wsub_p_q = NULL;
+    WordArray *wmin_val = NULL;
+    WordArray *one = NULL;
     WordArray *q_tmp = NULL;
-    size_t len;
+    size_t wplen = 0;
+    size_t bitplen = 0;
+    bool is_goto_begin = false;
+    int comp_p_q = 0;
     int ret = RET_OK;
 
     CHECK_PARAM(ctx != NULL);
     CHECK_PARAM(prng != NULL);
-    CHECK_PARAM(bits >= 2);
+    CHECK_PARAM(bits >= 256);
     CHECK_PARAM(e != NULL);
     CHECK_PARAM(n != NULL);
     CHECK_PARAM(d != NULL);
 
-    len = WA_LEN_FROM_BITS(bits >> 1);
-    DO(int_gen_prime(bits >> 1, prng, &wp));
+    bitplen = (bits + 1) >> 1;
+
+begin:
+
+    DO(int_gen_prime(bitplen, prng, &wp));
+
+    CHECK_NOT_NULL(one = wa_alloc_with_zero(wp->len));
+    one->buf[0] = 1;
+
+    CHECK_NOT_NULL(wmin_val = wa_alloc(wp->len));
+
+    int_lshift(one, bitplen - 100, wmin_val);
+    wa_change_len(wmin_val, wp->len);
 
     do {
         wa_free(wq);
-        DO(int_gen_prime(bits >> 1, prng, &wq));
+        wq = NULL;
+
+        DO(int_gen_prime(bits - bitplen, prng, &wq));
         ret = int_cmp(wq, wp);
         if (ret != 0) {
             if (ret > 0) {
@@ -634,26 +650,45 @@ int rsa_generate_privkey(RsaCtx *ctx, PrngCtx *prng, const size_t bits, const By
                 wq = wp;
                 wp = q_tmp;
             }
-            break;
+            CHECK_NOT_NULL(wsub_p_q = wa_alloc_with_zero(wp->len));
+            int_sub(wp, wq, wsub_p_q);
+
+            // conformance with ANSI X9.31 requirement
+            // |p-q| > 2^(prime bit length - 100)
+            comp_p_q = int_cmp(wsub_p_q, wmin_val);
+            wa_free(wsub_p_q);
+            wsub_p_q = NULL;
         }
-    } while (1);
+    } while (comp_p_q != 1);
 
     ret = RET_OK;
 
+    wplen = wp->len;
+    wa_change_len(wq, wplen);
+
     /* n = p * q */
-    CHECK_NOT_NULL(wn = wa_alloc_with_zero(2 * len));
+    CHECK_NOT_NULL(wn = wa_alloc_with_zero(2 * wplen));
     int_mul(wq, wp, wn);
 
     /* fi = (p - 1) * (q - 1) */
     wq->buf[0]--;
     wp->buf[0]--;
-    CHECK_NOT_NULL(fi = wa_alloc_with_zero(2 * len));
+    CHECK_NOT_NULL(fi = wa_alloc_with_zero(2 * wplen));
     int_mul(wq, wp, fi);
 
     CHECK_NOT_NULL(we = wa_alloc_from_ba(e));
-    wa_change_len(we, 2 * len);
+    wa_change_len(we, 2 * wplen);
 
-    CHECK_NOT_NULL(wd = gfp_mod_inv_core(we, fi));
+    wd = gfp_mod_inv_core(we, fi);
+    if (wd == NULL) {
+        is_goto_begin = true;
+        goto cleanup;
+    }
+
+    if (int_bit_len(wn) != bits) {
+        is_goto_begin = true;
+        goto cleanup;
+    }
 
     CHECK_NOT_NULL(*d = wa_to_ba(wd));
     CHECK_NOT_NULL(*n = wa_to_ba(wn));
@@ -664,8 +699,16 @@ cleanup:
     wa_free(wd);
     wa_free(fi);
     wa_free(wq);
+    wq = NULL;
     wa_free(wp);
     wa_free(we);
+    wa_free(wsub_p_q);
+    wa_free(one);
+    wa_free(wmin_val);
+    if (is_goto_begin) {
+        is_goto_begin = false;
+        goto begin;
+    }
 
     return ret;
 }
@@ -688,6 +731,7 @@ int rsa_generate_privkey_ext(RsaCtx *ctx, PrngCtx *prng, const size_t bits, cons
     WordArray *wiqmp = NULL;
     int ret = RET_OK;
     size_t plen;
+    size_t pbitlen = 0;
 
     CHECK_PARAM(ctx != NULL);
     CHECK_PARAM(prng != NULL);
@@ -702,14 +746,18 @@ int rsa_generate_privkey_ext(RsaCtx *ctx, PrngCtx *prng, const size_t bits, cons
     CHECK_PARAM(iqmp != NULL);
 
     plen = WA_LEN_FROM_BITS(bits >> 1);
-    DO(int_gen_prime(bits >> 1, prng, &wp));
+
+    //https://www.ibm.com/support/knowledgecenter/en/linuxonibm/com.ibm.linux.z.wskc.doc/wskc_c_rsagen.html
+    pbitlen = (bits + 1) >> 1;
+    DO(int_gen_prime(pbitlen, prng, &wp));
 
     do {
         wa_free(wq);
         wq = NULL;
-        DO(int_gen_prime(bits >> 1, prng, &wq));
+        DO(int_gen_prime(bits - pbitlen, prng, &wq));
         ret = int_cmp(wq, wp);
         if (ret != 0) {
+            //p > q
             if (ret > 0) {
                 q_tmp = wq;
                 wq = wp;

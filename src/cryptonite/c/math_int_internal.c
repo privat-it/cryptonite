@@ -1549,92 +1549,125 @@ cleanup:
 int int_gen_prime(const size_t bits, PrngCtx *prng, WordArray **out)
 {
     WordArray *a = NULL;
+    ByteArray *rnd_bytes = NULL;
     uint32_t gamma[NUMPRIMES];
     uint32_t delta = 0;
     uint32_t max_delta = 0xffffffffL - PRIMES[NUMPRIMES - 1];
     size_t i = 0;
-    ByteArray *rnd_bytes = NULL;
+    size_t bits_idxs = 0;
+    size_t bits_mod_8 = 0;
+    size_t last_byte_idx = 0;
+    size_t pre_last_byte_idx = 0;
+    size_t set_bit_num = 0;
     size_t byte_len;
     int ret = RET_OK;
     bool is_prime = false;
 
-    CHECK_PARAM(bits >= 2);
+    CHECK_PARAM(bits >= 8);
 
     //Генерируем нечетное большое число
-    byte_len = bits >> 3;
+    byte_len = (bits + 7) >> 3;
     CHECK_NOT_NULL(rnd_bytes = ba_alloc_by_len(byte_len));
     DO(prng_next_bytes(prng, rnd_bytes));
+
+    bits_idxs = bits - 1;
+    bits_mod_8 = bits_idxs % 8;
+    last_byte_idx = ((bits + 7) >> 3) - 1;
+    pre_last_byte_idx = ((bits + 6) >> 3) - 1;
+    set_bit_num = (bits_mod_8);
+
+    //Сетим младший бит для получение нечетного числа
+    rnd_bytes->buf[0] |= 1;
+
+    //Сетим последний бит
+    rnd_bytes->buf[last_byte_idx] |= 0x01 << set_bit_num;
+
+    //Зануляем все после последнего бита
+    rnd_bytes->buf[last_byte_idx] &= (uint8_t) (~(0xff << (bits_mod_8 + 1)));
+
+    if (set_bit_num == 0) {
+        set_bit_num = 8;
+    }
+    //Сетим предпоследний бит
+    rnd_bytes->buf[pre_last_byte_idx] |= 0x01 << ((set_bit_num - 1) % 8);
+
     CHECK_NOT_NULL(a = wa_alloc_from_ba(rnd_bytes));
 
-    a->buf[0] |= 1;
     ba_free(rnd_bytes);
+    rnd_bytes = NULL;
 
 again:
-    //Генерируем гамму для получения простого числа
-    if (bits < WORD_BIT_LENGTH) {
-        for (i = 0; i < NUMPRIMES && a->buf[0] < PRIMES[i]; i++) {
-            gamma[i] = int_mod_word(a, PRIMES[i]);
+    if (bits % 256 == 0) {
+        //Генерируем гамму для получения простого числа
+        if (bits < WORD_BIT_LENGTH) {
+            for (i = 0; i < NUMPRIMES && a->buf[0] < PRIMES[i]; i++) {
+                gamma[i] = int_mod_word(a, PRIMES[i]);
+            }
+        } else {
+            for (i = 0; i < NUMPRIMES; i++) {
+                gamma[i] = int_mod_word(a, PRIMES[i]);
+            }
         }
-    } else {
-        for (i = 0; i < NUMPRIMES; i++) {
-            gamma[i] = int_mod_word(a, PRIMES[i]);
-        }
-    }
-    delta = 0;
-
+        delta = 0;
 loop:
-    if (bits < WORD_BIT_LENGTH) {
-        for (i = 1; i < NUMPRIMES && a->buf[0] < PRIMES[i]; i++) {
-            if (((gamma[i] + delta) % PRIMES[i]) == 0) {
-                delta += 2;
-                if (delta > max_delta) {
+        if (bits < WORD_BIT_LENGTH) {
+            for (i = 1; i < NUMPRIMES && a->buf[0] < PRIMES[i]; i++) {
+                if (((gamma[i] + delta) % PRIMES[i]) == 0) {
+                    delta += 2;
+                    if (delta > max_delta) {
+                        goto again;
+                    }
+                    goto loop;
+                }
+            }
+        } else {
+            for (i = 1; i < NUMPRIMES; i++) {
+                if (((gamma[i] + delta) % PRIMES[i]) <= 1) {
+                    delta += 2;
+                    if (delta > max_delta) {
+                        goto again;
+                    }
+                    goto loop;
+                }
+            }
+        }
+
+        a->buf[0] += delta;
+
+        if (bits < WORD_BIT_LENGTH) {
+            for (i = 1; i < NUMPRIMES && a->buf[0] < PRIMES[i]; i++) {
+                if (int_mod_word(a, PRIMES[i]) != 0) {
+                    continue;
+                } else {
+                    i = 0;
+                    a->buf[0] += 2;
                     goto again;
                 }
-                goto loop;
             }
-        }
-    } else {
-        for (i = 1; i < NUMPRIMES; i++) {
-            if (((gamma[i] + delta) % PRIMES[i]) <= 1) {
-                delta += 2;
-                if (delta > max_delta) {
+        } else {
+            for (i = 1; i < NUMPRIMES; i++) {
+                if (int_mod_word(a, PRIMES[i]) != 0) {
+                    continue;
+                } else {
+                    i = 0;
+                    a->buf[0] += 2;
                     goto again;
                 }
-                goto loop;
             }
         }
     }
 
-    a->buf[0] += delta;
-
-    if (bits < WORD_BIT_LENGTH) {
-        for (i = 1; i < NUMPRIMES && a->buf[0] < PRIMES[i]; i++) {
-            if (int_mod_word(a, PRIMES[i]) != 0) {
-                continue;
-            } else {
-                i = 0;
-                a->buf[0] += 2;
-                goto again;
-            }
-        }
-    } else {
-        for (i = 1; i < NUMPRIMES; i++) {
-            if (int_mod_word(a, PRIMES[i]) != 0) {
-                continue;
-            } else {
-                i = 0;
-                a->buf[0] += 2;
-                goto again;
-            }
-        }
-    }
-
-    DO(int_fermat_primary_test(a, &is_prime));
-    if (is_prime) {
-        DO(int_rabin_miller_primary_test(a, &is_prime));
-    }
+    DO(int_is_prime(a, &is_prime));
 
     if (!is_prime) {
+        a->buf[0] += 2;
+        if (a->buf[0] % 5 == 0) {
+            a->buf[0] += 2;
+        }
+        goto again;
+    }
+
+    if (int_bit_len(a) != bits) {
         a->buf[0] += 2;
         goto again;
     }
@@ -1644,7 +1677,8 @@ loop:
 
 cleanup:
 
-    free(a);
+    wa_free(a);
+    ba_free(rnd_bytes);
 
     return ret;
 }
