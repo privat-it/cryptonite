@@ -184,6 +184,10 @@ int int_prand(const WordArray *in, WordArray *out);
 
 int int_is_prime(WordArray *a, bool *is_prime);
 
+int int_rabin_miller_primary_test(WordArray *num, bool *is_prime);
+
+int int_fermat_primary_test(WordArray *num, bool *is_prime);
+
 void factorial(int n, WordArray *fac);
 
 /**

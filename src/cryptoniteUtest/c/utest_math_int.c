@@ -218,6 +218,58 @@ static void int_div_test4(void)
     wa_free(exp_q);
     wa_free(exp_r);
 }
+#ifdef FULL_UTEST
+static void int_gen_prime_number_test()
+{
+    PrngCtx *prng = NULL;
+    WordArray *prime = NULL;
+
+    prng = test_utils_get_prng();
+
+    size_t basic_bit_len = 512;
+    for (size_t bit_num = basic_bit_len; bit_num < basic_bit_len + WORD_BIT_LENGTH; bit_num++) {
+        printf("bit_num: %d\n", bit_num);
+        int_gen_prime(bit_num, prng, &prime);
+
+        size_t prime_bit_len = int_bit_len(prime);
+        ASSERT_TRUE(prime_bit_len == bit_num)
+
+        wa_free(prime);
+        prime = NULL;
+    }
+
+cleanup:
+
+    prng_free(prng);
+    wa_free(prime);
+}
+#endif
+
+static void test_fermat_primary()
+{
+    WordArray *wa = wa_alloc_from_be_hex_string("01A1B0330792CC33D4358290085336C31BBDBED57E756A73A6B7AAA46A0E25241B");
+    bool is_prime = false;
+
+    ASSERT_RET_OK(int_fermat_primary_test(wa, &is_prime))
+    ASSERT_TRUE(is_prime);
+
+cleanup:
+
+    wa_free(wa);
+}
+
+static void test_rabin_miller_primary()
+{
+    WordArray *wa = wa_alloc_from_be_hex_string("01A1B0330792CC33D4358290085336C31BBDBED57E756A73A6B7AAA46A0E25241B");
+    bool is_prime = false;
+
+    ASSERT_RET_OK(int_rabin_miller_primary_test(wa, &is_prime))
+    ASSERT_TRUE(is_prime);
+
+cleanup:
+
+    wa_free(wa);
+}
 
 void utest_math_int(void)
 {
@@ -239,4 +291,10 @@ void utest_math_int(void)
     int_div_test2();
     int_div_test3();
     int_div_test4();
+    test_fermat_primary();
+    test_rabin_miller_primary();
+#ifdef FULL_UTEST
+    int_gen_prime_number_test();
+#endif
+
 }

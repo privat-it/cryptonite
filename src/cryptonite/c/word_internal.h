@@ -83,7 +83,7 @@ void wa_free(WordArray *in);
 void wa_free_private(WordArray *in);
 int word_bit_len(word_t a);
 word_t generate_bits(size_t bits);
-WordArray *wa_alloc_from_uint8(uint8_t *in, size_t in_len);
+WordArray *wa_alloc_from_uint8(const uint8_t *in, size_t in_len);
 int wa_to_uint8(WordArray *wa, uint8_t *in, size_t in_len);
 int wa_from_uint8(WordArray *wa, uint8_t *in, size_t in_len);
 

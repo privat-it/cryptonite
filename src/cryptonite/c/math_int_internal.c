@@ -973,7 +973,7 @@ cleanup:
     return ret;
 }
 
-static int int_fermat_primary_test(WordArray *num, bool *is_prime)
+int int_fermat_primary_test(WordArray *num, bool *is_prime)
 {
     WordArray *rnd_num = NULL;
     WordArray *out = NULL;
@@ -1013,7 +1013,7 @@ cleanup:
     return ret;
 }
 
-static int int_rabin_miller_primary_test(WordArray *num, bool *is_prime)
+int int_rabin_miller_primary_test(WordArray *num, bool *is_prime)
 {
     WordArray *rnd_num = NULL;
     WordArray *pow = NULL;
@@ -1055,6 +1055,8 @@ static int int_rabin_miller_primary_test(WordArray *num, bool *is_prime)
     //Генерируем простое случайное число
     bits = int_bit_len(num_to_check);
     DO(int_gen_odd(bits - 2, &rnd_num));
+    wa_change_len(rnd_num, num_to_check->len);
+
     //Создаем контекст gfp с модулем, значение которого является число, которое мы проверяем на простоту.
     CHECK_NOT_NULL(mod = gfp_alloc(num_to_check));
     wa_free(pow_two);

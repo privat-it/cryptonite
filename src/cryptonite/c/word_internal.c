@@ -211,7 +211,7 @@ cleanup:
     return ret;
 }
 
-WordArray *wa_alloc_from_uint8(uint8_t *in, size_t in_len)
+WordArray *wa_alloc_from_uint8(const uint8_t *in, size_t in_len)
 {
     WordArray *wa = NULL;
     int ret = RET_OK;
