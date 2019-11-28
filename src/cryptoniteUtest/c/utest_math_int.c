@@ -245,7 +245,7 @@ cleanup:
 }
 #endif
 
-static void test_fermat_primary()
+static void test_fermat_primary(void)
 {
     WordArray *wa = wa_alloc_from_be_hex_string("01A1B0330792CC33D4358290085336C31BBDBED57E756A73A6B7AAA46A0E25241B");
     bool is_prime = false;
@@ -258,7 +258,7 @@ cleanup:
     wa_free(wa);
 }
 
-static void test_rabin_miller_primary()
+static void test_rabin_miller_primary(void)
 {
     WordArray *wa = wa_alloc_from_be_hex_string("01A1B0330792CC33D4358290085336C31BBDBED57E756A73A6B7AAA46A0E25241B");
     bool is_prime = false;
