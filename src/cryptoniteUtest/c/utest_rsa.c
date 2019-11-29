@@ -423,6 +423,33 @@ cleanup:
     rsa_free(ctx);
 }
 
+static void rsa_extended_gen_validate(void)
+{
+    ByteArray *e = ba_alloc_from_le_hex_string("03");
+    RsaCtx *ctx = NULL;
+    ByteArray *n = NULL;
+
+    ByteArray *d = NULL;
+    ByteArray *p = NULL;
+    ByteArray *q = NULL;
+    ByteArray *dmp1 = NULL;
+    ByteArray *dmq1 = NULL;
+    ByteArray *iqmp = NULL;
+    PrngCtx *prng = NULL;
+
+    ASSERT_NOT_NULL(prng = test_utils_get_prng());
+
+    ASSERT_NOT_NULL(ctx = rsa_alloc());
+    ASSERT_RET_OK(rsa_generate_privkey_ext(ctx, prng, 257, e, &n, &d, &p, &q, &dmp1, &dmq1, &iqmp));
+    ASSERT_RET_OK(rsa_validate_key(ctx, n, e, d, p, q, dmp1, dmq1, iqmp) ? RET_OK : RET_VERIFY_FAILED);
+
+cleanup:
+
+    BA_FREE(e, n, d, p, q, dmp1, dmq1, iqmp);
+    rsa_free(ctx);
+    prng_free(prng);
+}
+
 #ifdef FULL_UTEST
 static void rsa_possible_bits_test(void)
 {
@@ -441,7 +468,7 @@ static void rsa_possible_bits_test(void)
 
     ctx = rsa_alloc();
 
-    for(int i = 0; i < 2; i++) {
+    for(int i = 0; i < 64; i++) {
         size_t bit_num = 256 + i;
         ASSERT_RET_OK(rsa_generate_privkey(ctx, prng, bit_num, e, &n, &priv_key));
 
@@ -454,7 +481,6 @@ static void rsa_possible_bits_test(void)
 cleanup:
 
     ba_free(seed);
-    ba_free(e);
     prng_free(prng);
     rsa_free(ctx);
 
@@ -478,6 +504,8 @@ void utest_rsa(void)
     test_rsa_oaep_with_not_null_label();
     test_rsa_pkcs1_v1_5();
     rsa_extended_validate();
+    rsa_extended_gen_validate();
+
 #ifdef FULL_UTEST
     rsa_possible_bits_test();
 #endif
