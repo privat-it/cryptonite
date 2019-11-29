@@ -598,8 +598,9 @@ cleanup:
     return ctx;
 }
 
-int rsa_generate_privkey(RsaCtx *ctx, PrngCtx *prng, const size_t bits, const ByteArray *e, ByteArray **n,
-        ByteArray **d)
+static int rsa_gen_privkey_core(RsaCtx *ctx, PrngCtx *prng, const size_t bits, const ByteArray *e,
+                                WordArray **wa_p, WordArray **wa_q, WordArray **wa_fi,
+                                WordArray **wa_n, WordArray **wa_d)
 {
     WordArray *fi = NULL;
     WordArray *wp = NULL;
@@ -611,11 +612,8 @@ int rsa_generate_privkey(RsaCtx *ctx, PrngCtx *prng, const size_t bits, const By
     WordArray *wmin_val = NULL;
     WordArray *one = NULL;
     WordArray *q_tmp = NULL;
-    ByteArray *ba_n = NULL;
-    ByteArray *ba_d = NULL;
     size_t wplen = 0;
     size_t bitplen = 0;
-    size_t bytelen = 0;
     bool is_goto_begin = false;
     int comp_p_q = 0;
     int ret = RET_OK;
@@ -624,8 +622,8 @@ int rsa_generate_privkey(RsaCtx *ctx, PrngCtx *prng, const size_t bits, const By
     CHECK_PARAM(prng != NULL);
     CHECK_PARAM(bits >= 256);
     CHECK_PARAM(e != NULL);
-    CHECK_PARAM(n != NULL);
-    CHECK_PARAM(d != NULL);
+    CHECK_PARAM(wa_n != NULL);
+    CHECK_PARAM(wa_d != NULL);
 
     bitplen = (bits + 1) >> 1;
 
@@ -674,10 +672,12 @@ begin:
     int_mul(wq, wp, wn);
 
     /* fi = (p - 1) * (q - 1) */
-    wq->buf[0]--;
-    wp->buf[0]--;
+    --wq->buf[0];
+    --wp->buf[0];
     CHECK_NOT_NULL(fi = wa_alloc_with_zero(2 * wplen));
     int_mul(wq, wp, fi);
+    ++wq->buf[0];
+    ++wp->buf[0];
 
     CHECK_NOT_NULL(we = wa_alloc_from_ba(e));
     wa_change_len(we, 2 * wplen);
@@ -693,18 +693,24 @@ begin:
         goto cleanup;
     }
 
-    CHECK_NOT_NULL(ba_d = wa_to_ba(wd));
-    CHECK_NOT_NULL(ba_n = wa_to_ba(wn));
+    *wa_d = wd;
+    *wa_n = wn;
 
-    bytelen = (bits + 7) >> 3;
+    if (wa_p != NULL) {
+        *wa_p = wp;
+    }
+    if (wa_q != NULL) {
+        *wa_q = wq;
+    }
+    if (wa_fi != NULL) {
+        *wa_fi = fi;
+    }
 
-    ba_change_len(ba_d, bytelen);
-    ba_change_len(ba_n, bytelen);
-
-    *d = ba_d;
-    *n = ba_n;
-    ba_d = NULL;
-    ba_n = NULL;
+    wd = NULL;
+    wn = NULL;
+    wp = NULL;
+    wq = NULL;
+    fi = NULL;
 
 cleanup:
 
@@ -718,8 +724,6 @@ cleanup:
     wa_free(wsub_p_q);
     wa_free(one);
     wa_free(wmin_val);
-    ba_free(ba_d);
-    ba_free(ba_n);
     if (is_goto_begin) {
         is_goto_begin = false;
         goto begin;
@@ -728,10 +732,41 @@ cleanup:
     return ret;
 }
 
+#define WA_TO_BA_WITH_TRUNC(wa, ba) {                   \
+    CHECK_NOT_NULL(ba = wa_to_ba(wa));                  \
+    DO(ba_change_len(ba, (int_bit_len(wa) + 7) >> 3));  \
+}
+
+int rsa_generate_privkey(RsaCtx *ctx, PrngCtx *prng, const size_t bits, const ByteArray *e, ByteArray **n,
+        ByteArray **d)
+{
+    WordArray *wn = NULL;
+    WordArray *wd = NULL;
+    int ret = RET_OK;
+
+    CHECK_PARAM(ctx != NULL);
+    CHECK_PARAM(prng != NULL);
+    CHECK_PARAM(bits >= 256);
+    CHECK_PARAM(e != NULL);
+    CHECK_PARAM(n != NULL);
+    CHECK_PARAM(d != NULL);
+
+    DO(rsa_gen_privkey_core(ctx, prng, bits, e, NULL, NULL, NULL, &wn, &wd));
+
+    WA_TO_BA_WITH_TRUNC(wd, *d);
+    WA_TO_BA_WITH_TRUNC(wn, *n);
+
+cleanup:
+
+    wa_free(wn);
+    wa_free(wd);
+
+    return ret;
+}
+
 int rsa_generate_privkey_ext(RsaCtx *ctx, PrngCtx *prng, const size_t bits, const ByteArray *e, ByteArray **n,
         ByteArray **d, ByteArray **p, ByteArray **q, ByteArray **dmp1, ByteArray **dmq1, ByteArray **iqmp)
 {
-    WordArray *q_tmp = NULL;
     WordArray *fi = NULL;
     GfpCtx *gfp = NULL;
     GfpCtx *gfp1 = NULL;
@@ -745,8 +780,7 @@ int rsa_generate_privkey_ext(RsaCtx *ctx, PrngCtx *prng, const size_t bits, cons
     WordArray *wdmp1 = NULL;
     WordArray *wiqmp = NULL;
     int ret = RET_OK;
-    size_t plen;
-    size_t pbitlen = 0;
+    size_t wplen = 0;
 
     CHECK_PARAM(ctx != NULL);
     CHECK_PARAM(prng != NULL);
@@ -760,72 +794,43 @@ int rsa_generate_privkey_ext(RsaCtx *ctx, PrngCtx *prng, const size_t bits, cons
     CHECK_PARAM(dmq1 != NULL);
     CHECK_PARAM(iqmp != NULL);
 
-    plen = WA_LEN_FROM_BITS(bits >> 1);
-
+    DO(rsa_gen_privkey_core(ctx, prng, bits, e, &wp, &wq, &fi, &wn, &wd));
     //https://www.ibm.com/support/knowledgecenter/en/linuxonibm/com.ibm.linux.z.wskc.doc/wskc_c_rsagen.html
-    pbitlen = (bits + 1) >> 1;
-    DO(int_gen_prime(pbitlen, prng, &wp));
 
-    do {
-        wa_free(wq);
-        wq = NULL;
-        DO(int_gen_prime(bits - pbitlen, prng, &wq));
-        ret = int_cmp(wq, wp);
-        if (ret != 0) {
-            //p > q
-            if (ret > 0) {
-                q_tmp = wq;
-                wq = wp;
-                wp = q_tmp;
-            }
-            break;
-        }
-    } while (1);
-
-    ret = RET_OK;
-
-    CHECK_NOT_NULL(wn = wa_alloc_with_zero(2 * plen));
-    CHECK_NOT_NULL(fi = wa_alloc_with_zero(2 * plen));
-
-    /* n = p * q */
-    int_mul(wq, wp, wn); //Модуль
+    wplen = wp->len;
 
     /* fi = (p - 1) * (q - 1) */
-    wq->buf[0]--;
-    wp->buf[0]--;
-    int_mul(wq, wp, fi);
+    --wq->buf[0];
+    --wp->buf[0];
 
     /* e */
     CHECK_NOT_NULL(we = wa_alloc_from_ba(e));
-    wa_change_len(we, 2 * plen);
-
-    /* d = e^-1 mod fi*/
-    CHECK_NOT_NULL(wd = gfp_mod_inv_core(we, fi));
+    wa_change_len(we, 2 * wplen);
 
     /* exponent1 = d mod (p-1) */
-    CHECK_NOT_NULL(wdmp1 = wa_alloc_with_zero(plen));
+    CHECK_NOT_NULL(wdmp1 = wa_alloc_with_zero(wplen));
     CHECK_NOT_NULL(gfp1 = gfp_alloc(wp));
     gfp_mod(gfp1, wd, wdmp1);
 
     /* exponent2 = d mod (q-1) */
-    CHECK_NOT_NULL(wdmq1 = wa_alloc_with_zero(plen));
+    CHECK_NOT_NULL(wdmq1 = wa_alloc_with_zero(wplen));
     CHECK_NOT_NULL(gfq1 = gfp_alloc(wq));
     gfp_mod(gfq1, wd, wdmq1);
 
-    wq->buf[0]++;
-    wp->buf[0]++;
+    ++wq->buf[0];
+    ++wp->buf[0];
 
     /* coefficient = (inverse of q) mod p */
     CHECK_NOT_NULL(gfp = gfp_alloc(wp));
     CHECK_NOT_NULL(wiqmp = gfp_mod_inv_core(wq, wp));
 
-    CHECK_NOT_NULL(*n = wa_to_ba(wn));
-    CHECK_NOT_NULL(*p = wa_to_ba(wp));
-    CHECK_NOT_NULL(*q = wa_to_ba(wq));
-    CHECK_NOT_NULL(*d = wa_to_ba(wd));
-    CHECK_NOT_NULL(*dmp1 = wa_to_ba(wdmp1));
-    CHECK_NOT_NULL(*dmq1 = wa_to_ba(wdmq1));
-    CHECK_NOT_NULL(*iqmp = wa_to_ba(wiqmp));
+    WA_TO_BA_WITH_TRUNC(wn, *n);
+    WA_TO_BA_WITH_TRUNC(wp, *p);
+    WA_TO_BA_WITH_TRUNC(wq, *q);
+    WA_TO_BA_WITH_TRUNC(wd, *d);
+    WA_TO_BA_WITH_TRUNC(wdmp1, *dmp1);
+    WA_TO_BA_WITH_TRUNC(wdmq1, *dmq1);
+    WA_TO_BA_WITH_TRUNC(wiqmp, *iqmp);
 
 cleanup:
 
@@ -849,10 +854,10 @@ cleanup:
 bool rsa_validate_key(RsaCtx *ctx, const ByteArray *n, const ByteArray *e, const ByteArray *d, const ByteArray *p,
         const ByteArray *q, const ByteArray *dmp1, const ByteArray *dmq1, const ByteArray *iqmp)
 {
-    WordArray *fi = NULL;
     GfpCtx *gfp = NULL;
     GfpCtx *gfp1 = NULL;
     GfpCtx *gfq1 = NULL;
+    WordArray *fi = NULL;
     WordArray *wp = NULL;
     WordArray *wq = NULL;
     WordArray *we = NULL;
@@ -863,7 +868,7 @@ bool rsa_validate_key(RsaCtx *ctx, const ByteArray *n, const ByteArray *e, const
     WordArray *wiqmp = NULL;
     WordArray *wa_exp = NULL;
     int ret = RET_OK;
-    size_t plen;
+    size_t wplen = 0;
 
     CHECK_PARAM(ctx != NULL);
     CHECK_PARAM(e != NULL);
@@ -875,13 +880,12 @@ bool rsa_validate_key(RsaCtx *ctx, const ByteArray *n, const ByteArray *e, const
     CHECK_PARAM(dmq1 != NULL);
     CHECK_PARAM(iqmp != NULL);
 
-    plen = ba_get_len(p) >> WORD_BYTE_LEN_SHIFT;
-
-    CHECK_NOT_NULL(wn = wa_alloc_with_zero(2 * plen));
-    CHECK_NOT_NULL(fi = wa_alloc_with_zero(2 * plen));
-
     CHECK_NOT_NULL(wp = wa_alloc_from_ba(p));
     CHECK_NOT_NULL(wq = wa_alloc_from_ba(q));
+    wplen = p->len;
+    wa_change_len(wq, wp->len);
+    CHECK_NOT_NULL(wn = wa_alloc_with_zero(2 * wplen));
+    CHECK_NOT_NULL(fi = wa_alloc_with_zero(2 * wplen));
 
     /* n = p * q */
     int_mul(wq, wp, wn); //Модуль
@@ -893,13 +897,13 @@ bool rsa_validate_key(RsaCtx *ctx, const ByteArray *n, const ByteArray *e, const
     wa_exp = NULL;
     /* fi = (p - 1) * (q - 1) */
 
-    wq->buf[0]--;
-    wp->buf[0]--;
+    --wq->buf[0];
+    --wp->buf[0];
     int_mul(wq, wp, fi);
 
     /* e */
     CHECK_NOT_NULL(we = wa_alloc_from_ba(e));
-    wa_change_len(we, 2 * plen);
+    wa_change_len(we, 2 * wplen);
 
     /* d = e^-1 mod fi*/
     CHECK_NOT_NULL(wd = gfp_mod_inv_core(we, fi));
@@ -911,7 +915,7 @@ bool rsa_validate_key(RsaCtx *ctx, const ByteArray *n, const ByteArray *e, const
     wa_exp = NULL;
 
     /* exponent1 = d mod (p-1) */
-    CHECK_NOT_NULL(wdmp1 = wa_alloc_with_zero(plen));
+    CHECK_NOT_NULL(wdmp1 = wa_alloc_with_zero(wplen));
     CHECK_NOT_NULL(gfp1 = gfp_alloc(wp));
     gfp_mod(gfp1, wd, wdmp1);
     CHECK_NOT_NULL(wa_exp = wa_alloc_from_ba(dmp1));
@@ -922,7 +926,7 @@ bool rsa_validate_key(RsaCtx *ctx, const ByteArray *n, const ByteArray *e, const
     wa_exp = NULL;
 
     /* exponent2 = d mod (q-1) */
-    CHECK_NOT_NULL(wdmq1 = wa_alloc_with_zero(plen));
+    CHECK_NOT_NULL(wdmq1 = wa_alloc_with_zero(wplen));
     CHECK_NOT_NULL(gfq1 = gfp_alloc(wq));
     gfp_mod(gfq1, wd, wdmq1);
     CHECK_NOT_NULL(wa_exp = wa_alloc_from_ba(dmq1));
@@ -932,8 +936,8 @@ bool rsa_validate_key(RsaCtx *ctx, const ByteArray *n, const ByteArray *e, const
     wa_free(wa_exp);
     wa_exp = NULL;
 
-    wq->buf[0]++;
-    wp->buf[0]++;
+    ++wq->buf[0];
+    ++wp->buf[0];
 
     /* coefficient = (inverse of q) mod p */
     CHECK_NOT_NULL(gfp = gfp_alloc(wp));
