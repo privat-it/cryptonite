@@ -611,8 +611,11 @@ int rsa_generate_privkey(RsaCtx *ctx, PrngCtx *prng, const size_t bits, const By
     WordArray *wmin_val = NULL;
     WordArray *one = NULL;
     WordArray *q_tmp = NULL;
+    ByteArray *ba_n = NULL;
+    ByteArray *ba_d = NULL;
     size_t wplen = 0;
     size_t bitplen = 0;
+    size_t bytelen = 0;
     bool is_goto_begin = false;
     int comp_p_q = 0;
     int ret = RET_OK;
@@ -690,8 +693,18 @@ begin:
         goto cleanup;
     }
 
-    CHECK_NOT_NULL(*d = wa_to_ba(wd));
-    CHECK_NOT_NULL(*n = wa_to_ba(wn));
+    CHECK_NOT_NULL(ba_d = wa_to_ba(wd));
+    CHECK_NOT_NULL(ba_n = wa_to_ba(wn));
+
+    bytelen = (bits + 7) >> 3;
+
+    ba_change_len(ba_d, bytelen);
+    ba_change_len(ba_n, bytelen);
+
+    *d = ba_d;
+    *n = ba_n;
+    ba_d = NULL;
+    ba_n = NULL;
 
 cleanup:
 
@@ -705,6 +718,8 @@ cleanup:
     wa_free(wsub_p_q);
     wa_free(one);
     wa_free(wmin_val);
+    ba_free(ba_d);
+    ba_free(ba_n);
     if (is_goto_begin) {
         is_goto_begin = false;
         goto begin;
