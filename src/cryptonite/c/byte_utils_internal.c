@@ -249,6 +249,10 @@ cleanup:
 
 void secure_zero(void *s, size_t n)
 {
+    if (s == NULL) {
+        return;
+    }
+
     volatile char *p = s;
     while (n--) {
         *p++ = 0;

@@ -8,7 +8,7 @@
 #include "macros_internal.h"
 #include "byte_array_internal.h"
 #include "aes.h"
-
+#include "byte_utils_internal.h"
 
 
 #undef FILE_MARKER
@@ -730,57 +730,57 @@ static const uint32_t rcon[] = {
     (ciphertext)[3] = (uint8_t)  (st)
 
 #define expanded_key_128(round)                                 \
-    temp    = rk[3];                                          \
-    rk[4] = rk[0] ^                                         \
+    temp    = rk[3];                                            \
+    rk[4] = rk[0] ^                                             \
                    (Te4[(temp >> 16) & 0xff] << 24       )^     \
                    (Te4[(temp >> 8)  & 0xff] & 0x00ff0000) ^    \
                    (Te4[(temp)       & 0xff] & 0x0000ff00) ^    \
                    (Te4[(temp >> 24)       ] & 0x000000ff) ^    \
                     rcon[round];                                \
-    rk[5] = rk[1] ^ rk[4];                                \
-    rk[6] = rk[2] ^ rk[5];                                \
-    rk[7] = rk[3] ^ rk[6];                                \
+    rk[5] = rk[1] ^ rk[4];                                      \
+    rk[6] = rk[2] ^ rk[5];                                      \
+    rk[7] = rk[3] ^ rk[6];                                      \
     rk += 4
 
 #define expanded_key_head_192(round)                        \
-    temp    = rk[5];                                      \
-    rk[6] = rk[0] ^                                     \
+    temp    = rk[5];                                        \
+    rk[6] = rk[0] ^                                         \
             (Te4[(temp >> 16) & 0xff] & 0xff000000) ^       \
             (Te4[(temp >> 8) & 0xff] & 0x00ff0000) ^        \
             (Te4[(temp) & 0xff] & 0x0000ff00) ^             \
             (Te4[(temp >> 24) ] & 0x000000ff) ^             \
-    rcon[round];                                            \
-    rk[7] = rk[1] ^ rk[6];                            \
-    rk[8] = rk[2] ^ rk[7];                            \
-    rk[9] = rk[3] ^ rk[8];                            \
+            rcon[round];                                    \
+    rk[7] = rk[1] ^ rk[6];                                  \
+    rk[8] = rk[2] ^ rk[7];                                  \
+    rk[9] = rk[3] ^ rk[8];                                  \
 
-#define expanded_key_tail_192                               \
-    rk[10] = rk[4] ^ rk[9];                           \
-    rk[11] = rk[5] ^ rk[10];                          \
+#define expanded_key_tail_192          \
+    rk[10] = rk[4] ^ rk[9];            \
+    rk[11] = rk[5] ^ rk[10];           \
     rk += 6
 
 #define expanded_key_head_256(round)                            \
-    temp = rk[7];                                             \
-    rk[8 ] = rk[0]^                                         \
+    temp = rk[7];                                               \
+    rk[8 ] = rk[0]^                                             \
                     (Te4[(temp >> 16) & 0xff] & 0xff000000)^    \
                     (Te4[(temp >> 8) & 0xff] & 0x00ff0000)^     \
                     (Te4[(temp) & 0xff] & 0x0000ff00)^          \
                     (Te4[(temp >> 24) ] & 0x000000ff)^          \
                     rcon[round];                                \
-    rk[9 ] = rk[1] ^ rk[8];                               \
-    rk[10] = rk[2] ^ rk[9];                               \
+    rk[9 ] = rk[1] ^ rk[8];                                     \
+    rk[10] = rk[2] ^ rk[9];                                     \
     rk[11] = rk[3] ^ rk[10]
 
 #define expanded_key_tail_256                                   \
-    temp = rk[11];                                            \
-    rk[12] = rk[4]^                                         \
+    temp = rk[11];                                              \
+    rk[12] = rk[4]^                                             \
                     (Te4[(temp >> 24) ] & 0xff000000)^          \
                     (Te4[(temp >> 16) & 0xff] & 0x00ff0000)^    \
                     (Te4[(temp >> 8) & 0xff] & 0x0000ff00) ^    \
                     (Te4[(temp) & 0xff] & 0x000000ff);          \
-    rk[13] = rk[5] ^ rk[12];                              \
-    rk[14] = rk[6] ^ rk[13];                              \
-    rk[15] = rk[7] ^ rk[14];                              \
+    rk[13] = rk[5] ^ rk[12];                                    \
+    rk[14] = rk[6] ^ rk[13];                                    \
+    rk[15] = rk[7] ^ rk[14];                                    \
     rk += 8
 
 #define t_round_encrypt(round)                                          \
@@ -1482,7 +1482,7 @@ cleanup:
 void aes_free(AesCtx *ctx)
 {
     if (ctx) {
-        memset(ctx, 0, sizeof(AesCtx));
+        secure_zero(ctx, sizeof(AesCtx));
         free(ctx);
     }
 }

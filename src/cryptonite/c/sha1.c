@@ -265,11 +265,11 @@ int sha1_final(Sha1Ctx *ctx, ByteArray **hash_code)
     rem++;
 
     if (64 - rem >= 8) {
-        memset(ctx->msg_last_block + rem, 0, 56 - rem);
+        memset(&ctx->msg_last_block[rem], 0, 56 - rem);
     } else {
-        memset(ctx->msg_last_block + rem, 0, 64 - rem);
+        memset(&ctx->msg_last_block[rem], 0, 64 - rem);
         sha1_compress(ctx->state, ctx->msg_last_block);
-        memset(ctx->msg_last_block, 0, 56);
+        memset(&ctx->msg_last_block[0], 0, 56);
     }
 
     wlen = ((uint64_t) ctx->msg_tot_len) << 3;

@@ -163,7 +163,7 @@ int wa_from_ba(const ByteArray *ba, WordArray *wa)
     CHECK_PARAM(ba != NULL);
 
     wa->len = (ba->len + WORD_BYTE_LENGTH - 1) / WORD_BYTE_LENGTH;
-    CHECK_NOT_NULL(wa->buf = realloc(wa->buf, wa->len * WORD_BYTE_LENGTH));
+    REALLOC_CHECKED(wa->buf, wa->len * WORD_BYTE_LENGTH, wa->buf);
 
 #ifdef ARCH64
     DO(uint8_to_uint64(ba->buf, ba->len, wa->buf, wa->len));
@@ -284,15 +284,16 @@ cleanup:
 
 void wa_change_len(WordArray *wa, size_t len)
 {
-    wa->buf = realloc(wa->buf, len * sizeof (word_t));
-    if (wa->buf == NULL) {
-        ERROR_CREATE(RET_MEMORY_ALLOC_ERROR);
-        return;
-    }
+    int ret = RET_OK;
+
+    REALLOC_CHECKED(wa->buf, len * sizeof (word_t), wa->buf);
     if (wa->len < len) {
         memset(&wa->buf[wa->len], 0, (len - wa->len) * sizeof (word_t));
     }
     wa->len = len;
+
+cleanup:
+    return;
 }
 
 void wa_free(WordArray *in)

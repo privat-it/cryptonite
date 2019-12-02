@@ -19,6 +19,7 @@
 #include "word_internal.h"
 #include "math_int_internal.h"
 #include "macros_internal.h"
+#include "byte_utils_internal.h"
 
 #undef FILE_MARKER
 #define FILE_MARKER "cryptonite/rs.c"
@@ -505,7 +506,7 @@ int rs_memory_next_bytes(ByteArray *buf)
         buf->buf[i] ^= rnd_buf[i];
     }
 
-    memset(rnd_buf, 0, buf->len);
+    secure_zero(rnd_buf, buf->len);
 
     free(mctx.mem_buf);
     free(rnd_buf);
@@ -513,8 +514,8 @@ int rs_memory_next_bytes(ByteArray *buf)
     return ret;
 
 cleanup:
-    memset(rnd_buf, 0, buf->len);
-    memset(buf->buf, 0, buf->len);
+    secure_zero(rnd_buf, buf->len);
+    secure_zero(buf->buf, buf->len);
 
     if (mctx.mem_buf != NULL) {
         free(mctx.mem_buf);

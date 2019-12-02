@@ -1656,7 +1656,7 @@ static int des_encrypt_cbc(DesCtx *ctx, const ByteArray *in, ByteArray **dst)
     for (; data_off + DES_BLOCK_LEN <= (int)in->len; data_off += DES_BLOCK_LEN) {
         des_xor(&in->buf[data_off], ctx->gamma_des3, ctx->gamma_des3);
         des_crypt(ctx->gamma_des3, &out->buf[data_off], ctx->enc_key);
-        memcpy(ctx->gamma_des3, &out->buf[data_off], DES_BLOCK_LEN);
+        memcpy(&ctx->gamma_des3[0], &out->buf[data_off], DES_BLOCK_LEN);
     }
 
     *dst = out;
@@ -1684,7 +1684,7 @@ static int des3_encrypt_cbc(DesCtx *ctx, const ByteArray *in, ByteArray **dst)
     for (; data_off + DES_BLOCK_LEN <= (int)in->len; data_off += DES_BLOCK_LEN) {
         des_xor(&in->buf[data_off], ctx->gamma_des3, ctx->gamma_des3);
         des3_crypt(ctx->gamma_des3, &out->buf[data_off], ctx->enc_key);
-        memcpy(ctx->gamma_des3, &out->buf[data_off], DES_BLOCK_LEN);
+        memcpy(&ctx->gamma_des3[0], &out->buf[data_off], DES_BLOCK_LEN);
     }
 
     *dst = out;
@@ -1726,7 +1726,7 @@ static int des_encrypt_cfb(DesCtx *ctx, const ByteArray *in, ByteArray **dst)
         /* Шифрование блоками по DES_BLOCK_LEN байт. */
         for (; data_off + DES_BLOCK_LEN <= in_len; data_off += DES_BLOCK_LEN) {
             des_xor(&in_buf[data_off], gamma, &out->buf[data_off]);
-            memcpy(feed, &out->buf[data_off], DES_BLOCK_LEN);
+            memcpy(&feed[0], &out->buf[data_off], DES_BLOCK_LEN);
 
             des_crypt(feed, gamma, ctx->enc_key);
         }
@@ -1774,7 +1774,7 @@ static int des3_encrypt_cfb(DesCtx *ctx, const ByteArray *in, ByteArray **dst)
         /* Шифрование блоками по DES_BLOCK_LEN байт. */
         for (; data_off + DES_BLOCK_LEN <= in_len; data_off += DES_BLOCK_LEN) {
             des_xor(&in_buf[data_off], gamma, &out->buf[data_off]);
-            memcpy(feed, &out->buf[data_off], DES_BLOCK_LEN);
+            memcpy(&feed[0], &out->buf[data_off], DES_BLOCK_LEN);
 
             des3_crypt(feed, gamma, ctx->enc_key);
         }
@@ -1821,7 +1821,7 @@ static int des_decrypt_cfb(DesCtx *ctx, const ByteArray *in, ByteArray **dst)
     if (data_off < in_len) {
         /* Расшифрование блоками по DES_BLOCK_LEN байт. */
         for (; data_off + DES_BLOCK_LEN <= in_len; data_off += DES_BLOCK_LEN) {
-            memcpy(feed, &in_buf[data_off], DES_BLOCK_LEN);
+            memcpy(&feed[0], &in_buf[data_off], DES_BLOCK_LEN);
             des_xor(&in_buf[data_off], gamma, &out->buf[data_off]);
 
             des_crypt(feed, gamma, ctx->enc_key);
@@ -1871,7 +1871,7 @@ static int des3_decrypt_cfb(DesCtx *ctx, const ByteArray *in, ByteArray **dst)
     if (data_off < in_len) {
         /* Расшифрование блоками по DES_BLOCK_LEN байт. */
         for (; data_off + DES_BLOCK_LEN <= in_len; data_off += DES_BLOCK_LEN) {
-            memcpy(feed, &in_buf[data_off], DES_BLOCK_LEN);
+            memcpy(&feed[0], &in_buf[data_off], DES_BLOCK_LEN);
             des_xor(&in_buf[data_off], gamma, &out->buf[data_off]);
 
             des3_crypt(feed, gamma, ctx->enc_key);
@@ -1902,7 +1902,7 @@ static int des_decrypt_cbc(DesCtx *ctx, const ByteArray *in, ByteArray **out)
     uint8_t *in_buf = pt->buf;
     size_t in_len = pt->len;
 
-    memcpy(ctx->gamma_des3, in_buf, DES_BLOCK_LEN);
+    memcpy(&ctx->gamma_des3[0], in_buf, DES_BLOCK_LEN);
     des_crypt(&in_buf[i], &in_buf[i], &ctx->dec_key[64]);
     des_xor(&in_buf[i], ctx->iv, &in_buf[i]);
 
@@ -1910,7 +1910,7 @@ static int des_decrypt_cbc(DesCtx *ctx, const ByteArray *in, ByteArray **out)
         memcpy(prev, &in_buf[i], DES_BLOCK_LEN);
         des_crypt(&in_buf[i], &in_buf[i], &ctx->dec_key[64]);
         des_xor(&in_buf[i], ctx->gamma_des3, &in_buf[i]);
-        memcpy(ctx->gamma_des3, prev, DES_BLOCK_LEN);
+        memcpy(&ctx->gamma_des3[0], prev, DES_BLOCK_LEN);
     }
 
     *out = pt;
@@ -1931,7 +1931,7 @@ static int des3_decrypt_cbc(DesCtx *ctx, const ByteArray *in, ByteArray **out)
     uint8_t *in_buf = pt->buf;
     size_t in_len = pt->len;
 
-    memcpy(ctx->gamma_des3, in_buf, DES_BLOCK_LEN);
+    memcpy(&ctx->gamma_des3[0], in_buf, DES_BLOCK_LEN);
     des3_crypt(&in_buf[i], &in_buf[i], ctx->dec_key);
     des_xor(&in_buf[i], ctx->iv, &in_buf[i]);
 
@@ -1939,7 +1939,7 @@ static int des3_decrypt_cbc(DesCtx *ctx, const ByteArray *in, ByteArray **out)
         memcpy(prev, &in_buf[i], DES_BLOCK_LEN);
         des3_crypt(&in_buf[i], &in_buf[i], ctx->dec_key);
         des_xor(&in_buf[i], ctx->gamma_des3, &in_buf[i]);
-        memcpy(ctx->gamma_des3, prev, DES_BLOCK_LEN);
+        memcpy(&ctx->gamma_des3[0], prev, DES_BLOCK_LEN);
     }
 
     *out = pt;
@@ -2081,8 +2081,8 @@ int des_init_cbc(DesCtx *ctx, const ByteArray *key, const ByteArray *iv)
     DO(ba_to_uint8(iv, ctx->iv, ba_get_len(iv)));
     des_setup(ctx, ctx->key);
     ctx->mode = CBC;
-    memcpy(ctx->gamma_des, ctx->iv, ba_get_len(iv));
-    memcpy(ctx->gamma_des3, ctx->iv, ba_get_len(iv));
+    memcpy(&ctx->gamma_des[0], ctx->iv, ba_get_len(iv));
+    memcpy(&ctx->gamma_des3[0], ctx->iv, ba_get_len(iv));
 
 cleanup:
 
@@ -2101,8 +2101,8 @@ int des_init_ofb(DesCtx *ctx, const ByteArray *key, const ByteArray *iv)
     DO(ba_to_uint8(iv, ctx->iv, ba_get_len(iv)));
     des_setup(ctx, ctx->key);
     ctx->mode = OFB;
-    memcpy(ctx->gamma_des, ctx->iv, DES_BLOCK_LEN);
-    memcpy(ctx->gamma_des3, ctx->iv, DES_BLOCK_LEN);
+    memcpy(&ctx->gamma_des[0], &ctx->iv[0], DES_BLOCK_LEN);
+    memcpy(&ctx->gamma_des3[0], &ctx->iv[0], DES_BLOCK_LEN);
 
     DO(ba_to_uint8(iv, ctx->feed, DES_BLOCK_LEN));
     ctx->offset = DES_BLOCK_LEN;
@@ -2125,8 +2125,8 @@ int des_init_ctr(DesCtx *ctx, const ByteArray *key, const ByteArray *iv)
     des_setup(ctx, ctx->key);
 
     ctx->mode = CTR;
-    memcpy(ctx->gamma_des, ctx->iv, DES_BLOCK_LEN);
-    memcpy(ctx->gamma_des3, ctx->iv, DES_BLOCK_LEN);
+    memcpy(&ctx->gamma_des[0], &ctx->iv[0], DES_BLOCK_LEN);
+    memcpy(&ctx->gamma_des3[0], &ctx->iv[0], DES_BLOCK_LEN);
 
     DO(ba_to_uint8(iv, ctx->feed, DES_BLOCK_LEN));
     ctx->offset = DES_BLOCK_LEN;
@@ -2151,8 +2151,8 @@ int des_init_cfb(DesCtx *ctx, const ByteArray *key, const ByteArray *iv)
     des_setup(ctx, ctx->key);
 
     ctx->mode = CFB;
-    memcpy(ctx->gamma_des, ctx->iv, iv_len);
-    memcpy(ctx->gamma_des3, ctx->iv, iv_len);
+    memcpy(&ctx->gamma_des[0], ctx->iv, iv_len);
+    memcpy(&ctx->gamma_des3[0], ctx->iv, iv_len);
 
     DO(ba_to_uint8(iv, ctx->feed, DES_BLOCK_LEN));
     ctx->offset = DES_BLOCK_LEN;
@@ -2325,7 +2325,7 @@ cleanup:
 void des_free(DesCtx *ctx)
 {
     if (ctx) {
-        memset(ctx, 0, sizeof(DesCtx));
+        secure_zero(ctx, sizeof(DesCtx));
         free(ctx);
     }
 }

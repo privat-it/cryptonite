@@ -1426,10 +1426,9 @@ static Dstu7624Ctx *dstu7624_alloc_user_sbox_core(const uint8_t *s_blocks, size_
     generate_reverse_table(s_blocks, ctx->sbox_rev);
     p_sub_row_col(ctx->sbox_rev, ctx->p_boxrowcol_rev, mds_matrix_reverse);
 
-    return ctx;
 cleanup:
-    free(ctx);
-    return NULL;
+
+    return ctx;
 }
 
 Dstu7624Ctx *dstu7624_alloc_user_sbox(ByteArray *sblocks)
@@ -1476,7 +1475,7 @@ void dstu7624_free(Dstu7624Ctx *ctx)
         default:
             break;
         }
-        memset(ctx, 0, sizeof (Dstu7624Ctx));
+        secure_zero(ctx, sizeof (Dstu7624Ctx));
         free(ctx);
     }
 }
@@ -2487,7 +2486,7 @@ static int dstu7624_init(Dstu7624Ctx *ctx, const ByteArray *key, const size_t bl
     const uint8_t *key_buf = NULL;
     uint64_t *p_hrkey = NULL;
     uint64_t *p_key_shifts = NULL;
-    size_t key_buf_len;
+    size_t key_buf_len = 0;
     int ret = RET_OK;
 
     CHECK_PARAM(ctx != NULL);
@@ -2550,18 +2549,18 @@ static int dstu7624_init(Dstu7624Ctx *ctx, const ByteArray *key, const size_t bl
     DO(p_help_round_key(key, ctx, p_hrkey));
     DO(precomputed_rkeys(ctx, p_key_shifts, p_hrkey));
 
-    memcpy(ctx->p_rkeys_rev, ctx->p_rkeys, MAX_BLOCK_LEN * 20);
+    memcpy(&ctx->p_rkeys_rev[0], &ctx->p_rkeys[0], MAX_BLOCK_LEN * 20);
     reverse_rkey(ctx->p_rkeys_rev, ctx);
 
 cleanup:
 
     if (p_hrkey) {
-        memset(p_hrkey, 0, key_buf_len);
+        secure_zero(p_hrkey, key_buf_len);
     }
     free(p_hrkey);
 
     if (p_key_shifts) {
-        memset(p_key_shifts, 0, key_buf_len * ((ctx->rounds >> 1) + 1));
+        secure_zero(p_key_shifts, key_buf_len * ((ctx->rounds >> 1) + 1));
     }
     free(p_key_shifts);
 
@@ -3656,7 +3655,7 @@ static int encrypt_ofb(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **out)
                 plain_data);
     }
 
-    i = block_len - used_gamma_len == block_len ? 0 : block_len - used_gamma_len;
+    i = used_gamma_len == block_len ? block_len : used_gamma_len;
     for (; i < plain_data_size_byte; i += block_len) {
         crypt_basic_transform(ctx, gamma, gamma);
         kalina_xor(&plain_data[i], gamma, block_len, &plain_data[i]);
@@ -4022,7 +4021,7 @@ cleanup:
 int dstu7624_init_gmac(Dstu7624Ctx *ctx, const ByteArray *key, const size_t block_size, const size_t q)
 {
     int ret = RET_OK;
-    int f[5];
+    int f[5] = {0};
 
     CHECK_PARAM(ctx != NULL);
     CHECK_PARAM(key != NULL);
@@ -4094,7 +4093,7 @@ cleanup:
 
 int dstu7624_init_xts(Dstu7624Ctx *ctx, const ByteArray *key, const ByteArray *iv)
 {
-    int f[5];
+    int f[5] = {0};
     int ret = RET_OK;
 
     CHECK_PARAM(ctx != NULL);
@@ -4169,7 +4168,7 @@ cleanup:
 
 int dstu7624_init_gcm(Dstu7624Ctx *ctx, const ByteArray *key, const ByteArray *iv, const size_t q)
 {
-    int f[5];
+    int f[5] = {0};
     int ret = RET_OK;
 
     CHECK_PARAM(ctx != NULL);
@@ -4223,7 +4222,6 @@ static int cmac_update(Dstu7624Ctx *ctx, const ByteArray *in)
     uint8_t *shifted_data = NULL;
     uint8_t *plain_data = NULL;
     uint8_t cipher_data[64];
-    uint8_t rkey[64];
     size_t plain_data_len;
     size_t i, j;
     size_t block_len;
@@ -4242,7 +4240,6 @@ static int cmac_update(Dstu7624Ctx *ctx, const ByteArray *in)
 
     /*State in be format -> cipher data in be.*/
     DO(uint64_to_uint8(ctx->state, block_len >> 3, cipher_data, block_len));
-    memset(rkey, 0, block_len);
 
     plain_data = in->buf;
     plain_data_len = in->len;

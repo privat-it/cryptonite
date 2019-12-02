@@ -20,9 +20,9 @@ EcGfpCtx *ecp_alloc(const WordArray *p, const WordArray *a, const WordArray *b)
     CHECK_PARAM(b != NULL);
 
     CALLOC_CHECKED(ctx, sizeof(EcGfpCtx));
-    if (ctx != NULL) {
-        ecp_init(ctx, p, a, b);
-    }
+
+    ecp_init(ctx, p, a, b);
+
 cleanup:
     return ctx;
 }
@@ -81,7 +81,8 @@ bool ecp_is_on_curve(const EcGfpCtx *ctx, const WordArray *px, const WordArray *
 {
     WordArray *x = NULL;
     WordArray *y = NULL;
-    bool ret = false;
+    bool answ = false;
+    int ret = RET_OK;
 
     ASSERT(ctx != NULL);
     ASSERT(px != NULL);
@@ -102,12 +103,14 @@ bool ecp_is_on_curve(const EcGfpCtx *ctx, const WordArray *px, const WordArray *
     wa_copy(py, y);
     gfp_mod_sqr(ctx->gfp, y, y);
 
-    ret = int_equals(x, y);
+    answ = int_equals(x, y);
 
     wa_free(x);
     wa_free(y);
+
 cleanup:
-    return ret;
+
+    return answ;
 }
 
 /**
@@ -632,7 +635,7 @@ int ecp_dual_mul_opt(EcGfpCtx *ctx, const EcPrecomp *p_precomp, const WordArray 
     if (p_precomp != NULL) {
         if (p_precomp->type == EC_PRECOMP_TYPE_COMB) {
             iter_p = (m_bit_len + p_precomp->ctx.comb->comb_width - 1) / p_precomp->ctx.comb->comb_width - 1;
-        } else if (p_precomp != NULL && p_precomp->type == EC_PRECOMP_TYPE_WIN) {
+        } else if (p_precomp->type == EC_PRECOMP_TYPE_WIN) {
             ASSERT(m != NULL);
             ASSERT(ctx->len == p_precomp->ctx.win->precomp[0]->x->len);
 

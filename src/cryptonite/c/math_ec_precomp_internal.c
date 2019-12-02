@@ -20,37 +20,38 @@ EcPrecomp *ec_copy_precomp_with_alloc(EcPrecomp *precomp)
     }
 
     CALLOC_CHECKED(precomp_copy, sizeof(EcPrecomp));
-
     precomp_copy->type = precomp->type;
-    if (precomp->type == EC_PRECOMP_TYPE_COMB) {
+    switch (precomp->type) {
+        case EC_PRECOMP_TYPE_COMB:
         CALLOC_CHECKED(precomp_copy->ctx.comb, sizeof(EcPrecompComb));
-        precomp_copy->ctx.comb->comb_width = precomp->ctx.comb->comb_width;
+            precomp_copy->ctx.comb->comb_width = precomp->ctx.comb->comb_width;
 
-        if (precomp->ctx.comb->precomp != NULL) {
-            int comb_len = (1 << precomp->ctx.comb->comb_width) - 1;
+            if (precomp->ctx.comb->precomp != NULL) {
+                int comb_len = (1 << precomp->ctx.comb->comb_width) - 1;
 
-            CALLOC_CHECKED(precomp_copy->ctx.comb->precomp, comb_len * sizeof(ECPoint *));
+                CALLOC_CHECKED(precomp_copy->ctx.comb->precomp, comb_len * sizeof(ECPoint *));
 
-            for (i = 0; i < comb_len; i++) {
-                CHECK_NOT_NULL(precomp_copy->ctx.comb->precomp[i] = ec_point_copy_with_alloc(precomp->ctx.comb->precomp[i]));
+                for (i = 0; i < comb_len; i++) {
+                    CHECK_NOT_NULL(precomp_copy->ctx.comb->precomp[i] = ec_point_copy_with_alloc(precomp->ctx.comb->precomp[i]));
+                }
             }
-        }
-
-    } else if (precomp->type == EC_PRECOMP_TYPE_WIN) {
+            break;
+        case EC_PRECOMP_TYPE_WIN:
         CALLOC_CHECKED(precomp_copy->ctx.win, sizeof(EcPrecompWin));
 
-        precomp_copy->ctx.win->win_width = precomp->ctx.win->win_width;
-        precomp_copy->ctx.win->precomp_len = precomp->ctx.win->precomp_len;
+            precomp_copy->ctx.win->win_width = precomp->ctx.win->win_width;
+            precomp_copy->ctx.win->precomp_len = precomp->ctx.win->precomp_len;
 
-        if (precomp->ctx.win->precomp != NULL) {
-            CALLOC_CHECKED(precomp_copy->ctx.win->precomp, precomp->ctx.win->precomp_len * sizeof(ECPoint *));
+            if (precomp->ctx.win->precomp != NULL) {
+                CALLOC_CHECKED(precomp_copy->ctx.win->precomp, precomp->ctx.win->precomp_len * sizeof(ECPoint *));
 
-            for (i = 0; i < precomp->ctx.win->precomp_len; i++) {
-                CHECK_NOT_NULL(precomp_copy->ctx.win->precomp[i] = ec_point_copy_with_alloc(precomp->ctx.win->precomp[i]));
+                for (i = 0; i < precomp->ctx.win->precomp_len; i++) {
+                    CHECK_NOT_NULL(precomp_copy->ctx.win->precomp[i] = ec_point_copy_with_alloc(precomp->ctx.win->precomp[i]));
+                }
             }
-        }
-    } else {
-        SET_ERROR(RET_INVALID_CTX);
+            break;
+        default:
+            SET_ERROR(RET_INVALID_CTX);
     }
 
     return precomp_copy;

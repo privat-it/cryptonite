@@ -909,13 +909,13 @@ void gf2m_mul_opt(const Gf2mCtx *ctx, const WordArray *x1, const WordArray *y1, 
     s = (2 * n > WA_LEN(96)) ? (2 * n - WA_LEN(96)) : 0;
 
     gf2m_mul_256(x->buf, y->buf, n, true, r->buf);
-    memcpy(r->buf + s, r->buf + WA_LEN(32) + s, (2 * n - WA_LEN(64) - s) * sizeof(word_t));
+    memcpy(&r->buf[s], r->buf + WA_LEN(32) + s, (2 * n - WA_LEN(64) - s) * sizeof(word_t));
     for (i = 2 * n - WA_LEN(64), j = 2 * n - WA_LEN(32); j < 2 * n; r->buf[i++] ^= r->buf[j++]);
 
-    memcpy(xPoly, x->buf + n - WA_LEN(32), WA_LEN(32) * sizeof(word_t));
+    memcpy(&xPoly[0], x->buf + n - WA_LEN(32), WA_LEN(32) * sizeof(word_t));
     for (i = WA_LEN(64) - n, j = 0; i < WA_LEN(32); xPoly[i++] ^= x->buf[j++]);
 
-    memcpy(yPoly, y->buf + n - WA_LEN(32), WA_LEN(32) * sizeof(word_t));
+    memcpy(&yPoly[0], y->buf + n - WA_LEN(32), WA_LEN(32) * sizeof(word_t));
     for (i = WA_LEN(64) - n, j = 0; i < WA_LEN(32); yPoly[i++] ^= y->buf[j++]);
 
     gf2m_mul_256(xPoly, yPoly, WA_LEN(32), true, dtPoly);

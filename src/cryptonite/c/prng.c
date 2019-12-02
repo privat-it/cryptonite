@@ -28,11 +28,14 @@ PrngCtx *prng_alloc(PrngMode mode, const ByteArray *seed)
     CHECK_PARAM(seed->len >= 40);
 
     CALLOC_CHECKED(ctx, sizeof(PrngCtx));
-    if (mode == PRNG_MODE_DEFAULT || mode == PRNG_MODE_DSTU) {
-        ctx->mode_id = mode;
-        CHECK_NOT_NULL(ctx->mode.dstu = dstu4145_prng_alloc(seed));
-    } else {
-        SET_ERROR(RET_INVALID_PARAM);
+    switch (mode) {
+        case PRNG_MODE_DEFAULT:
+        case PRNG_MODE_DSTU:
+            ctx->mode_id = mode;
+            CHECK_NOT_NULL(ctx->mode.dstu = dstu4145_prng_alloc(seed));
+            break;
+        default:
+            SET_ERROR(RET_INVALID_PARAM);
     }
 
 cleanup:

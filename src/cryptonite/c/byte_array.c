@@ -429,21 +429,21 @@ void ba_free(ByteArray *ba)
 
 int ba_change_len(ByteArray *ba, size_t len)
 {
+    int ret = RET_OK;
     if (ba == NULL) {
-        ERROR_CREATE(RET_INVALID_PARAM);
-        return RET_INVALID_PARAM;
+        SET_ERROR(RET_INVALID_PARAM);
     }
-    ba->buf = realloc(ba->buf, len);
-    if (ba->buf == NULL) {
-        ERROR_CREATE(RET_MEMORY_ALLOC_ERROR);
-        return RET_MEMORY_ALLOC_ERROR;
-    }
+
+    REALLOC_CHECKED(ba->buf, len, ba->buf);
+
     if (ba->len < len) {
         memset(&ba->buf[ba->len], 0, len - ba->len);
     }
     ba->len = len;
 
-    return RET_OK;
+cleanup:
+
+    return ret;
 }
 
 void ba_free_private(ByteArray *ba)

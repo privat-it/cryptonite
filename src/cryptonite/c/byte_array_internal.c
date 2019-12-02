@@ -136,7 +136,7 @@ int ba_from_uint64(const uint64_t *buf, size_t buf_len, ByteArray *ba)
     CHECK_PARAM(ba != NULL);
 
     ba->len = buf_len * UINT64_LEN;
-    CHECK_NOT_NULL(ba->buf = realloc(ba->buf, ba->len));
+    REALLOC_CHECKED(ba->buf, ba->len, ba->buf);
     DO(uint64_to_uint8(buf, buf_len, ba->buf, ba->len));
 
 cleanup:
@@ -153,7 +153,7 @@ int ba_from_uint32(const uint32_t *buf, size_t buf_len, ByteArray *ba)
     CHECK_PARAM(ba != NULL);
 
     ba->len = buf_len * UINT32_LEN;
-    CHECK_NOT_NULL(ba->buf = realloc(ba->buf, ba->len));
+    REALLOC_CHECKED(ba->buf, ba->len, ba->buf);
     DO(uint32_to_uint8(buf, buf_len, ba->buf, ba->len));
 
 cleanup:

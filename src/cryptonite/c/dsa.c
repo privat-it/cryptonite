@@ -102,11 +102,12 @@ static int generate_p_q(int L, int N, PrngCtx *prng, ByteArray **p, ByteArray **
     WordArray *wp = NULL;
     int i, counter;
     int ret = RET_OK;
-    int seed_len;
-    int hash_bytes_len;
+    int seed_len = 0;
+    int hash_bytes_len = 0;
     int w_len = L / 8;
     int n = (L - 1) / N;
-    bool is_prime;
+    int dsa_hashpart = 0;
+    bool is_prime = false;
     DsaShaCtx *sha_ctx = NULL;
 
     CHECK_PARAM(L >= 512);
@@ -195,7 +196,9 @@ static int generate_p_q(int L, int N, PrngCtx *prng, ByteArray **p, ByteArray **
             inc_be(offset, seed_len);
             DO(hash(sha_ctx, offset, seed_len, part1));
 
-            memcpy(w, &part1[(hash_bytes_len - ((w_len - n * hash_bytes_len)))], (w_len - n * hash_bytes_len));
+            dsa_hashpart = w_len - n * hash_bytes_len;
+
+            memcpy(w, &part1[hash_bytes_len - dsa_hashpart], dsa_hashpart);
             w[0] |= 0x80;
 
             wa_free(wx);
@@ -424,11 +427,10 @@ int dsa_generate_privkey(const DsaCtx *ctx, PrngCtx *prng, ByteArray **priv_key)
     CHECK_NOT_NULL(wd = wa_alloc(ctx->params->gfq->p->len));
 
     DO(int_rand(prng, ctx->params->gfq->p, wd));
-    if (ret == RET_OK) {
-        *priv_key = wa_to_ba(wd);
-        blen = (int_bit_len(ctx->params->gfq->p) + 7) / 8;
-        DO(ba_change_len(*priv_key, blen));
-    }
+
+    CHECK_NOT_NULL(*priv_key = wa_to_ba(wd));
+    blen = (int_bit_len(ctx->params->gfq->p) + 7) / 8;
+    DO(ba_change_len(*priv_key, blen));
 
 cleanup:
 

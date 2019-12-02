@@ -64,21 +64,22 @@ struct Sha2Ctx_st {
         ctx->h[6] = h0[6];          \
         ctx->h[7] = h0[7]
 
-#define SHFR(x, n)    (x >> n)
-#define ROTR(x, n)   ((x >> n) | (x << ((sizeof(x) << 3) - n)))
-#define ROTL(x, n)   ((x << n) | (x >> ((sizeof(x) << 3) - n)))
-#define CH(x, y, z)  ((x & y) ^ (~x & z))
-#define MAJ(x, y, z) ((x & y) ^ (x & z) ^ (y & z))
+#define SHFR(x, n)    ((x) >> (n))
+#define ROTR32(x, n)   (((x) >> (n)) | (((x) << (32 - (n)))))
+#define ROTR64(x, n)   (((x) >> (n)) | (((x) << (64 - (n)))))
+#define ROTL(x, n)   (((x) << (n)) | ((x) >> ((sizeof((x)) << 3) - (n))))
+#define CH(x, y, z)  (((x) & (y)) ^ ((~(x)) & (z)))
+#define MAJ(x, y, z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
 
-#define SHA256_F1(x) (ROTR(x,  2) ^ ROTR(x, 13) ^ ROTR(x, 22))
-#define SHA256_F2(x) (ROTR(x,  6) ^ ROTR(x, 11) ^ ROTR(x, 25))
-#define SHA256_F3(x) (ROTR(x,  7) ^ ROTR(x, 18) ^ SHFR(x,  3))
-#define SHA256_F4(x) (ROTR(x, 17) ^ ROTR(x, 19) ^ SHFR(x, 10))
+#define SHA256_F1(x) (ROTR32(x,  2) ^ ROTR32(x, 13) ^ ROTR32(x, 22))
+#define SHA256_F2(x) (ROTR32(x,  6) ^ ROTR32(x, 11) ^ ROTR32(x, 25))
+#define SHA256_F3(x) (ROTR32(x,  7) ^ ROTR32(x, 18) ^ SHFR(x,  3))
+#define SHA256_F4(x) (ROTR32(x, 17) ^ ROTR32(x, 19) ^ SHFR(x, 10))
 
-#define SHA512_F1(x) (ROTR(x, 28) ^ ROTR(x, 34) ^ ROTR(x, 39))
-#define SHA512_F2(x) (ROTR(x, 14) ^ ROTR(x, 18) ^ ROTR(x, 41))
-#define SHA512_F3(x) (ROTR(x,  1) ^ ROTR(x,  8) ^ SHFR(x,  7))
-#define SHA512_F4(x) (ROTR(x, 19) ^ ROTR(x, 61) ^ SHFR(x,  6))
+#define SHA512_F1(x) (ROTR64(x, 28) ^ ROTR64(x, 34) ^ ROTR64(x, 39))
+#define SHA512_F2(x) (ROTR64(x, 14) ^ ROTR64(x, 18) ^ ROTR64(x, 41))
+#define SHA512_F3(x) (ROTR64(x,  1) ^ ROTR64(x,  8) ^ SHFR(x,  7))
+#define SHA512_F4(x) (ROTR64(x, 19) ^ ROTR64(x, 61) ^ SHFR(x,  6))
 
 #define UNPACK32(x, str)                            \
 {                                                   \
@@ -302,8 +303,8 @@ static __inline int sha224_init(Sha2Ctx *ctx)
 
     ctx224 = &ctx->type.ctx224;
 
-    memset(ctx224->block, 0, SHA256_BLOCK_SIZE >> 1);
-    memset(ctx224->h, 0, 32);
+    memset(&ctx224->block[0], 0, SHA256_BLOCK_SIZE >> 1);
+    memset(&ctx224->h[0], 0, 32);
 
     BASE_INIT(ctx224, sha224_h0);
     ctx224->len = 0;
@@ -322,8 +323,8 @@ static __inline int sha256_init(Sha2Ctx *ctx)
     CHECK_PARAM(ctx != NULL);
     Sha256Ctx *ctx256 = &ctx->type.ctx256;
 
-    memset(ctx256->block, 0, SHA256_BLOCK_SIZE >> 1);
-    memset(ctx256->h, 0, 32);
+    memset(&ctx256->block[0], 0, SHA256_BLOCK_SIZE >> 1);
+    memset(&ctx256->h[0], 0, 32);
 
     BASE_INIT(ctx256, sha256_h0);
     ctx256->len = 0;
@@ -343,8 +344,8 @@ static __inline int sha384_init(Sha2Ctx *ctx)
 
     Sha384Ctx *ctx384 = &ctx->type.ctx384;
 
-    memset(ctx384->block, 0, SHA512_BLOCK_SIZE >> 1);
-    memset(ctx384->h, 0, 64);
+    memset(&ctx384->block[0], 0, SHA512_BLOCK_SIZE >> 1);
+    memset(&ctx384->h[0], 0, 64);
     BASE_INIT(ctx384, sha384_h0);
     ctx384->len = 0;
     ctx384->tot_len = 0;
@@ -363,8 +364,8 @@ static __inline int sha512_init(Sha2Ctx *ctx)
 
     Sha512Ctx *ctx512 = &ctx->type.ctx512;
 
-    memset(ctx512->block, 0, SHA512_BLOCK_SIZE >> 1);
-    memset(ctx512->h, 0, 64);
+    memset(&ctx512->block[0], 0, SHA512_BLOCK_SIZE >> 1);
+    memset(&ctx512->h[0], 0, 64);
 
     BASE_INIT(ctx512, sha512_h0);
     ctx512->len = 0;
@@ -537,13 +538,13 @@ static int sha224_update(Sha224Ctx *ctx, const ByteArray *data_ba)
     shifted_message = data_buf + rem_len;
 
     sha256_transf(ctx, ctx->block, 1);
-    memset(ctx->block, 0, SHA224_BLOCK_SIZE);
+    memset(&ctx->block[0], 0, SHA224_BLOCK_SIZE);
     if (ctx->len + msg_len != SHA224_BLOCK_SIZE) {
         sha256_transf(ctx, shifted_message, block_nb);
     }
 
     rem_len = new_len % SHA224_BLOCK_SIZE;
-    memcpy(ctx->block, &shifted_message[block_nb << 6], rem_len);
+    memcpy(&ctx->block[0], &shifted_message[block_nb << 6], rem_len);
     ctx->len = rem_len;
     ctx->tot_len += (block_nb + 1) << 6;
 
@@ -566,15 +567,12 @@ static int sha224_final(Sha2Ctx *ctx, ByteArray **hash_code)
     CHECK_PARAM(hash_code != NULL);
 
     ctx224 = &ctx->type.ctx224;
-    if (ctx224 == NULL) {
-        SET_ERROR(RET_INVALID_CTX);
-    }
 
     memset(digest, 0, 28);
     block_nb = (1 + ((SHA224_BLOCK_SIZE - 9) < (ctx224->len % SHA224_BLOCK_SIZE)));
     len_b = (ctx224->tot_len + ctx224->len) << 3;
     pm_len = block_nb << 6;
-    memset(ctx224->block + ctx224->len, 0, pm_len - ctx224->len);
+    memset(&ctx224->block[ctx224->len], 0, pm_len - ctx224->len);
     ctx224->block[ctx224->len] = 0x80;
 
     UNPACK32(len_b, ctx224->block + pm_len - 4);
@@ -632,7 +630,7 @@ static int sha256_update(Sha256Ctx *ctx, const ByteArray *msg_ba)
     sha256_transf(ctx, shifted_msg, block_nb);
 
     rem_len = new_len % SHA256_BLOCK_SIZE;
-    memcpy(ctx->block, &shifted_msg[block_nb << 6], rem_len);
+    memcpy(&ctx->block[0], &shifted_msg[block_nb << 6], rem_len);
     ctx->len = rem_len;
     ctx->tot_len += (block_nb + 1) << 6;
 
@@ -655,9 +653,6 @@ static int sha256_final(Sha2Ctx *ctx, ByteArray **hash_code)
     CHECK_PARAM(hash_code != NULL);
 
     ctx256 = &ctx->type.ctx256;
-    if (ctx256 == NULL) {
-        SET_ERROR(RET_INVALID_CTX);
-    }
 
     memset(digest, 0, 32);
 
@@ -749,9 +744,6 @@ static int sha384_final(Sha2Ctx *ctx, ByteArray **hash_code)
     CHECK_PARAM(hash_code != NULL);
 
     ctx384 = &ctx->type.ctx384;
-    if (ctx384 == NULL) {
-        SET_ERROR(RET_INVALID_CTX);
-    }
 
     memset(digest, 0, 48);
     block_nb = (1 + ((SHA384_BLOCK_SIZE - 17) < (ctx384->len % SHA384_BLOCK_SIZE)));
@@ -838,9 +830,6 @@ static int sha512_final(Sha2Ctx *ctx, ByteArray **hash_code)
     CHECK_PARAM(hash_code != NULL);
 
     ctx512 = &ctx->type.ctx512;
-    if (ctx512 == NULL) {
-        SET_ERROR(RET_INVALID_CTX);
-    }
 
     memset(digest, 0, 64);
     block_nb = 1 + ((SHA512_BLOCK_SIZE - 17) < (ctx512->len % SHA512_BLOCK_SIZE));

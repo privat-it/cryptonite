@@ -571,7 +571,7 @@ int ec2m_dual_mul_opt(const EcGf2mCtx *ctx, const EcPrecomp *p_precomp, const Wo
     if (p_precomp != NULL) {
         if (p_precomp->type == EC_PRECOMP_TYPE_COMB) {
             iter_p = (m_bit_len + p_precomp->ctx.comb->comb_width - 1) / p_precomp->ctx.comb->comb_width - 1;
-        } else if (p_precomp != NULL && p_precomp->type == EC_PRECOMP_TYPE_WIN) {
+        } else if (p_precomp->type == EC_PRECOMP_TYPE_WIN) {
             ASSERT(m != NULL);
             ASSERT(ctx->len == p_precomp->ctx.win->precomp[0]->x->len);
 

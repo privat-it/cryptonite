@@ -9,6 +9,7 @@
 #include "md5.h"
 #include "byte_array_internal.h"
 #include "macros_internal.h"
+#include "byte_utils_internal.h"
 
 #undef FILE_MARKER
 #define FILE_MARKER "cryptonite/md5.c"
@@ -83,14 +84,9 @@ Rotation is separate from addition to prevent recomputation.
         (a) += (b);                                         \
         }
 
-__inline static void decode(uint32_t *output, const uint8_t *input, const size_t len)
-{
-    unsigned int i, j;
-
-    for (i = 0, j = 0; j < len; i++, j += 4)
-        output[i] = ((uint32_t) input[j]) | (((uint32_t) input[j + 1]) << 8) |
-                (((uint32_t) input[j + 2]) << 16) | (((uint32_t) input[j + 3]) << 24);
-}
+#define PACK32(i, j)\
+    x[i] = ((uint32_t) block[j]) | (((uint32_t) block[j + 1]) << 8) | \
+    (((uint32_t) block[j + 2]) << 16) | (((uint32_t) block[j + 3]) << 24);
 
 __inline static void md5_basic_transform(uint32_t state[4], const uint8_t block[64])
 {
@@ -105,7 +101,22 @@ __inline static void md5_basic_transform(uint32_t state[4], const uint8_t block[
     c = state[2];
     d = state[3];
 
-    decode(x, block, 64);
+    PACK32(0, 0)
+    PACK32(1, 4)
+    PACK32(2, 8)
+    PACK32(3, 12)
+    PACK32(4, 16)
+    PACK32(5, 20)
+    PACK32(6, 24)
+    PACK32(7, 28)
+    PACK32(8, 32)
+    PACK32(9, 36)
+    PACK32(10, 40)
+    PACK32(11, 44)
+    PACK32(12, 48)
+    PACK32(13, 52)
+    PACK32(14, 56)
+    PACK32(15, 60)
 
     /* Round 1 */
     FF(a, b, c, d, x[ 0], S11, 0xd76aa478); /* 1 */
@@ -183,25 +194,16 @@ __inline static void md5_basic_transform(uint32_t state[4], const uint8_t block[
     state[1] += b;
     state[2] += c;
     state[3] += d;
-
-    /* Zeroize sensitive information. */
-    memset(x, 0, sizeof (x));
 }
 
 /* Encodes input (uint32_t) into output (unsigned char). Assumes len is
   a multiple of 4.
  */
-static __inline void encode(uint8_t *output, const uint32_t *input, const size_t len)
-{
-    unsigned int i, j;
-
-    for (i = 0, j = 0; j < len; i++, j += 4) {
-        output[j] = (unsigned char) (input[i] & 0xff);
-        output[j + 1] = (unsigned char) ((input[i] >> 8) & 0xff);
-        output[j + 2] = (unsigned char) ((input[i] >> 16) & 0xff);
-        output[j + 3] = (unsigned char) ((input[i] >> 24) & 0xff);
-    }
-}
+#define UNPACK32(input, output, i, j)                           \
+    output[j] = (unsigned char) (input[i] & 0xff);              \
+    output[j + 1] = (unsigned char) ((input[i] >> 8) & 0xff);   \
+    output[j + 2] = (unsigned char) ((input[i] >> 16) & 0xff);  \
+    output[j + 3] = (unsigned char) ((input[i] >> 24) & 0xff);
 
 /* Decodes input (unsigned char) into output (uint32_t). Assumes len is
   a multiple of 4.
@@ -304,7 +306,10 @@ int md5_final(Md5Ctx *ctx, ByteArray **hash_code)
     memcpy(count_tmp, ctx->count, sizeof(uint32_t) * 2);
 
     /* Save number of bits */
-    encode(bits, ctx->count, 8);
+    UNPACK32(ctx->count, bits, 0, 0)
+    UNPACK32(ctx->count, bits, 1, 4)
+
+//    encode(bits, ctx->count, 8);
 
     /* Pad out to 56 mod 64. */
     index = (unsigned int) ((ctx->count[0] >> 3) & 0x3f);
@@ -319,7 +324,10 @@ int md5_final(Md5Ctx *ctx, ByteArray **hash_code)
     DO(md5_update(ctx, ba_bits));
     memcpy(ctx->count, count_tmp, sizeof(uint32_t) * 2);
     /* Store state in digest */
-    encode(digest, ctx->state, 16);
+    UNPACK32(ctx->state, digest, 0, 0)
+    UNPACK32(ctx->state, digest, 1, 4)
+    UNPACK32(ctx->state, digest, 2, 8)
+    UNPACK32(ctx->state, digest, 3, 12)
 
     /* Zeroize sensitive information. */
     CHECK_NOT_NULL(*hash_code = ba_alloc_from_uint8(digest, 16));

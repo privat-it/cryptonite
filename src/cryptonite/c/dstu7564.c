@@ -542,16 +542,16 @@ Dstu7564Ctx *dstu7564_alloc(const Dstu7564SboxId sbox_id)
     int ret = RET_OK;
 
     CALLOC_CHECKED(ctx, sizeof(Dstu7564Ctx));
-    if (ctx != NULL) {
-        ctx->is_inited = false;
-        switch (sbox_id) {
+
+    ctx->is_inited = false;
+    switch (sbox_id) {
         case DSTU7564_SBOX_1:
             memcpy(ctx->p_boxrowcol, subrowcol, 8 * 256 * sizeof(uint64_t));
             break;
         default:
-            SET_ERROR(RET_INVALID_PARAM);
-        }
+        SET_ERROR(RET_INVALID_PARAM);
     }
+
 
 cleanup:
 
@@ -590,10 +590,10 @@ void dstu7564_free(Dstu7564Ctx *ctx)
     if (ctx) {
         ctx->is_inited = false;
         if (ctx->hmac != NULL) {
-            memset(ctx->hmac, 0, sizeof (Dstu7564Hmac));
+            secure_zero(ctx->hmac, sizeof(Dstu7564Hmac));
             free(ctx->hmac);
         }
-        memset(ctx, 0, sizeof (Dstu7564Ctx));
+        secure_zero(ctx, sizeof(Dstu7564Ctx));
         free(ctx);
     }
 }
@@ -609,13 +609,13 @@ int dstu7564_init(Dstu7564Ctx *ctx, size_t hash_nbytes)
         ctx->rounds = NR_512;
         ctx->columns = NB_512;
         ctx->nbytes = STATE_BYTE_SIZE_512;
-        memset(ctx->state, 0, STATE_BYTE_SIZE_512);
+        memset(&ctx->state[0], 0, STATE_BYTE_SIZE_512);
         ctx->state[0] = STATE_BYTE_SIZE_512;
     } else {
         ctx->rounds = NR_1024;
         ctx->columns = NB_1024;
         ctx->nbytes = STATE_BYTE_SIZE_1024;
-        memset(ctx->state, 0, STATE_BYTE_SIZE_1024);
+        memset(&ctx->state[0], 0, STATE_BYTE_SIZE_1024);
         ctx->state[0] = STATE_BYTE_SIZE_1024;
     }
     ctx->hash_nbytes = hash_nbytes;
@@ -626,6 +626,7 @@ int dstu7564_init(Dstu7564Ctx *ctx, size_t hash_nbytes)
         ctx->hmac = NULL;
     }
     ctx->is_inited = true;
+
 cleanup:
 
     return ret;
@@ -661,7 +662,7 @@ int dstu7564_update(Dstu7564Ctx *ctx, const ByteArray *data)
 
     memcpy(&ctx->last_block[ctx->last_block_el], data_buf, block_size - ctx->last_block_el);
     digest(ctx, ctx->last_block);
-    memset(ctx->last_block, 0, 64);
+    memset(&ctx->last_block[0], 0, MAX_BLOCK_LEN);
 
     shifted_buf = data_buf + (block_size - ctx->last_block_el);
     data_buf_len -= (block_size - ctx->last_block_el);
@@ -789,7 +790,6 @@ int dstu7564_final_kmac(Dstu7564Ctx *ctx, ByteArray **mac)
 
     /*Вычитаем размер инверсии ключа, так как у нас есть инверсия ключа с падингом всего сообщения.*/
     ctx->msg_tot_len -= ctx->hmac->key_len << 3;
-    memset(ctx->last_block, 0, ctx->last_block_el);
     ctx->last_block_el = 0;
 
     ctx->msg_tot_len += ctx->nbytes << 3;

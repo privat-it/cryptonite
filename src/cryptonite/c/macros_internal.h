@@ -72,11 +72,13 @@
  */
 #define REALLOC_CHECKED(_buffer, _len, _out)             \
     {                                                    \
-        if (NULL == (_out = realloc(_buffer, _len))) {   \
+        void *tmp = NULL;                                \
+        if (NULL == (tmp = realloc(_buffer, _len))) {    \
             ret = RET_MEMORY_ALLOC_ERROR;                \
             ERROR_CREATE(ret);                           \
             goto cleanup;                                \
         }                                                \
+        _out = tmp;                                      \
     }
 
 /**

@@ -57,32 +57,29 @@ Dstu4145PrngCtx *dstu4145_prng_alloc(const ByteArray *seed)
     CHECK_PARAM(seed->len >= 40);
 
     CALLOC_CHECKED(prng, sizeof(Dstu4145PrngCtx));
+    CHECK_NOT_NULL(prng->ecb = gost28147_alloc(GOST28147_SBOX_ID_1));
 
-    if (prng != NULL) {
-        CHECK_NOT_NULL(prng->ecb = gost28147_alloc(GOST28147_SBOX_ID_1));
+    CHECK_NOT_NULL(sync = ba_alloc_by_len(32));
+    DO(ba_set(sync, 0));
+    CHECK_NOT_NULL(prng->hash = gost34_311_alloc(GOST28147_SBOX_ID_1, sync));
 
-        CHECK_NOT_NULL(sync = ba_alloc_by_len(32));
-        ba_set(sync, 0);
-        CHECK_NOT_NULL(prng->hash = gost34_311_alloc(GOST28147_SBOX_ID_1, sync));
+    state = ((uint8_t *) seed->buf) + 32;
+    tm = get_current_time();
+    DO(uint64_to_uint8(&tm, 1, time, 8));
+    DO(uint8_swap(time, 8, time, 8));
 
-        state = ((uint8_t *)seed->buf) + 32;
-        tm = get_current_time();
-        DO(uint64_to_uint8(&tm, 1, time, 8));
-        DO(uint8_swap(time, 8, time, 8));
+    memcpy(prng->state, state, 8);
+    memcpy(prng->old_state, state, 8);
 
-        memcpy(prng->state, state, 8);
-        memcpy(prng->old_state, state, 8);
+    CHECK_NOT_NULL(key = ba_alloc_from_uint8(seed->buf, 32));
+    CHECK_NOT_NULL(src = ba_alloc_from_uint8(time, 8));
 
-        CHECK_NOT_NULL(key = ba_alloc_from_uint8(seed->buf, 32));
-        CHECK_NOT_NULL(src = ba_alloc_from_uint8(time, 8));
+    DO(gost28147_init_ecb(prng->ecb, key));
+    DO(gost28147_encrypt(prng->ecb, src, &dst));
+    DO(ba_to_uint8(dst, (uint8_t *) prng->time, 8));
 
-        DO(gost28147_init_ecb(prng->ecb, key));
-        DO(gost28147_encrypt(prng->ecb, src, &dst));
-        DO(ba_to_uint8(dst, (uint8_t *)prng->time, 8));
-
-        tm = 0;
-        memset(time, 0, 8);
-    }
+    tm = 0;
+    secure_zero(time, 8);
 
 cleanup:
 
@@ -182,7 +179,7 @@ int dstu4145_prng_seed(Dstu4145PrngCtx *prng, const ByteArray *buf)
 cleanup:
 
     tm = 0;
-    memset(time, 0, 8);
+    secure_zero(time, 8);
     ba_free_private(key);
     ba_free_private(src);
     ba_free_private(dst);
@@ -212,7 +209,7 @@ void dstu4145_prng_free(Dstu4145PrngCtx *ctx)
     if (ctx) {
         gost28147_free(ctx->ecb);
         gost34_311_free(ctx->hash);
-        memset(ctx, 0, sizeof(Dstu4145PrngCtx));
+        secure_zero(ctx, sizeof(Dstu4145PrngCtx));
         free(ctx);
     }
 }

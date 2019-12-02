@@ -211,9 +211,12 @@ void word_div(Dword *a, word_t b, Dword *q, word_t *r)
     Dword dword;
     int b_bit_len = word_bit_len(b);
 
+    ASSERT(q != NULL);
+    ASSERT(a != NULL);
+    ASSERT(r != NULL);
+
     (*q).hi = 0;
     (*q).lo = 0;
-    *r = 0;
 
     rh.hi = a->hi;
     rh.lo = a->lo;
@@ -236,10 +239,10 @@ void word_div(Dword *a, word_t b, Dword *q, word_t *r)
         word_add_64(&qh, &dword, &qh);
     }
 
-    if (q != NULL) {
-        (*q).hi = qh.hi;
-        (*q).lo = qh.lo;
-    }
+
+    (*q).hi = qh.hi;
+    (*q).lo = qh.lo;
+
     if (r != NULL) {
         *r = rh.lo;
     }
@@ -766,9 +769,7 @@ void int_truncate(WordArray *a, size_t bit_len)
 
     if (word_off < a->len) {
         a->buf[word_off] &= (((word_t) 1 << (bit_len & WORD_BIT_LEN_MASK)) - 1);
-        if (a->len > word_off) {
-            memset(&a->buf[word_off + 1], 0, (a->len - word_off - 1) * WORD_BYTE_LENGTH);
-        }
+        memset(&a->buf[word_off + 1], 0, (a->len - word_off - 1) * WORD_BYTE_LENGTH);
     }
 }
 
@@ -1173,7 +1174,7 @@ int int_mult_and_div(const WordArray *a, word_t b, word_t c, int n, WordArray *a
     WordArray *ab = NULL;
     int ret = RET_OK;
 
-    ASSERT(b <= c);
+    CHECK_PARAM(b <= c);
 
     CHECK_NOT_NULL(ab = wa_alloc_with_zero(2 * n));
 
@@ -1208,8 +1209,12 @@ int int_get_naf(const WordArray *in, int width, int **out)
     int *naf = NULL;
     int ret = RET_OK;
 
+    CHECK_PARAM(in != NULL)
+    CHECK_PARAM(out != NULL)
+    CHECK_PARAM(width >= 0)
+
     word_t carry = 0;
-    word_t mod = (word_t)(1 << width);
+    word_t mod = (word_t)1 << width;
     word_t mask = ((word_t)(-1)) >> (WORD_BIT_LENGTH - width);
     word_t mask_div2 = mask >> 1;
     int i = 0, j;
