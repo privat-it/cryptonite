@@ -1038,14 +1038,14 @@ int int_rabin_miller_primary_test(WordArray *num, bool *is_prime)
     pow_two->buf[0] = 1;
     CHECK_NOT_NULL(d = wa_copy_with_alloc(num_to_check));
 
-    d->buf[0]--; //(n - 1)
+    --d->buf[0]; //(n - 1)
     wa_change_len(pow_two, pow_two->len);
     wa_change_len(d, num_to_check->len << 1);
 
     CHECK_NOT_NULL(res = wa_alloc(d->len));
     //Приводим данные к виду 2^r*d, d == res r == counter
     do {
-        counter++;
+        ++counter;
         int_lshift(pow_two, 1, pow_two);
         int_div(d, pow_two, res, NULL);
     } while (res->buf[0] % 2 == 0);
@@ -1062,7 +1062,7 @@ int int_rabin_miller_primary_test(WordArray *num, bool *is_prime)
     wa_free(pow_two);
     CHECK_NOT_NULL(pow_two = wa_alloc_with_zero(num_to_check->len));
     pow_two->buf[0] = 2;
-    for (i = 0; i < counter; i++) {
+    for (i = 0; i < counter; ++i) {
         //умножение (2^r) * d, ^ - степень
         CHECK_NOT_NULL(mul = wa_alloc(pow_two->len << 1));
         int_mul(pow_two, res, mul);
@@ -1072,12 +1072,12 @@ int int_rabin_miller_primary_test(WordArray *num, bool *is_prime)
         CHECK_NOT_NULL(mul_pow = wa_alloc(mod->p->len));
         //Возводим в степень наше случайное число
         gfp_mod_pow(mod, rnd_num, mul, mul_pow);
-        num_to_check->buf[0]--;
+        --num_to_check->buf[0];
         int_lshift(pow_two, 1, pow_two);
         //Если на протяжении итераций наше число == 1 или -1, то ,вероятно, оно простое.
         if (!int_cmp(mul_pow, num_to_check) || int_is_one(mul_pow) == 1) {
             *is_prime = true;
-            num_to_check->buf[0]++;
+            ++num_to_check->buf[0];
             ret = RET_OK;
             goto cleanup;
         } else {
@@ -1088,7 +1088,7 @@ int int_rabin_miller_primary_test(WordArray *num, bool *is_prime)
             mul = NULL;
             mul_pow = NULL;
         }
-        num_to_check->buf[0]++;
+        ++num_to_check->buf[0];
     }
 
 cleanup:

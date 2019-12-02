@@ -43,44 +43,44 @@ const uint8_t HASH_LEN[] = {20, 32, 48, 64};
 const uint8_t HASH_AID_LEN[] = {15, 19, 19, 19};
 
 const uint8_t AID_SHA1[] = {
-    0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e, 0x03, 0x02, 0x1a, 0x05,
-    0x00, 0x04, 0x14
+        0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e, 0x03, 0x02, 0x1a, 0x05,
+        0x00, 0x04, 0x14
 };
 const uint8_t AID_SHA256[] = {
-    0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03,
-    0x04, 0x02, 0x01, 0x05, 0x00, 0x04, 0x20
+        0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03,
+        0x04, 0x02, 0x01, 0x05, 0x00, 0x04, 0x20
 };
 const uint8_t AID_SHA384[] = {
-    0x30, 0x41, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03,
-    0x04, 0x02, 0x02, 0x05, 0x00, 0x04, 0x30
+        0x30, 0x41, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03,
+        0x04, 0x02, 0x02, 0x05, 0x00, 0x04, 0x30
 };
 const uint8_t AID_SHA512[] = {
-    0x30, 0x51, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03,
-    0x04, 0x02, 0x03, 0x05, 0x00, 0x04, 0x40
+        0x30, 0x51, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01, 0x65, 0x03,
+        0x04, 0x02, 0x03, 0x05, 0x00, 0x04, 0x40
 };
 
 const uint8_t LHASH_SHA1[20] = {
-    0xda, 0x39, 0xa3, 0xee, 0x5e, 0x6b, 0x4b, 0x0d, 0x32, 0x55, 0xbf, 0xef,
-    0x95, 0x60, 0x18, 0x90, 0xaf, 0xd8, 0x07, 0x09
+        0xda, 0x39, 0xa3, 0xee, 0x5e, 0x6b, 0x4b, 0x0d, 0x32, 0x55, 0xbf, 0xef,
+        0x95, 0x60, 0x18, 0x90, 0xaf, 0xd8, 0x07, 0x09
 };
 const uint8_t LHASH_SHA256[32] = {
-    0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4, 0xc8,
-    0x99, 0x6f, 0xb9, 0x24, 0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c,
-    0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55
+        0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4, 0xc8,
+        0x99, 0x6f, 0xb9, 0x24, 0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c,
+        0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55
 };
 const uint8_t LHASH_SHA384[48] = {
-    0x38, 0xb0, 0x60, 0xa7, 0x51, 0xac, 0x96, 0x38, 0x4c, 0xd9, 0x32, 0x7e,
-    0xb1, 0xb1, 0xe3, 0x6a, 0x21, 0xfd, 0xb7, 0x11, 0x14, 0xbe, 0x07, 0x43,
-    0x4c, 0x0c, 0xc7, 0xbf, 0x63, 0xf6, 0xe1, 0xda, 0x27, 0x4e, 0xde, 0xbf,
-    0xe7, 0x6f, 0x65, 0xfb, 0xd5, 0x1a, 0xd2, 0xf1, 0x48, 0x98, 0xb9, 0x5b
+        0x38, 0xb0, 0x60, 0xa7, 0x51, 0xac, 0x96, 0x38, 0x4c, 0xd9, 0x32, 0x7e,
+        0xb1, 0xb1, 0xe3, 0x6a, 0x21, 0xfd, 0xb7, 0x11, 0x14, 0xbe, 0x07, 0x43,
+        0x4c, 0x0c, 0xc7, 0xbf, 0x63, 0xf6, 0xe1, 0xda, 0x27, 0x4e, 0xde, 0xbf,
+        0xe7, 0x6f, 0x65, 0xfb, 0xd5, 0x1a, 0xd2, 0xf1, 0x48, 0x98, 0xb9, 0x5b
 };
 const uint8_t LHASH_SHA512[64] = {
-    0xcf, 0x83, 0xe1, 0x35, 0x7e, 0xef, 0xb8, 0xbd, 0xf1, 0x54, 0x28, 0x50,
-    0xd6, 0x6d, 0x80, 0x07, 0xd6, 0x20, 0xe4, 0x05, 0x0b, 0x57, 0x15, 0xdc,
-    0x83, 0xf4, 0xa9, 0x21, 0xd3, 0x6c, 0xe9, 0xce, 0x47, 0xd0, 0xd1, 0x3c,
-    0x5d, 0x85, 0xf2, 0xb0, 0xff, 0x83, 0x18, 0xd2, 0x87, 0x7e, 0xec, 0x2f,
-    0x63, 0xb9, 0x31, 0xbd, 0x47, 0x41, 0x7a, 0x81, 0xa5, 0x38, 0x32, 0x7a,
-    0xf9, 0x27, 0xda, 0x3e
+        0xcf, 0x83, 0xe1, 0x35, 0x7e, 0xef, 0xb8, 0xbd, 0xf1, 0x54, 0x28, 0x50,
+        0xd6, 0x6d, 0x80, 0x07, 0xd6, 0x20, 0xe4, 0x05, 0x0b, 0x57, 0x15, 0xdc,
+        0x83, 0xf4, 0xa9, 0x21, 0xd3, 0x6c, 0xe9, 0xce, 0x47, 0xd0, 0xd1, 0x3c,
+        0x5d, 0x85, 0xf2, 0xb0, 0xff, 0x83, 0x18, 0xd2, 0x87, 0x7e, 0xec, 0x2f,
+        0x63, 0xb9, 0x31, 0xbd, 0x47, 0x41, 0x7a, 0x81, 0xa5, 0x38, 0x32, 0x7a,
+        0xf9, 0x27, 0xda, 0x3e
 };
 
 const uint8_t md5_empty_string[] = {0xd4, 0x1d, 0x8c, 0xd9, 0x8f, 0x00, 0xb2, 0x04, 0xe9, 0x80, 0x09, 0x98, 0xec, 0xf8, 0x42, 0x7e};
@@ -92,19 +92,19 @@ static int rsa_hash_alloc(void **ctx, RsaHashType id)
     int ret = RET_OK;
 
     switch (id) {
-    case RSA_HASH_SHA1:
+        case RSA_HASH_SHA1:
         CHECK_NOT_NULL((*ctx) = sha1_alloc());
-        break;
-    case RSA_HASH_SHA256:
+            break;
+        case RSA_HASH_SHA256:
         CHECK_NOT_NULL((*ctx) = sha2_alloc(SHA2_VARIANT_256));
-        break;
-    case RSA_HASH_SHA384:
+            break;
+        case RSA_HASH_SHA384:
         CHECK_NOT_NULL((*ctx) = sha2_alloc(SHA2_VARIANT_384));
-        break;
-    case RSA_HASH_SHA512:
+            break;
+        case RSA_HASH_SHA512:
         CHECK_NOT_NULL((*ctx) = sha2_alloc(SHA2_VARIANT_512));
-        break;
-    default:
+            break;
+        default:
         SET_ERROR(RET_INVALID_PARAM);
     }
 
@@ -118,19 +118,15 @@ static int rsa_hash_update(void *ctx, const ByteArray *data, RsaHashType id)
     int ret = RET_OK;
 
     switch (id) {
-    case RSA_HASH_SHA1:
+        case RSA_HASH_SHA1:
         DO(sha1_update((Sha1Ctx *) ctx, data));
-        break;
-    case RSA_HASH_SHA256:
+            break;
+        case RSA_HASH_SHA256:
+        case RSA_HASH_SHA384:
+        case RSA_HASH_SHA512:
         DO(sha2_update((Sha2Ctx *) ctx, data));
-        break;
-    case RSA_HASH_SHA384:
-        DO(sha2_update((Sha2Ctx *) ctx, data));
-        break;
-    case RSA_HASH_SHA512:
-        DO(sha2_update((Sha2Ctx *) ctx, data));
-        break;
-    default:
+            break;
+        default:
         SET_ERROR(RET_INVALID_PARAM);
     }
 cleanup:
@@ -142,19 +138,15 @@ static int rsa_hash_final(void *ctx, ByteArray **hash, RsaHashType id)
     int ret = RET_OK;
 
     switch (id) {
-    case RSA_HASH_SHA1:
-        DO(sha1_final((Sha1Ctx *) ctx, hash));
-        break;
-    case RSA_HASH_SHA256:
-        DO(sha2_final((Sha2Ctx *) ctx, hash));
-        break;
-    case RSA_HASH_SHA384:
-        DO(sha2_final((Sha2Ctx *) ctx, hash));
-        break;
-    case RSA_HASH_SHA512:
-        DO(sha2_final((Sha2Ctx *) ctx, hash));
-        break;
-    default:
+        case RSA_HASH_SHA1:
+            DO(sha1_final((Sha1Ctx *) ctx, hash));
+            break;
+        case RSA_HASH_SHA256:
+        case RSA_HASH_SHA384:
+        case RSA_HASH_SHA512:
+            DO(sha2_final(ctx, hash));
+            break;
+        default:
         SET_ERROR(RET_INVALID_PARAM);
     }
 
@@ -168,19 +160,15 @@ static void rsa_hash_free(void *ctx, RsaHashType id)
     int ret = RET_OK;
 
     switch (id) {
-    case RSA_HASH_SHA1:
-        sha1_free((Sha1Ctx *) ctx);
-        break;
-    case RSA_HASH_SHA256:
-        sha2_free((Sha2Ctx *) ctx);
-        break;
-    case RSA_HASH_SHA384:
-        sha2_free((Sha2Ctx *) ctx);
-        break;
-    case RSA_HASH_SHA512:
-        sha2_free((Sha2Ctx *) ctx);
-        break;
-    default:
+        case RSA_HASH_SHA1:
+            sha1_free((Sha1Ctx *) ctx);
+            break;
+        case RSA_HASH_SHA256:
+        case RSA_HASH_SHA384:
+        case RSA_HASH_SHA512:
+            sha2_free((Sha2Ctx *) ctx);
+            break;
+        default:
         SET_ERROR(RET_INVALID_PARAM);
     }
 
@@ -627,7 +615,7 @@ static int rsa_gen_privkey_core(RsaCtx *ctx, PrngCtx *prng, const size_t bits, c
 
     bitplen = (bits + 1) >> 1;
 
-begin:
+    begin:
 
     DO(int_gen_prime(bitplen, prng, &wp));
 
@@ -738,7 +726,7 @@ cleanup:
 }
 
 int rsa_generate_privkey(RsaCtx *ctx, PrngCtx *prng, const size_t bits, const ByteArray *e, ByteArray **n,
-        ByteArray **d)
+                         ByteArray **d)
 {
     WordArray *wn = NULL;
     WordArray *wd = NULL;
@@ -765,7 +753,7 @@ cleanup:
 }
 
 int rsa_generate_privkey_ext(RsaCtx *ctx, PrngCtx *prng, const size_t bits, const ByteArray *e, ByteArray **n,
-        ByteArray **d, ByteArray **p, ByteArray **q, ByteArray **dmp1, ByteArray **dmq1, ByteArray **iqmp)
+                             ByteArray **d, ByteArray **p, ByteArray **q, ByteArray **dmp1, ByteArray **dmq1, ByteArray **iqmp)
 {
     WordArray *fi = NULL;
     GfpCtx *gfp = NULL;
@@ -852,7 +840,7 @@ cleanup:
 }
 
 bool rsa_validate_key(RsaCtx *ctx, const ByteArray *n, const ByteArray *e, const ByteArray *d, const ByteArray *p,
-        const ByteArray *q, const ByteArray *dmp1, const ByteArray *dmq1, const ByteArray *iqmp)
+                      const ByteArray *q, const ByteArray *dmp1, const ByteArray *dmq1, const ByteArray *iqmp)
 {
     GfpCtx *gfp = NULL;
     GfpCtx *gfp1 = NULL;
@@ -993,14 +981,13 @@ int rsa_init_encrypt_pkcs1_v1_5(RsaCtx *ctx, PrngCtx *prng, const ByteArray *n, 
     DO(prng_next_bytes(prng, seed));
     prng_free(ctx->prng);
     CHECK_NOT_NULL(ctx->prng = prng_alloc(PRNG_MODE_DEFAULT, seed));
-    ba_set(seed, sizeof(seed));
 
     ctx->mode_id = RSA_MODE_ENCRYPT_PKCS;
 
 cleanup:
 
     wa_free(wn);
-    ba_free(seed);
+    ba_free_private(seed);
 
     return ret;
 }
@@ -1096,7 +1083,7 @@ cleanup:
 }
 
 int rsa_init_encrypt_oaep(RsaCtx *ctx, PrngCtx *prng, RsaHashType htype, ByteArray *label, const ByteArray *n,
-        const ByteArray *e)
+                          const ByteArray *e)
 {
     int ret = RET_OK;
     WordArray *wn = NULL;
@@ -1130,15 +1117,13 @@ int rsa_init_encrypt_oaep(RsaCtx *ctx, PrngCtx *prng, RsaHashType htype, ByteArr
     prng_free(ctx->prng);
     CHECK_NOT_NULL(ctx->prng = prng_alloc(PRNG_MODE_DEFAULT, seed));
 
-    ba_set(seed, 0);
-
     ctx->label = label;
     ctx->mode_id = RSA_MODE_ENCRYPT_OAEP;
 
 cleanup:
 
     wa_free(wn);
-    ba_free(seed);
+    ba_free_private(seed);
 
     return ret;
 }
@@ -1184,13 +1169,13 @@ int rsa_encrypt(RsaCtx *ctx, const ByteArray *data, ByteArray **encrypted_data)
     CHECK_PARAM(encrypted_data != NULL);
 
     switch (ctx->mode_id) {
-    case RSA_MODE_ENCRYPT_OAEP:
+        case RSA_MODE_ENCRYPT_OAEP:
         DO(rsa_encrypt_oaep(ctx, data, ctx->label, encrypted_data));
-        break;
-    case RSA_MODE_ENCRYPT_PKCS:
+            break;
+        case RSA_MODE_ENCRYPT_PKCS:
         DO(rsa_encrypt_pkcs1_v1_5(ctx, data, encrypted_data));
-        break;
-    default:
+            break;
+        default:
         SET_ERROR(RET_INVALID_CTX_MODE);
     }
 
@@ -1208,13 +1193,13 @@ int rsa_decrypt(RsaCtx *ctx, const ByteArray *encrypted_data, ByteArray **data)
     CHECK_PARAM(encrypted_data != NULL);
 
     switch (ctx->mode_id) {
-    case RSA_MODE_DECRYPT_OAEP:
+        case RSA_MODE_DECRYPT_OAEP:
         DO(rsa_decrypt_oaep(ctx, encrypted_data, data));
-        break;
-    case RSA_MODE_DECRYPT_PKCS:
+            break;
+        case RSA_MODE_DECRYPT_PKCS:
         DO(rsa_decrypt_pkcs1_v1_5(ctx, encrypted_data, data));
-        break;
-    default:
+            break;
+        default:
         SET_ERROR(RET_INVALID_CTX_MODE);
     }
 
