@@ -2446,7 +2446,7 @@ static void dsa_test_get_public(DsaTestParams *test_params, DsaTestData *test_da
     DsaCtx *ctx = NULL;
     int ret = RET_OK;
 
-    ctx = dsa_alloc(p, q, g);
+    ASSERT_NOT_NULL(ctx = dsa_alloc(p, q, g));
     ASSERT_RET_OK(dsa_get_pubkey(ctx, priv_key, &pub_key_act));
 
     ASSERT_EQUALS_BA(pub_key, pub_key_act);
@@ -2455,10 +2455,6 @@ cleanup:
 
     BA_FREE(p, q, g, priv_key, pub_key, pub_key_act);
     dsa_free(ctx);
-    if (ret != RET_OK) {
-        error_count++;
-        print_atest_dsa_error("get public key failed", test_params, test_data);
-    }
 }
 
 #define TEST_DSA_CORE(_params, _data)                                \

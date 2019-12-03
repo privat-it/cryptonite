@@ -31,7 +31,7 @@ int msg_print_atest(const char *name, const char *modes, const char *res)
     dot_count_name = (int)(20 - name_s);
     dot_count_modes = (int)(SIZE_STR - 20 - modes_s - res_s - 2);
 
-    if (dot_count_name < 0 || dot_count_modes < 0) {
+    if (dot_count_modes < 0) {
         PR("Message total len > 80. Error.\n");
         ret = RET_INVALID_PARAM;
         goto cleanup;

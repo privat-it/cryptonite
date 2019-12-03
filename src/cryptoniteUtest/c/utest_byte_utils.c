@@ -82,9 +82,9 @@ cleanup:
 
 static void test_u64_to_u32(void)
 {
-    uint64_t from[] = {0x0807060504030201LLU, 0x100e0d0c0b0a0908LLU};
-    uint32_t to[sizeof(from) / sizeof(uint32_t)] = {0};
-    uint32_t exp[] = {0x04030201LU, 0x08070605LU, 0x0b0a0908LU, 0x100e0d0cLU};
+    uint64_t from[2] = {0x0807060504030201LLU, 0x100e0d0c0b0a0908LLU};
+    uint32_t to[4] = {0};
+    uint32_t exp[4] = {0x04030201LU, 0x08070605LU, 0x0b0a0908LU, 0x100e0d0cLU};
 
     ASSERT_RET_OK(uint64_to_uint32(from, sizeof(from) / sizeof(uint64_t), to, sizeof(to) / sizeof(uint32_t)));
     ASSERT_TRUE(!memcmp(exp, to, sizeof(to)));
@@ -95,8 +95,8 @@ cleanup:
 
 static void test_u32_to_u64(void)
 {
-    uint32_t from[] = {0x04030201LU, 0x08070605LU, 0x0b0a0908LU, 0x100e0d0cLU};
-    uint64_t to[sizeof(from) / sizeof(uint64_t)] = {0};
+    uint32_t from[4] = {0x04030201LU, 0x08070605LU, 0x0b0a0908LU, 0x100e0d0cLU};
+    uint64_t to[2] = {0};
     uint64_t exp[] = {0x0807060504030201LLU, 0x100e0d0c0b0a0908LLU};
 
     ASSERT_RET_OK(uint32_to_uint64(from, sizeof(from) / sizeof(uint32_t), to, sizeof(to) / sizeof(uint64_t)));
@@ -109,9 +109,9 @@ cleanup:
 static void test_u8_swap_alloc(void)
 {
     uint8_t *test_swap_alloc = NULL;
-    uint8_t from[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 0};
-    uint8_t exp[] = {0, 9, 8, 7, 6, 5, 4, 3, 2, 1};
-    uint8_t test_swap[sizeof(from)];
+    uint8_t from[10] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 0};
+    uint8_t exp[10] = {0, 9, 8, 7, 6, 5, 4, 3, 2, 1};
+    uint8_t test_swap[10];
 
     ASSERT_NOT_NULL(test_swap_alloc = uint8_swap_with_alloc(from, sizeof(from)));
     ASSERT_TRUE(!memcmp(test_swap_alloc, exp, sizeof(exp)));

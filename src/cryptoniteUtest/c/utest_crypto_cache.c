@@ -51,6 +51,7 @@ static void test_crypto_cache_add_dstu4145_pb(void)
 
     BA_FREE(b, n, px, py);
     free(f);
+    f = NULL;
     b = NULL;
     n = NULL;
     px = NULL;
@@ -110,6 +111,7 @@ static void test_crypto_cache_add_dstu4145_onb(void)
 
     BA_FREE(b, n, px, py);
     free(f);
+    f = NULL;
     b = NULL;
     n = NULL;
     px = NULL;
