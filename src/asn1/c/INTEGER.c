@@ -258,11 +258,10 @@ static const asn_INTEGER_enum_map_t *
 INTEGER_map_enum2value(asn_INTEGER_specifics_t *specs, const char *lstart, const char *lstop)
 {
     const asn_INTEGER_enum_map_t *el_found;
-    int count = specs ? specs->map_count : 0;
     struct e2v_key key;
     const char *lp;
 
-    if (!count) {
+    if (!specs) {
         return NULL;
     }
 
@@ -294,7 +293,7 @@ INTEGER_map_enum2value(asn_INTEGER_specifics_t *specs, const char *lstart, const
     key.vemap = specs->value2enum;
     key.evmap = specs->enum2value;
     el_found = (asn_INTEGER_enum_map_t *)bsearch(&key,
-            specs->value2enum, count, sizeof(specs->value2enum[0]),
+            specs->value2enum, specs->map_count, sizeof(specs->value2enum[0]),
             INTEGER__compar_enum2value);
     if (el_found) {
         /* Remap enum2value into value2enum */
@@ -321,12 +320,11 @@ INTEGER__compar_value2enum(const void *kp, const void *am)
 const asn_INTEGER_enum_map_t *
 INTEGER_map_value2enum(asn_INTEGER_specifics_t *specs, long value)
 {
-    int count = specs ? specs->map_count : 0;
-    if (!count) {
+    if (!specs) {
         return 0;
     }
     return (asn_INTEGER_enum_map_t *)bsearch(&value, specs->value2enum,
-            count, sizeof(specs->value2enum[0]),
+            specs->map_count, sizeof(specs->value2enum[0]),
             INTEGER__compar_value2enum);
 }
 
@@ -413,13 +411,6 @@ INTEGER__xer_body_decode(asn_TYPE_descriptor_t *td, void *sptr, const void *chun
             }
             break;
         case 0x2d:    /* '-' */
-            if (state == ST_LEADSPACE) {
-                dec_value = 0;
-                dec_value_start = lp;
-                state = ST_WAITDIGITS;
-                continue;
-            }
-            break;
         case 0x2b:    /* '+' */
             if (state == ST_LEADSPACE) {
                 dec_value = 0;

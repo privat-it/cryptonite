@@ -708,11 +708,6 @@ asn_time2GT_frac(GeneralizedTime_t *opt_gt, const struct tm *_tm, int frac_value
     char *p;
     int size;
 
-    /* Check arguments */
-    if (!tm) {
-        return 0;
-    }
-
     /* Pre-allocate a buffer of sufficient yet small length */
     buf = (char *)MALLOC(buf_size);
 

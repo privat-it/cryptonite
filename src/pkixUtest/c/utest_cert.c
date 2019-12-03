@@ -567,7 +567,7 @@ static void utest_cert_check_validity_with_date(void)
     Certificate_t *cert = NULL;
     time_t date;
     struct tm *timeinfo = NULL;
-    timeinfo = calloc(1, sizeof(struct tm));
+    ASSERT_NOT_NULL(timeinfo = calloc(1, sizeof(struct tm)));
     timeinfo->tm_year = 151;
     timeinfo->tm_mon  = 0;
     timeinfo->tm_mday = 25;
@@ -596,7 +596,7 @@ static void utest_cert_check_validity_with_date_2(void)
     Certificate_t *cert = NULL;
     time_t date;
     struct tm *timeinfo = NULL;
-    timeinfo = calloc(1, sizeof(struct tm));
+    ASSERT_NOT_NULL(timeinfo = calloc(1, sizeof(struct tm)));
     timeinfo->tm_year = 110;
     timeinfo->tm_mon  = 0;
     timeinfo->tm_mday = 25;
@@ -625,7 +625,7 @@ static void utest_cert_check_validity_with_date_3(void)
     Certificate_t *cert = NULL;
     time_t date;
     struct tm *timeinfo = NULL;
-    timeinfo = calloc(1, sizeof(struct tm));
+    ASSERT_NOT_NULL(timeinfo = calloc(1, sizeof(struct tm)));
     timeinfo->tm_year = 154;
     timeinfo->tm_mon  = 0;
     timeinfo->tm_mday = 25;
@@ -720,7 +720,7 @@ static void utest_cert_check_validity_with_date_4(void)
     Certificate_t *cert = NULL;
     time_t date;
     struct tm *timeinfo = NULL;
-    timeinfo = calloc(1, sizeof(struct tm));
+    ASSERT_NOT_NULL(timeinfo = calloc(1, sizeof(struct tm)));
     timeinfo->tm_year = 114;
     timeinfo->tm_mon  = 0;
     timeinfo->tm_mday = 25;

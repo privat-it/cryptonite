@@ -97,7 +97,7 @@ int pkcs12_enum_keys(Pkcs12Ctx *this, const Pkcs12Keypair *const *keys, const si
 
             DO(safebag_get_type(safebag, &type));
             if (type == KEY_BAG) {
-                this->kprs = realloc(this->kprs, (count + 1) * sizeof(Pkcs12Keypair));
+                REALLOC_CHECKED(this->kprs, (count + 1) * sizeof(Pkcs12Keypair), this->kprs);
                 DO(safebag_get_alias(safebag, count, &alias));
 
                 *(char **)&this->kprs[count].alias = alias;
@@ -109,7 +109,7 @@ int pkcs12_enum_keys(Pkcs12Ctx *this, const Pkcs12Keypair *const *keys, const si
             }
 
             if (type == PKCS8SHROUDEDKEY_BAG) {
-                this->kprs = realloc(this->kprs, (count + 1) * sizeof(Pkcs12Keypair));
+                REALLOC_CHECKED(this->kprs, (count + 1) * sizeof(Pkcs12Keypair), this->kprs);
                 DO(safebag_get_alias(safebag, count, &alias));
 
                 CHECK_NOT_NULL(encrypted_key = asn_any2type(&safebag->bagValue, &EncryptedPrivateKeyInfo_desc));
@@ -327,7 +327,7 @@ int pkcs12_store_key(Pkcs12Ctx *this, const char *alias, const char *pwd, int ro
     if (this->owner->contents == NULL) {
         this->owner->contents = pkcs12_contents_alloc(this->owner->contents_len);
     } else {
-        this->owner->contents = realloc(this->owner->contents, sizeof(Pkcs12Contents *) * this->owner->contents_len);
+        REALLOC_CHECKED(this->owner->contents, sizeof(Pkcs12Contents *) * this->owner->contents_len, this->owner->contents);
         CALLOC_CHECKED(this->owner->contents[this->owner->contents_len - 1], sizeof(Pkcs12Contents));
     }
 
@@ -355,7 +355,7 @@ int pkcs12_set_certificates(Pkcs12Ctx *this, const ByteArray **certs)
     if (this->owner->contents == NULL) {
         this->owner->contents = pkcs12_contents_alloc(this->owner->contents_len);
     } else {
-        this->owner->contents = realloc(this->owner->contents, sizeof(Pkcs12Contents *) * this->owner->contents_len);
+        REALLOC_CHECKED(this->owner->contents, sizeof(Pkcs12Contents *) * this->owner->contents_len, this->owner->contents);
         CALLOC_CHECKED(this->owner->contents[this->owner->contents_len - 1], sizeof(Pkcs12Contents));
     }
 

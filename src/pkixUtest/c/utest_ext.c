@@ -64,6 +64,8 @@ static void test_extensions_generate(void)
     QCStatement_t *qc_statement = NULL;
     QCStatement_t **qc_statements = malloc(2 * sizeof(QCStatement_t *));
 
+    ASSERT_NOT_NULL(qc_statements);
+
     const char *crl_distr[] = {"http://ca.ua/crls/full.crl"};
     const char *fresh_crl[] = {"http://ca.ua/crls/delta.crl"};
     char distr_url[] = "http://czo.gov.ua/download/crls/CZO-Full.crl";
@@ -96,7 +98,7 @@ static void test_extensions_generate(void)
 
     ASSERT_RET_OK(asn_create_oid_from_text("1.3.6.1.5.5.7.3.9", &extkey_usage));
 
-    timeinfo = calloc(1, sizeof(struct tm));
+    ASSERT_NOT_NULL(timeinfo = calloc(1, sizeof(struct tm)));
     timeinfo->tm_year = 113;
     timeinfo->tm_mon  = 0;
     timeinfo->tm_mday = 25;
@@ -308,8 +310,11 @@ static void test_ext_ext_key_usage(void)
 {
     Extension_t *ext = NULL;
     OBJECT_IDENTIFIER_t **key_usage = malloc(2 * sizeof(OBJECT_IDENTIFIER_t *));
+    ASSERT_NOT_NULL(key_usage);
+
     key_usage[0] = NULL;
     key_usage[1] = NULL;
+
 
     ASSERT_RET(RET_INVALID_PARAM, ext_create_ext_key_usage(true, key_usage, 2, &ext));
     ASSERT_TRUE(ext == NULL);
@@ -411,7 +416,7 @@ static void test_ext_create_private_key_usage(void)
     struct tm *timeinfo = NULL;
 
     /* UTC time 26.01.23 22:00:00. */
-    timeinfo = calloc(1, sizeof(struct tm));
+    ASSERT_NOT_NULL(timeinfo = calloc(1, sizeof(struct tm)));
     timeinfo->tm_year = 123;
     timeinfo->tm_mon  = 0;
     timeinfo->tm_mday = 25;
@@ -423,7 +428,7 @@ static void test_ext_create_private_key_usage(void)
     free(timeinfo);
 
     /* UTC time 26.01.13 22:00:00. */
-    timeinfo = calloc(1, sizeof(struct tm));
+    ASSERT_NOT_NULL(timeinfo = calloc(1, sizeof(struct tm)));
     timeinfo->tm_year = 113;
     timeinfo->tm_mon  = 0;
     timeinfo->tm_mday = 25;
@@ -549,7 +554,7 @@ static void test_ext_create_private_key_usage_2(void)
     struct tm *timeinfo = NULL;
 
     /* UTC time 26.01.23 22:00:00. */
-    timeinfo = calloc(1, sizeof(struct tm));
+    ASSERT_NOT_NULL(timeinfo = calloc(1, sizeof(struct tm)));
     timeinfo->tm_year = 123;
     timeinfo->tm_mon  = 0;
     timeinfo->tm_mday = 25;
@@ -561,8 +566,8 @@ static void test_ext_create_private_key_usage_2(void)
     free(timeinfo);
 
     ASSERT_ASN_ALLOC(validity);
-
     ASSERT_ASN_ALLOC(pkix_time);
+
     memcpy(&tm_time, localtime(&not_after), sizeof(tm_time));
     pkix_time->present = PKIXTime_PR_utcTime;
     utcTime = asn_time2UT(NULL, &tm_time, true);

@@ -339,7 +339,7 @@ static void test_sdata_get_content_time_stamp(SignedData_t *sdata)
     struct tm *timeinfo = NULL;
 
     //Тут разница в два часа
-    timeinfo = calloc(1, sizeof(struct tm));
+    ASSERT_NOT_NULL(timeinfo = calloc(1, sizeof(struct tm)));
     timeinfo->tm_year = 116;
     timeinfo->tm_mon  = 1;
     timeinfo->tm_mday = 26;

@@ -49,21 +49,20 @@ CertStore_t *cert_store_alloc(const char *path)
     CertStore_t *store = NULL;
     int ret = RET_OK;
 
+    pthread_mutex_lock(&cert_store_mutex);
+
     CALLOC_CHECKED(store, sizeof(CertStore_t));
     store->ctx = NULL;
 
     if (path == NULL) {
-        pthread_mutex_lock(&cert_store_mutex);
         CHECK_NOT_NULL(store->path = dupstr(DEFAULT_CERT_PATH));
-        pthread_mutex_unlock(&cert_store_mutex);
     } else {
-        pthread_mutex_lock(&cert_store_mutex);
         CHECK_NOT_NULL(store->path = dupstr(path));
-        pthread_mutex_unlock(&cert_store_mutex);
     }
 
-
 cleanup:
+
+    pthread_mutex_unlock(&cert_store_mutex);
 
     if (ret != RET_OK) {
         cert_store_free(store);
@@ -161,7 +160,7 @@ int cert_store_get_certificates_by_alias(CertStore_t *store, const char *alias_p
 
     ASN_ALLOC(certs);
 
-    while (dir && (in_file = readdir(dir))) {
+    while ((in_file = readdir(dir))) {
         if (is_dir(in_file->d_name)) {
             continue;
         }

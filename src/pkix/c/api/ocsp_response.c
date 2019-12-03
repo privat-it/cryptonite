@@ -165,7 +165,7 @@ int ocspresp_get_certs(const OCSPResponse_t *ocspresp, Certificate_t *** certs, 
     CHECK_NOT_NULL(basic_response = asn_decode_with_alloc(&BasicOCSPResponse_desc, ocspresp->responseBytes->response.buf,
             ocspresp->responseBytes->response.size));
 
-    if (basic_response != NULL && basic_response->certs != NULL && basic_response->certs->list.count > 0) {
+    if (basic_response->certs != NULL && basic_response->certs->list.count > 0) {
         certs_ptr_len = basic_response->certs->list.count;
         CALLOC_CHECKED(certs_ptr, certs_ptr_len * sizeof(Certificate_t *));
         for (i = 0; i < certs_ptr_len; i++) {
@@ -203,12 +203,7 @@ int ocspresp_get_responder_id(const OCSPResponse_t *ocspresp, ResponderID_t **re
 
     CHECK_NOT_NULL(basic_response = asn_decode_with_alloc(&BasicOCSPResponse_desc,
             ocspresp->responseBytes->response.buf, ocspresp->responseBytes->response.size));
-
-    if (basic_response != NULL) {
-        CHECK_NOT_NULL(*responderID = asn_copy_with_alloc(&ResponderID_desc, &basic_response->tbsResponseData.responderID));
-    } else {
-        SET_ERROR(RET_PKIX_NO_RESPONDER_ID);
-    }
+    CHECK_NOT_NULL(*responderID = asn_copy_with_alloc(&ResponderID_desc, &basic_response->tbsResponseData.responderID));
 
 cleanup:
 
@@ -229,7 +224,6 @@ int ocspresp_get_certs_status(const OCSPResponse_t *ocspresp, OcspCertStatus ***
 
     CHECK_PARAM(ocspresp != NULL);
     CHECK_PARAM(ocsp_cert_statuses != NULL);
-    CHECK_PARAM(ocsp_cert_statuses != NULL);
 
     if (!ocspresp->responseBytes) {
         LOG_ERROR();
@@ -241,7 +235,7 @@ int ocspresp_get_certs_status(const OCSPResponse_t *ocspresp, OcspCertStatus ***
             ocspresp->responseBytes->response.buf, ocspresp->responseBytes->response.size));
 
     LOG_ENTRY();
-    if (basic_response && basic_response->tbsResponseData.responses.list.count > 0) {
+    if (basic_response->tbsResponseData.responses.list.count > 0) {
         LOG_ENTRY();
         *ocsp_cert_statuses_len = basic_response->tbsResponseData.responses.list.count;
         CALLOC_CHECKED(ocsp_cert_statuses_ptr, (*ocsp_cert_statuses_len) * sizeof(OcspCertStatus *));

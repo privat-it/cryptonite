@@ -71,7 +71,7 @@ static void test_ecert_generate(void)
     ByteArray *serial_ba = ba_alloc_from_uint8(serial, 20);
 
     /* UTC time 26.01.23 22:00:00. */
-    timeinfo = calloc(1, sizeof(struct tm));
+    ASSERT_NOT_NULL(timeinfo = calloc(1, sizeof(struct tm)));
     timeinfo->tm_year = 123;
     timeinfo->tm_mon  = 0;
     timeinfo->tm_mday = 25;
@@ -83,7 +83,7 @@ static void test_ecert_generate(void)
     free(timeinfo);
 
     /* UTC time 26.01.13 22:00:00. */
-    timeinfo = calloc(1, sizeof(struct tm));
+    ASSERT_NOT_NULL(timeinfo = calloc(1, sizeof(struct tm)));
     timeinfo->tm_year = 113;
     timeinfo->tm_mon  = 0;
     timeinfo->tm_mday = 25;
@@ -189,7 +189,7 @@ static void test_ecert_generate_2(void)
     ByteArray *serial_ba = ba_alloc_from_uint8(serial, 20);
 
     // UTC time 26.01.53 22:00:00.
-    timeinfo = calloc(1, sizeof(struct tm));
+    ASSERT_NOT_NULL(timeinfo = calloc(1, sizeof(struct tm)));
     timeinfo->tm_year = 153;
     timeinfo->tm_mon  = 0;
     timeinfo->tm_mday = 25;
@@ -201,7 +201,7 @@ static void test_ecert_generate_2(void)
     free(timeinfo);
 
     // UTC time 26.01.13 22:00:00.
-    timeinfo = calloc(1, sizeof(struct tm));
+    ASSERT_NOT_NULL(timeinfo = calloc(1, sizeof(struct tm)));
     timeinfo->tm_year = 113;
     timeinfo->tm_mon  = 0;
     timeinfo->tm_mday = 25;

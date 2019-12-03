@@ -108,7 +108,7 @@ static void test_eocspresp_generate(void)
     time_t current_time;
 
     /* UTC time 25.01.13 22:00:00. */
-    timeinfo = calloc(sizeof(struct tm), 1);
+    ASSERT_NOT_NULL(timeinfo = calloc(sizeof(struct tm), 1));
     timeinfo->tm_year = 113;
     timeinfo->tm_mon  = 0;
     timeinfo->tm_mday = 25;
@@ -228,7 +228,7 @@ static void test_eocspresp_generate_2(void)
     int timeout = 2;
 
     /* UTC time 25.01.13 22:00:00. */
-    timeinfo = calloc(sizeof(struct tm), 1);
+    ASSERT_NOT_NULL(timeinfo = calloc(sizeof(struct tm), 1));
     timeinfo->tm_year = 113;
     timeinfo->tm_mon  = 0;
     timeinfo->tm_mday = 25;

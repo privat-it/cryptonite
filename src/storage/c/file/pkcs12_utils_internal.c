@@ -663,8 +663,7 @@ int pkcs12_contents_get_certificates(const Pkcs12Contents **contents, size_t con
                         X509_CERTIFICATE_OID,
                         sizeof(X509_CERTIFICATE_OID) / sizeof(X509_CERTIFICATE_OID[0]))) {
 
-                } else if (asn_check_oid_equal(&cert_bag->certId,
-                        SDSI_CERTIFICATE_OID,
+                } else if (asn_check_oid_equal(&cert_bag->certId, SDSI_CERTIFICATE_OID,
                         sizeof(SDSI_CERTIFICATE_OID) / sizeof(SDSI_CERTIFICATE_OID[0]))) {
 
                 } else {
@@ -673,7 +672,7 @@ int pkcs12_contents_get_certificates(const Pkcs12Contents **contents, size_t con
 
                 CHECK_NOT_NULL(data = asn_any2type(&cert_bag->certValue, &OCTET_STRING_desc));
 
-                certificates = realloc(certificates, (count + 2) * sizeof(ByteArray *));
+                REALLOC_CHECKED(certificates, (count + 2) * sizeof(ByteArray *),certificates);
                 DO(asn_OCTSTRING2ba(data, &certificates[count]))
 
                 ASN_FREE(&OCTET_STRING_desc, data);

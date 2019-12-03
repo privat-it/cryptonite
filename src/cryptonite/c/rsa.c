@@ -1170,10 +1170,10 @@ int rsa_encrypt(RsaCtx *ctx, const ByteArray *data, ByteArray **encrypted_data)
 
     switch (ctx->mode_id) {
         case RSA_MODE_ENCRYPT_OAEP:
-        DO(rsa_encrypt_oaep(ctx, data, ctx->label, encrypted_data));
+            DO(rsa_encrypt_oaep(ctx, data, ctx->label, encrypted_data));
             break;
         case RSA_MODE_ENCRYPT_PKCS:
-        DO(rsa_encrypt_pkcs1_v1_5(ctx, data, encrypted_data));
+            DO(rsa_encrypt_pkcs1_v1_5(ctx, data, encrypted_data));
             break;
         default:
         SET_ERROR(RET_INVALID_CTX_MODE);
@@ -1194,10 +1194,10 @@ int rsa_decrypt(RsaCtx *ctx, const ByteArray *encrypted_data, ByteArray **data)
 
     switch (ctx->mode_id) {
         case RSA_MODE_DECRYPT_OAEP:
-        DO(rsa_decrypt_oaep(ctx, encrypted_data, data));
+            DO(rsa_decrypt_oaep(ctx, encrypted_data, data));
             break;
         case RSA_MODE_DECRYPT_PKCS:
-        DO(rsa_decrypt_pkcs1_v1_5(ctx, encrypted_data, data));
+            DO(rsa_decrypt_pkcs1_v1_5(ctx, encrypted_data, data));
             break;
         default:
         SET_ERROR(RET_INVALID_CTX_MODE);

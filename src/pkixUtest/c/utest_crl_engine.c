@@ -105,7 +105,7 @@ static void test_ecrl_generate_delta(void)
     time_t revoke_time;
 
     /* UTC time 26.01.13 22:00:00. */
-    timeinfo = calloc(1, sizeof(struct tm));
+    ASSERT_NOT_NULL(timeinfo = calloc(1, sizeof(struct tm)));
     timeinfo->tm_year = 113;
     timeinfo->tm_mon  = 0;
     timeinfo->tm_mday = 25;
@@ -175,7 +175,7 @@ static void test_ecrl_generate_next_update(void)
     time_t next_update;
 
     /* UTC time 26.11.16 22:00:00. */
-    timeinfo = calloc(1, sizeof(struct tm));
+    ASSERT_NOT_NULL(timeinfo = calloc(1, sizeof(struct tm)));
     timeinfo->tm_year = 116;
     timeinfo->tm_mon  = 10;
     timeinfo->tm_mday = 26;

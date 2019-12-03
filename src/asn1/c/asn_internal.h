@@ -25,7 +25,7 @@ CRYPTONITE_EXPORT int get_asn1c_environment_version(void);       /* Run-time ver
 #define CALLOC(nmemb, size)    calloc(nmemb, size)
 #define MALLOC(size)           malloc(size)
 #define REALLOC(oldptr, size)  realloc(oldptr, size)
-#define FREEMEM(ptr)           free(ptr)
+#define FREEMEM(ptr)           free(ptr); ptr = NULL;
 
 #define asn_debug_indent    0
 #define ASN_DEBUG_INDENT_ADD(i) do{}while(0)

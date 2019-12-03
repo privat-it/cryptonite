@@ -527,7 +527,6 @@ int pkcs8_get_verify_adapter(const PrivateKeyInfo_t *key, VerifyAdapter **va)
 
     default:
         SET_ERROR(RET_STORAGE_UNSUPPORTED_PRIV_KEY_TYPE);
-        goto cleanup;
     }
 
 cleanup:

@@ -280,9 +280,6 @@ phase1:
                     }
                     prev->got += sel->got;
                     sel = stck->cur_ptr = prev;
-                    if (!sel) {
-                        break;
-                    }
                     tlv_constr = 1;
                     continue;
                 } else {

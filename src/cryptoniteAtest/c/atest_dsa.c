@@ -2444,7 +2444,6 @@ static void dsa_test_get_public(DsaTestParams *test_params, DsaTestData *test_da
     ByteArray *pub_key = ba_alloc_from_be_hex_string(test_data->pub_key_be);
     ByteArray *pub_key_act = NULL;
     DsaCtx *ctx = NULL;
-    int ret = RET_OK;
 
     ASSERT_NOT_NULL(ctx = dsa_alloc(p, q, g));
     ASSERT_RET_OK(dsa_get_pubkey(ctx, priv_key, &pub_key_act));

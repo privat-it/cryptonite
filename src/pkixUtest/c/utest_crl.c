@@ -453,7 +453,7 @@ static void test_crl_get_this_update(void)
     time_t this_update;
     time_t act_this_update;
 
-    timeinfo = calloc(1, sizeof(struct tm));
+    ASSERT_NOT_NULL(timeinfo = calloc(1, sizeof(struct tm)));
     timeinfo->tm_year = 163;
     timeinfo->tm_mon  = 0;
     timeinfo->tm_mday = 25;

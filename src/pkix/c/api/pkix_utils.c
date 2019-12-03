@@ -174,12 +174,13 @@ bool is_dstu_be_params(const OBJECT_IDENTIFIER_t *oid)
 
 int sign_ba_to_bs(const ByteArray *sign, const AlgorithmIdentifier_t *aid, BIT_STRING_t *sign_bitstring)
 {
+    ECDSA_Sig_Value_t *ec_str = NULL;
     OCTET_STRING_t *octet_sign = NULL;
-    uint8_t *buf = NULL;
     ByteArray *ba_buf = NULL;
     ByteArray *zero_ba = NULL;
+    ByteArray *r = NULL;
+    ByteArray *s = NULL;
     int ret = RET_OK;
-    int buf_len = 0;
 
     LOG_ENTRY();
 
@@ -193,7 +194,6 @@ int sign_ba_to_bs(const ByteArray *sign, const AlgorithmIdentifier_t *aid, BIT_S
         DO(asn_encode_ba(&OCTET_STRING_desc, octet_sign, &ba_buf));
         DO(asn_create_bitstring_from_ba(ba_buf, &sign_bitstring));
     } else if (is_dstu_be_params(&aid->algorithm)) {
-        SWAP_BYTES(buf, buf, buf_len);
         DO(asn_create_octstring_from_ba(sign, &octet_sign));
         DO(asn_encode_ba(&OCTET_STRING_desc, octet_sign, &ba_buf));
         DO(asn_create_bitstring_from_ba(ba_buf, &sign_bitstring));
@@ -202,10 +202,7 @@ int sign_ba_to_bs(const ByteArray *sign, const AlgorithmIdentifier_t *aid, BIT_S
             pkix_check_oid_parent(&aid->algorithm, oids_get_oid_numbers_by_id(OID_ECDSA_WITH_SHA384_ID)) ||
             pkix_check_oid_parent(&aid->algorithm, oids_get_oid_numbers_by_id(OID_ECDSA_WITH_SHA512_ID)) ||
             pkix_check_oid_parent(&aid->algorithm, oids_get_oid_numbers_by_id(OID_ECDSA_WITH_SHA1_ID))) {
-        ByteArray *r = NULL;
-        ByteArray *s = NULL;
 
-        ECDSA_Sig_Value_t *ec_str = NULL;
         ASN_ALLOC(ec_str);
 
         CHECK_NOT_NULL(r = ba_copy_with_alloc(sign, 0, ba_get_len(sign) >> 1));
@@ -224,19 +221,18 @@ int sign_ba_to_bs(const ByteArray *sign, const AlgorithmIdentifier_t *aid, BIT_S
         DO(asn_encode_ba(&ECDSA_Sig_Value_desc, ec_str, &ba_buf));
 
         DO(asn_create_bitstring_from_ba(ba_buf, &sign_bitstring));
-        ba_free(r);
-        ba_free(s);
-        ASN_FREE(&ECDSA_Sig_Value_desc, ec_str);
     } else {
         SET_ERROR(RET_PKIX_UNSUPPORTED_SIGN_ALG);
     }
 
 cleanup:
 
+    ba_free(r);
+    ba_free(s);
     ba_free(zero_ba);
-    free(buf);
     ba_free(ba_buf);
     ASN_FREE(&OCTET_STRING_desc, octet_sign);
+    ASN_FREE(&ECDSA_Sig_Value_desc, ec_str);
 
     if (ret != RET_OK) {
         ASN_FREE_CONTENT_PTR(&BIT_STRING_desc, sign_bitstring);
@@ -612,7 +608,7 @@ int get_attr_by_oid(const Attributes_t *attrs, const OBJECT_IDENTIFIER_t *oid, A
     for (i = 0; i < attrs->list.count; i++) {
         Attribute_t *cur_attr = attrs->list.array[i];
 
-        if (!attr) {
+        if (!cur_attr) {
             continue;
         }
         DO(asn_get_oid_arcs(oid, &oid_numbers, &oid_numbers_len));

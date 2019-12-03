@@ -1098,7 +1098,7 @@ int aid_get_dstu4145_params(const AlgorithmIdentifier_t *aid, Dstu4145Ctx **ctx)
                 DO(ba_swap(Pc));
             }
 
-            if (aid && pkix_check_oid_parent(&aid->algorithm, oids_get_oid_numbers_by_id(OID_PKI_DSTU4145_ONB_LE_ID))) {
+            if (pkix_check_oid_parent(&aid->algorithm, oids_get_oid_numbers_by_id(OID_PKI_DSTU4145_ONB_LE_ID))) {
                 CHECK_NOT_NULL(dstu_params = dstu4145_alloc_onb((int)m, (int)a, b, n, Pc, NULL));
             } else {
                 CHECK_NOT_NULL(dstu_params = dstu4145_alloc_pb(f, f_len, (int)a, b, n, Pc, NULL));
