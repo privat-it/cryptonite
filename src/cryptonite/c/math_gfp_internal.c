@@ -437,6 +437,7 @@ cleanup:
  */
 void gfp_mod_pow(const GfpCtx *ctx, const WordArray *a, const WordArray *x, WordArray *out)
 {
+    WordArray *tmp = NULL;
     int len;
     int i;
 
@@ -447,19 +448,25 @@ void gfp_mod_pow(const GfpCtx *ctx, const WordArray *a, const WordArray *x, Word
 
     /* Метод удвоения сложения. */
     wa_copy(ctx->one, out);
+    wa_copy(ctx->one, tmp);
 
     len = (int)int_bit_len(x);
     for (i = len - 1; i >= 0; i--) {
         gfp_mod_sqr(ctx, out, out);
         if (int_get_bit(x, i)) {
             gfp_mod_mul(ctx, a, out, out);
+        } else {
+            gfp_mod_mul(ctx, a, out, tmp);
         }
     }
+
+    wa_free(tmp);
 }
 
 void gfp_mod_dual_pow(const GfpCtx *ctx, const WordArray *a, const WordArray *x,
         const WordArray *b, const WordArray *y, WordArray *out)
 {
+    WordArray *tmp = NULL;
     int xlen, ylen, len;
     int i;
 
@@ -473,6 +480,7 @@ void gfp_mod_dual_pow(const GfpCtx *ctx, const WordArray *a, const WordArray *x,
 
     /* Метод удвоения сложения. */
     wa_copy(ctx->one, out);
+    wa_copy(ctx->one, tmp);
 
     xlen = (int)int_bit_len(x);
     ylen = (int)int_bit_len(y);
@@ -481,11 +489,17 @@ void gfp_mod_dual_pow(const GfpCtx *ctx, const WordArray *a, const WordArray *x,
         gfp_mod_sqr(ctx, out, out);
         if (int_get_bit(x, i)) {
             gfp_mod_mul(ctx, a, out, out);
+        } else {
+            gfp_mod_mul(ctx, a, out, tmp);
         }
+
         if (int_get_bit(y, i)) {
             gfp_mod_mul(ctx, b, out, out);
+        } else {
+            gfp_mod_mul(ctx, b, out, tmp);
         }
     }
+    wa_free(tmp);
 }
 
 /**
