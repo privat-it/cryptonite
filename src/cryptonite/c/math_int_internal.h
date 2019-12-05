@@ -207,6 +207,8 @@ int int_mult_and_div(const WordArray *a, word_t b, word_t c, int n, WordArray *a
 
 int int_get_naf(const WordArray *in, int width, int **out);
 
+int int_get_naf_extra_add(const WordArray *in, const int *naf, int width, int *extra_addition);
+
 int int_gen_prime(const size_t bits, PrngCtx *prng, WordArray **out);
 
 #ifdef  __cplusplus

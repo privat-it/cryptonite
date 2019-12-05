@@ -550,20 +550,51 @@ static void ec2m_dual_mul_opt_step(const EcGf2mCtx *ctx, const EcPrecomp *p_prec
     }
 }
 
+static void ec2m_dual_mul_opt_extra_addition(const EcGf2mCtx *ctx, const EcPrecomp *precomp, const WordArray *in, int *naf, ECPoint *buf)
+{
+    int iter_p = 0;
+    int iter_b = 0;
+    int iter_max = 0;
+    int i = 0;
+
+    if (ctx != NULL && buf != NULL && in != NULL && precomp != NULL && precomp->type == EC_PRECOMP_TYPE_WIN) {
+        iter_max = (int)int_bit_len(in);
+        iter_b = (int)(ctx->gf2m->f[0] * 0.9) - iter_max;
+
+        int_get_naf_extra_add(in, naf, precomp->ctx.win->win_width, &iter_p);
+
+        do {
+            for (i = 0; i < iter_max && iter_p >= 0; ++i) {
+                if (naf[i] != 0) {
+                    ec2m_dual_mul_opt_step(ctx, precomp, in, naf, buf, i, iter_max);
+                    --iter_p;
+                }
+            }
+        } while (iter_p >= 0);
+
+        for (; iter_b >= 0; --iter_b) {
+            ec2m_double(ctx, buf, buf);
+        }
+    }
+}
+
 int ec2m_dual_mul_opt(const EcGf2mCtx *ctx, const EcPrecomp *p_precomp, const WordArray *m,
         const EcPrecomp *q_precomp, const WordArray *n, ECPoint *r)
 {
     int *n_naf = NULL;
     int *m_naf = NULL;
-    int iter_max;
+    int iter_max = 0;
     int iter_q = 0;
-    int i;
+    int i = 0;
     int ret = RET_OK;
+    ECPoint *tmp = NULL;
 
     ASSERT(ctx != NULL);
     ASSERT(p_precomp != NULL);
     ASSERT(m != NULL);
     ASSERT(ctx->len == r->x->len);
+
+    CHECK_NOT_NULL(tmp = ec_point_copy_with_alloc(r));
 
     int iter_p = 0;
     int m_bit_len = ctx->gf2m->f[0];
@@ -612,10 +643,15 @@ int ec2m_dual_mul_opt(const EcGf2mCtx *ctx, const EcPrecomp *p_precomp, const Wo
         }
     }
 
+    //Дополнительные операции для размазывания времени у "слабых" naf ключей
+    ec2m_dual_mul_opt_extra_addition(ctx, p_precomp, m, m_naf, tmp);
+    ec2m_dual_mul_opt_extra_addition(ctx, q_precomp, n, n_naf, tmp);
+
     ec2m_point_to_affine(ctx, r);
 
 cleanup:
 
+    ec_point_free(tmp);
     free(n_naf);
     free(m_naf);
 

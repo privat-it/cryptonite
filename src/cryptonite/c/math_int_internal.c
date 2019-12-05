@@ -1202,24 +1202,58 @@ cleanup:
     return ret;
 }
 
+int int_get_naf_extra_add(const WordArray *in, const int *naf, int width, int *extra_addition)
+{
+    size_t i = 0;
+    int ret = RET_OK;
+    int nonzero = 0;
+    int extra_add_local = 0;
+    size_t bitlen = 0;
+
+    CHECK_PARAM(in != NULL)
+    CHECK_PARAM(naf != NULL)
+    CHECK_PARAM(extra_addition != NULL)
+
+    bitlen = int_bit_len(in);
+
+    for (i = 0; i < bitlen; i++) {
+        if (naf[i] != 0) {
+            ++nonzero;
+        }
+    }
+
+    extra_add_local = (int)((bitlen / (width + 1)) * 0.9);
+    extra_add_local -= nonzero;
+    if (extra_add_local < 0) {
+        extra_add_local = -1;
+    }
+    *extra_addition = extra_add_local;
+
+cleanup:
+
+    return ret;
+}
+
 int int_get_naf(const WordArray *in, int width, int **out)
 {
     WordArray *k_naf = NULL;
     WordArray *z_naf = NULL;
     int *naf = NULL;
     int ret = RET_OK;
+    int bitlen = 0;
 
     CHECK_PARAM(in != NULL)
     CHECK_PARAM(out != NULL)
     CHECK_PARAM(width >= 0)
 
+    bitlen = in->len << WORD_BIT_LEN_SHIFT;
     word_t carry = 0;
     word_t mod = (word_t)1 << width;
     word_t mask = ((word_t)(-1)) >> (WORD_BIT_LENGTH - width);
     word_t mask_div2 = mask >> 1;
     int i = 0, j;
 
-    MALLOC_CHECKED(naf, ((in->len << WORD_BIT_LEN_SHIFT) + 1) * sizeof(int));
+    MALLOC_CHECKED(naf, (bitlen + 1) * sizeof(int));
     CHECK_NOT_NULL(k_naf = wa_copy_with_alloc(in));
     CHECK_NOT_NULL(z_naf = wa_alloc_with_zero(in->len));
 
@@ -1245,8 +1279,9 @@ int int_get_naf(const WordArray *in, int width, int **out)
         i++;
     }
 
-    for (j = (int)(in->len << WORD_BIT_LEN_SHIFT); j >= i; j--) {
-        naf[j] = 0;
+    j = (int)(in->len << WORD_BIT_LEN_SHIFT) - i + 1;
+    if (j > 0) {
+        memset(&naf[i], 0, j * sizeof(int));
     }
 
     *out = naf;
