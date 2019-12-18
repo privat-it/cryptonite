@@ -640,6 +640,7 @@ static int rsa_gen_privkey_core(RsaCtx *ctx, PrngCtx *prng, const size_t bits, c
                 wp = q_tmp;
             }
             CHECK_NOT_NULL(wsub_p_q = wa_alloc_with_zero(wp->len));
+            wa_change_len(wq, wp->len);
             int_sub(wp, wq, wsub_p_q);
 
             // conformance with ANSI X9.31 requirement
