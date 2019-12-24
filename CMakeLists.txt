@@ -103,7 +103,7 @@ target_sources(pkixExample PUBLIC ${PKIX_SOURCE} ${STORAGE_SOURCE} ${PKIX_EXAMPL
 target_link_libraries(pkixExample m)
 
 add_executable(asn1Utest "")
-target_sources(asn1Utest PUBLIC ${ASN1_SOURCE} ${ASN1_UTEST} ${CRYPTONITE_TEST_UTILS} ${CRYPTONITE_SOURCE} ${ASN1_SOURCE} ${PKIX_TEST_UTILS} ${PTHREAD_SOURCE})
+target_sources(asn1Utest PUBLIC ${ASN1_SOURCE} ${ASN1_UTEST} ${CRYPTONITE_TEST_UTILS} ${CRYPTONITE_SOURCE} ${ASN1_SOURCE} ${PKIX_TEST_UTILS} ${PTHREAD_SOURCE} ${PKIX_SOURCE})
 target_link_libraries(asn1Utest m)
 
 link_directories(storageUtest
@@ -113,6 +113,7 @@ add_executable(storageUtest "")
 target_sources(storageUtest PUBLIC ${ASN1_SOURCE} ${PKIX_SOURCE} ${CRYPTONITE_TEST_UTILS} ${CRYPTONITE_SOURCE} ${ASN1_SOURCE} ${STORAGE_UTEST} ${STORAGE_SOURCE} ${PKIX_TEST_UTILS} ${PTHREAD_SOURCE})
 target_link_libraries(storageUtest m)
 
-add_executable(cryptonite ${CRYPTONITE_SOURCE} ${CRYPTONITE_ATEST} ${CRYPTONITE_PTEST} ${CRYPTONITE_UTEST} ${CRYPTONITE_TEST_UTILS})
-
+add_executable(cryptoniteExample "")
+target_sources(cryptoniteExample PUBLIC ${CRYPTONITE_SOURCE} ${CRYPTONITE_EXAMPLE_SOURCE} ${PTHREAD_SOURCE})
+target_link_libraries(cryptoniteExample m)
 
