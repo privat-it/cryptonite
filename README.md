@@ -20,7 +20,7 @@ Implemented algorithms:
 * SHA2 - hash funtion
 * MD5 - hash function
 
-Expert opinion on the results of the Ukrainian state expertise in the field of cryptographic protection of information [No 04/03/02-4834 from 30.11.2016](http://www.dsszzi.gov.ua/dsszzi/control/uk/publish/article?art_id=316570&cat_id=72110) (Due date 25.11.2021) "Програмний виріб криптографічного захисту інформації “CRYPTONITE” UA.14360570.00001-01 90 01-1".
+Expert opinion on the results of the Ukrainian state expertise in the field of cryptographic protection of information [No 04/03/02-4834 from 30.11.2016](https://data.gov.ua/dataset/7b0d45fe-75eb-4d14-9792-59e440305678) (Due date 25.11.2021) "Програмний виріб криптографічного захисту інформації “CRYPTONITE” UA.14360570.00001-01 90 01-1".
 
 # CMake Build
 ```
