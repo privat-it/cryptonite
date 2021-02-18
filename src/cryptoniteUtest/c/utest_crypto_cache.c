@@ -6,7 +6,6 @@
 #include <stdlib.h>
 
 #include "crypto_cache.h"
-#include "byte_array_internal.h"
 #include "utest.h"
 #include "dstu4145.h"
 #include "ecdsa.h"
