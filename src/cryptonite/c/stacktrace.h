@@ -9,8 +9,6 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-#include "byte_array.h"
-
 #ifdef EDEBUG
 #undef ASSERT
 #include <assert.h>
