@@ -18,6 +18,10 @@
 
 #define PKCS8_CERT_PREF      "PKCS12-"
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 /** Типи ключового сховища. */
 typedef enum {
     KS_FILE_PKCS12_UNKNOWN = 0,
@@ -228,5 +232,9 @@ CRYPTONITE_EXPORT int pkcs12_decode(const char *storage_name, const ByteArray *s
  * @return код помилки
  */
 CRYPTONITE_EXPORT int pkcs12_create(Pkcs12MacType type, const char *password, int rounds, Pkcs12Ctx **storage);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
