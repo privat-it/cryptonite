@@ -275,7 +275,7 @@ CRYPTONITE_EXPORT int sdata_get_cert_by_idx(const SignedData_t *sdata, int index
 CRYPTONITE_EXPORT int sdata_get_crl_by_idx(const SignedData_t *sdata, int index, RevocationInfoChoice_t **crl);
 
 /**
- * Повертає по індексу відкликаний сертифікат.
+ * Повертає по індексу інформацію про підписника.
  * Виділена пам'ять потребує вивільнення.
  *
  * @param sdata контейнер підпису
