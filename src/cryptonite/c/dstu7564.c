@@ -192,17 +192,17 @@ struct Dstu7564Ctx_st {
     uint64_t p_boxrowcol[ROWS][MAX_NUM_IN_BYTE];
     uint8_t last_block[STATE_BYTE_SIZE_1024 * 2];
     size_t last_block_el;
-    size_t msg_tot_len;
+    uint64_t msg_tot_len;
     uint8_t state[NB_1024 * ROWS];
     size_t nbytes;                              /* Number of bytes currently located in state. */
     size_t hash_nbytes;                         /* Hash code byte length. */
     size_t columns;                             /* Number of columns (8-byte vectors) located in internal state. */
-    size_t is_inited;                           /* Reinit checker */
+    bool is_inited;                             /* Reinit checker */
     size_t rounds;                              /* Number of rounds for current mode of operation. */
     Dstu7564Hmac *hmac;
 };
 
-static void padding(uint8_t *buf, size_t buf_len_out, size_t buf_len_out_bit, size_t nbytes)
+static size_t padding(uint8_t *buf, size_t buf_len_out, size_t buf_len_out_bit, size_t nbytes)
 {
     size_t zero_nbytes;
     size_t cur_pos;
@@ -216,12 +216,14 @@ static void padding(uint8_t *buf, size_t buf_len_out, size_t buf_len_out_bit, si
     cur_pos += zero_nbytes;
 
     for (i = 0; i < (96 >> 3); ++i, ++cur_pos) {
-        if (i < (int)sizeof (size_t)) {
+        if (i < (int) sizeof(size_t)) {
             buf[cur_pos] = ((buf_len_out_bit) >> (i << 3)) & 0xFF;
         } else {
             buf[cur_pos] = 0;
         }
     }
+
+    return zero_nbytes + 1 + i;
 }
 
 /*Russian peasant multiplication algorithm*/
@@ -683,6 +685,8 @@ cleanup:
 int dstu7564_final(Dstu7564Ctx *ctx, ByteArray **hash_code)
 {
     int ret = RET_OK;
+    size_t padd_len;
+    size_t i;
 
     CHECK_PARAM(ctx != NULL);
     CHECK_PARAM(hash_code != NULL);
@@ -690,8 +694,10 @@ int dstu7564_final(Dstu7564Ctx *ctx, ByteArray **hash_code)
         SET_ERROR(RET_CONTEXT_NOT_READY);
     }
 
-    padding(ctx->last_block, ctx->last_block_el, ctx->msg_tot_len, ctx->nbytes);
-    digest(ctx, ctx->last_block);
+    padd_len = padding(ctx->last_block, ctx->last_block_el, ctx->msg_tot_len, ctx->nbytes);
+    for(i = 0; i < padd_len; i+= ctx->nbytes) {
+        digest(ctx, &ctx->last_block[i]);
+    }
     DO(output_transformation(ctx, hash_code));
 
 cleanup:
