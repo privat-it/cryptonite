@@ -709,7 +709,8 @@ int dstu7564_init_kmac(Dstu7564Ctx *ctx, const ByteArray *key, size_t mac_len)
 {
     uint8_t key_buf[STATE_BYTE_SIZE_1024];
     size_t key_buf_len;
-    size_t i;
+    size_t i = 0;
+    size_t padd_len;
     int ret = RET_OK;
 
     CHECK_PARAM(ctx != NULL);
@@ -732,14 +733,16 @@ int dstu7564_init_kmac(Dstu7564Ctx *ctx, const ByteArray *key, size_t mac_len)
         ctx->hmac->invert_key[i] = ~key_buf[i];
     }
     /*PAD(K)*/
-    padding(key_buf, key_buf_len, key_buf_len << 3, ctx->nbytes);
+    padd_len = padding(key_buf, key_buf_len, key_buf_len << 3, ctx->nbytes);
     /*Сохраняем ключ*/
     memcpy(ctx->hmac->key, key_buf, ctx->nbytes);
     /*Размер дополненного ключа всегда равен размеру блока.*/
     ctx->msg_tot_len += ctx->nbytes << 3;
 
     /*HASH(PAD(K))*/
-    digest(ctx, key_buf);
+    for(i = 0; i < padd_len; i+= ctx->nbytes) {
+        digest(ctx, &key_buf[i]);
+    }
 
     ctx->hash_nbytes = mac_len;
 
@@ -765,6 +768,8 @@ cleanup:
 int dstu7564_final_kmac(Dstu7564Ctx *ctx, ByteArray **mac)
 {
     size_t msg_len;
+    size_t padd_len;
+    size_t i = 0;
     int ret = RET_OK;
 
     CHECK_PARAM(ctx != NULL);
@@ -777,10 +782,12 @@ int dstu7564_final_kmac(Dstu7564Ctx *ctx, ByteArray **mac)
     ctx->msg_tot_len -= ctx->last_block_el << 3;
 
     /*PAD(M)*/
-    padding(ctx->last_block, msg_len, msg_len << 3, ctx->nbytes);
-    ctx->msg_tot_len += ctx->nbytes << 3;
+    padd_len = padding(ctx->last_block, msg_len, msg_len << 3, ctx->nbytes);
 
-    digest(ctx, ctx->last_block);
+    for(i = 0; i < padd_len; i+= ctx->nbytes) {
+        ctx->msg_tot_len += ctx->nbytes << 3;
+        digest(ctx, &ctx->last_block[i]);
+    }
 
     /*Зануляем последний блок, так как он был использован.*/
     memset(ctx->last_block, 0, ctx->nbytes);
@@ -792,7 +799,7 @@ int dstu7564_final_kmac(Dstu7564Ctx *ctx, ByteArray **mac)
     memcpy(ctx->last_block, ctx->hmac->invert_key, ctx->hmac->key_len);
     /*H(PAD(PAD(K) || PAD(M) || (~K)))*/
     /*Высчитываем дополнение от всего сообщения.*/
-    padding(ctx->last_block, ctx->msg_tot_len >> 3, ctx->msg_tot_len, ctx->nbytes);
+    padd_len = padding(ctx->last_block, ctx->msg_tot_len >> 3, ctx->msg_tot_len, ctx->nbytes);
 
     /*Вычитаем размер инверсии ключа, так как у нас есть инверсия ключа с падингом всего сообщения.*/
     ctx->msg_tot_len -= ctx->hmac->key_len << 3;
@@ -800,12 +807,11 @@ int dstu7564_final_kmac(Dstu7564Ctx *ctx, ByteArray **mac)
 
     ctx->msg_tot_len += ctx->nbytes << 3;
     /*Последний digest.*/
-    digest(ctx, ctx->last_block);
+    for(i = 0; i < padd_len; i+= ctx->nbytes) {
+        digest(ctx, &ctx->last_block[i]);
+    }
 
     DO(output_transformation(ctx, mac));
-    /*Выполняем hmac_init*/
-    digest(ctx, ctx->hmac->key);
-    ctx->msg_tot_len += ctx->nbytes << 3;
 cleanup:
 
     return ret;
