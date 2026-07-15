@@ -29,7 +29,7 @@ typedef enum{
     CRYPTONITE_DSTU
 } LIBS_XTEST_DSTU;
 
-pthread_mutex_t lock;
+extern pthread_mutex_t lock;
 
 typedef enum{
     SHA_HASH = 0,

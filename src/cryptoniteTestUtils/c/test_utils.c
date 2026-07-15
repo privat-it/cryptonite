@@ -25,6 +25,10 @@ size_t level_num = 0;
 char DOT_STRING80[]    = "................................................................................";
 char WSPACE_STRING80[] = "                                                                                ";
 
+size_t data_size_byte;
+unsigned int LOOP_NUM;
+unsigned int THREADS_NUM;
+
 const char *location_cut(const char *file)
 {
     const char *file_ptr = NULL;
@@ -36,7 +40,10 @@ const char *location_cut(const char *file)
     cryptonite_len = strlen(cryptonite_text);
     file_ptr = file;
     len = strlen(file);
-    for (i = len - 1; i > 0; i--) {
+    if (len < cryptonite_len) {
+        return NULL;
+    }
+    for (i = len - cryptonite_len; i > 0; i--) {
         if (!memcmp(cryptonite_text, &file[i], cryptonite_len)) {
             return file_ptr + i;
         }
@@ -127,7 +134,8 @@ bool assert_equals_core(const void *expected, const void *actual, size_t size, c
     size_t i = 0;
     uint8_t *exp = (uint8_t *) expected;
     uint8_t *act = (uint8_t *) actual;
-#ifdef _WIN32
+#if defined(_WIN32) && defined(USE_COLOR)
+    /* hConsole та saved_attributes використовують макроси COLOR_* */
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
     CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
     WORD saved_attributes;

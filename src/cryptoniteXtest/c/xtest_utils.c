@@ -14,6 +14,8 @@
 #include "byte_utils_internal.h"
 #include "byte_array.h"
 
+pthread_mutex_t lock;
+
 XtestSt* rnd_generate(size_t size_mode)
 {
     srand((unsigned int) time(NULL));

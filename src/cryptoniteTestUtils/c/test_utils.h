@@ -87,7 +87,7 @@ extern size_t error_count;
 extern char DOT_STRING80[];
 extern char WSPACE_STRING80[];
 
-unsigned int THREADS_NUM;
+extern unsigned int THREADS_NUM;
 
 typedef struct column_st {
     char *name;
@@ -121,9 +121,9 @@ typedef enum {
     WHITE,
 } COLOR_en;
 
-size_t data_size_byte;
+extern size_t data_size_byte;
 
-unsigned int LOOP_NUM;
+extern unsigned int LOOP_NUM;
 
 #define PR(...)        printf(__VA_ARGS__); fflush(stdout)
 

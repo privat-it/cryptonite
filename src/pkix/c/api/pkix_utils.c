@@ -17,7 +17,9 @@
 #include "digest_adapter.h"
 #include "cryptonite_manager.h"
 
-#if defined(__linux__) || defined(__APPLE__) || defined(__GNUC__)
+#ifdef _WIN32
+#include <windows.h>
+#elif defined(__linux__) || defined(__APPLE__) || defined(__GNUC__)
 #include "iconv.h"
 #endif
 
