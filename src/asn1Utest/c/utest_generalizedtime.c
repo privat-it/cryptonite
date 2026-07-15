@@ -118,18 +118,11 @@ void test_generalizedtime_asn_GT2time(void)
 {
     GeneralizedTime_t *generalizedtime = NULL;
     time_t actual;
-    tm_t timeinfo;
     time_t expected;
 
-    /* UTC time 25.01.23 22:00:00 GMT. */
-    timeinfo.tm_year = 2023 - 1900;
-    timeinfo.tm_mon  = 0;
-    timeinfo.tm_mday = 25;
-    timeinfo.tm_hour = 22;
-    timeinfo.tm_min  = 0;
-    timeinfo.tm_sec  = 0;
-    timeinfo.tm_isdst = -1;
-    expected = mktime(&timeinfo);
+    /* Блоб містить "20230125200000Z" — 2023-01-25 20:00:00 UTC.
+       Порівнюємо з фіксованою епохою, незалежно від локального поясу. */
+    expected = (time_t)1674676800;
 
     generalizedtime = test_generalizedtime_create_with_timezone();
     ASSERT_NOT_NULL(generalizedtime);
@@ -150,19 +143,16 @@ void test_generalizedtime_asn_time2GT(void)
     GeneralizedTime_t *expected = NULL;
     tm_t timeinfo = {0};
 
-    /* UTC time 25.01.13 22:00:00 GMT. */
-    timeinfo.tm_year = 123;
-    timeinfo.tm_mon  = 0;
-    timeinfo.tm_mday = 25;
-    timeinfo.tm_hour = 22;
-    timeinfo.tm_min  = 0;
-    timeinfo.tm_sec  = 0;
-    timeinfo.tm_isdst = -1;
+    /* 2023-01-25 20:00:00 UTC у локальному представленні поточного поясу:
+       вхідний tm для asn_time2GT — локальний час, force_gmt=true
+       нормалізує його назад у "20230125200000Z" незалежно від поясу. */
+    time_t moment = (time_t)1674676800;
+    timeinfo = *localtime(&moment);
 
-    expected = test_generalizedtime_create_without_timezone();
+    expected = test_generalizedtime_create_with_timezone();
     ASSERT_NOT_NULL(expected);
 
-    actual = asn_time2GT(NULL, &timeinfo, false);
+    actual = asn_time2GT(NULL, &timeinfo, true);
 
     ASSERT_TRUE(asn_equals(&GeneralizedTime_desc, expected, actual));
 
@@ -321,8 +311,21 @@ void test_generalizedtime_frac(void)
     int frac_digits;
     GeneralizedTime_t *actual = NULL;
     time_t time_sec;
-    uint64_t time_msec_exp = 1478459187333;
+    uint64_t time_msec_exp;
     uint64_t time_msec;
+    tm_t frac_tm = {0};
+
+    /* Блоб "20161106210627.333" без зони — за специфікацією трактується
+       як локальний час, тому очікування будується через mktime тих самих
+       полів (tm_isdst = 0 — так само канонікалізує asn_GT2time). */
+    frac_tm.tm_year = 116;
+    frac_tm.tm_mon  = 10;
+    frac_tm.tm_mday = 6;
+    frac_tm.tm_hour = 21;
+    frac_tm.tm_min  = 6;
+    frac_tm.tm_sec  = 27;
+    frac_tm.tm_isdst = 0;
+    time_msec_exp = (uint64_t)mktime(&frac_tm) * 1000 + 333;
 
     actual = asn_decode_with_alloc(&GeneralizedTime_desc, encoded, sizeof(encoded));
     ASSERT_NOT_NULL(actual);
