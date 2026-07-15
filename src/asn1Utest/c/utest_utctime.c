@@ -117,18 +117,11 @@ void test_utctime_asn_UT2time(void)
 {
     UTCTime_t *utctime = NULL;
     time_t actual;
-    tm_t timeinfo = {0};
     time_t expected;
 
-    /* UTC time 25.01.13 22:00:00 GMT. */
-    timeinfo.tm_year = 123;
-    timeinfo.tm_mon  = 0;
-    timeinfo.tm_mday = 25;
-    timeinfo.tm_hour = 22;
-    timeinfo.tm_min  = 0;
-    timeinfo.tm_sec  = 0;
-    timeinfo.tm_isdst = -1;
-    expected = mktime(&timeinfo);
+    /* Блоб містить "230125220000+0200" — 2023-01-25 20:00:00 UTC.
+       Порівнюємо з фіксованою епохою, незалежно від локального поясу. */
+    expected = (time_t)1674676800;
 
     utctime = test_utctime_create_without_timezone();
     ASSERT_NOT_NULL(utctime);
@@ -148,19 +141,16 @@ void test_utctime_asn_time2UT(void)
     UTCTime_t *expected = NULL;
     tm_t timeinfo = {0};
 
-    /* UTC time 25.01.13 22:00:00 GMT. */
-    timeinfo.tm_year = 123;
-    timeinfo.tm_mon  = 0;
-    timeinfo.tm_mday = 25;
-    timeinfo.tm_hour = 22;
-    timeinfo.tm_min  = 0;
-    timeinfo.tm_sec  = 0;
-    timeinfo.tm_isdst = -1;
+    /* 2023-01-25 20:00:00 UTC у локальному представленні поточного поясу:
+       вхідний tm для asn_time2UT — локальний час, force_gmt=true
+       нормалізує його назад у "230125200000Z" незалежно від поясу. */
+    time_t moment = (time_t)1674676800;
+    timeinfo = *localtime(&moment);
 
-    expected = test_utctime_create_without_timezone();
+    expected = test_utctime_create_with_timezone();
     ASSERT_NOT_NULL(expected);
 
-    actual = asn_time2UT(NULL, &timeinfo, false);
+    actual = asn_time2UT(NULL, &timeinfo, true);
 
     ASSERT_TRUE(asn_equals(&UTCTime_desc, actual, expected));
 

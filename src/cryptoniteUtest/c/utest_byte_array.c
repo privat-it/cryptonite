@@ -211,7 +211,7 @@ static void test_ba_trim_leading_zeros(void)
     ASSERT_TRUE(ba_get_len(ba) == sizeof(uint64_t));
     ASSERT_RET_OK(ba_trim_leading_zeros(ba));
     ASSERT_TRUE(ba_get_len(ba) == sizeof(uint32_t));
-    ASSERT_RET_OK(ba_to_uint32(ba, &val_32, 2));
+    ASSERT_RET_OK(ba_to_uint32(ba, &val_32, 1));
     ASSERT_TRUE(val_32 == ((uint32_t)0x08070605));
 
 cleanup:
