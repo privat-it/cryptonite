@@ -7,3 +7,9 @@ file(GLOB SOURCE c/*.c)
 add_library(cryptonite STATIC ${SOURCE})
 target_link_libraries(cryptonite pthread_impl)
 target_include_directories(cryptonite PUBLIC c)
+
+# rs.c seeds the PRNG from the Windows system RNG (BCryptGenRandom), which
+# lives in bcrypt.dll.
+if(WIN32)
+    target_link_libraries(cryptonite bcrypt)
+endif()

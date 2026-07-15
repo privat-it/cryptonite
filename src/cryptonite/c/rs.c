@@ -5,14 +5,20 @@
 
 #include <time.h>
 #include <string.h>
+#include <stdbool.h>
 
 #ifdef _WIN32
 #   include <windows.h>
 #   if !defined(_WIN32_WCE)
-#       include <wincrypt.h>
+#       include <bcrypt.h>
 #   endif
 #else
 #   include <sys/time.h>
+#   if defined(__linux__) && defined(__GLIBC__) && \
+        (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 25))
+#       include <sys/random.h>
+#       define HAS_GETRANDOM
+#   endif
 #endif
 
 #include "rs.h"
@@ -60,88 +66,76 @@ typedef struct {
 } mem_ctx_t;
 
 /**
- * Заполняет буфер случайными байтами.
+ * Fills the buffer with random bytes.
  *
- * Используемые источники случайности:
- *  - для UNIX используется устройство /dev/urandom;
- *  - для Windows, используется Microsoft CryptoAPI.
+ * Entropy sources used:
+ *  - on Windows   — the system RNG via BCryptGenRandom;
+ *  - on Linux (glibc >= 2.25) — the getrandom() syscall, falling back
+ *    to /dev/urandom on failure;
+ *  - on other UNIX — the /dev/urandom device.
  *
- * @param rnd буфер, в котором будут размещены случайные байты
- * @param size размер буфера в байтах
+ * If none of the system sources succeeds an error is returned; the
+ * output buffer must not be used in that case.
  *
- * @return код ошибки
+ * @param rnd  buffer to receive the random bytes
+ * @param size buffer size in bytes
+ *
+ * @return error code
  */
 static int next_bytes_from_os_rng(void *rnd, size_t size)
 {
     uint8_t *rnd8 = (uint8_t *)rnd;
-    uint8_t *buf = NULL;
-    size_t i;
+    bool os_rng_ok = false;
     int ret = RET_OK;
 
     memset(rnd, 0, size);
 
-    MALLOC_CHECKED(buf, size);
-
 #if defined(_WIN32) && !defined(_WIN32_WCE)
-    /* Пытаемся использовать CryptGenRandom */
-    while (1) {
-        HCRYPTPROV hProv;
+    /* Windows system RNG (CNG). */
+    if (BCryptGenRandom(NULL, (PUCHAR)rnd8, (ULONG)size,
+            BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0 /* STATUS_SUCCESS */) {
+        os_rng_ok = true;
+    }
+#else
 
-        if (CryptAcquireContextA(&hProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT) == 0) {
-            break;
-        }
+#ifdef HAS_GETRANDOM
+    /* getrandom() works even when /dev is not yet mounted. */
+    {
+        size_t total = 0;
 
-        if (CryptGenRandom(hProv, (DWORD)size, (BYTE *)buf) == TRUE) {
-            for (i = 0; i < size; i++) {
-                rnd8[i] ^= buf[i];
+        while (total < size) {
+            ssize_t readed = getrandom(rnd8 + total, size - total, 0);
+            if (readed < 0) {
+                break;
             }
-            CryptReleaseContext(hProv, 0);
-        } else {
-            CryptReleaseContext(hProv, 0);
+            total += (size_t)readed;
         }
-        break;
+        os_rng_ok = (total == size);
     }
 #endif
 
-    /* Пытаемся использовать /dev/urandom */
-    while (1) {
-        size_t readed;
+    if (!os_rng_ok) {
         FILE *fos = fopen("/dev/urandom", "rb");
-#ifdef WINDOWS
-        SetLastError(ERROR_SUCCESS);
+
+        if (fos != NULL) {
+            os_rng_ok = (fread(rnd8, 1, size, fos) == size);
+            fclose(fos);
+        }
+    }
 #endif
 
-        if (fos == NULL) {
-            ERROR_CREATE(RET_FILE_OPEN_ERROR);
-            break;
-        }
-
-        readed = fread(buf, 1, size, fos);
-        for (i = 0; i < readed; i++) {
-            rnd8[i] ^= buf[i];
-        }
-
-        fclose(fos);
-        break;
+    if (!os_rng_ok) {
+        memset(rnd, 0, size);
+        SET_ERROR(RET_FILE_OPEN_ERROR);
     }
 
 cleanup:
-    free(buf);
     return ret;
 }
 
 int rs_std_next_bytes(ByteArray *buf)
 {
-    size_t i;
-
-    next_bytes_from_os_rng(buf->buf, buf->len);
-
-    srand((unsigned int)time(NULL));
-    for (i = 0; i < buf->len; i++) {
-        buf->buf[i] ^= rand() % 256;
-    }
-
-    return RET_OK;
+    return next_bytes_from_os_rng(buf->buf, buf->len);
 }
 
 uint64_t rdtsc(void)
