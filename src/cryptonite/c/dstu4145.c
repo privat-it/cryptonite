@@ -880,7 +880,11 @@ int dstu4145_sign(const Dstu4145Ctx *ctx, const ByteArray *hash, ByteArray **r, 
 
     CHECK_PARAM(ctx != NULL);
     CHECK_PARAM(hash != NULL);
-    CHECK_PARAM(hash->len == 32);
+    /* Accept 256/384/512-bit digests (Kupyna-256/384/512, SHA-256/384/512).
+     * The hash is reduced to the field size below, but the length is limited
+     * to the standardized digest sizes to keep a lower security bound. This
+     * matches the certified successor UAPKI. */
+    CHECK_PARAM(hash->len == 32 || hash->len == 48 || hash->len == 64);
     CHECK_PARAM(r != NULL);
     CHECK_PARAM(s != NULL);
 
@@ -1065,7 +1069,11 @@ int dstu4145_verify(const Dstu4145Ctx *ctx, const ByteArray *hash, const ByteArr
 
     CHECK_PARAM(ctx != NULL);
     CHECK_PARAM(hash != NULL);
-    CHECK_PARAM(hash->len == 32);
+    /* Accept 256/384/512-bit digests (Kupyna-256/384/512, SHA-256/384/512).
+     * The hash is reduced to the field size below, but the length is limited
+     * to the standardized digest sizes to keep a lower security bound. This
+     * matches the certified successor UAPKI. */
+    CHECK_PARAM(hash->len == 32 || hash->len == 48 || hash->len == 64);
     CHECK_PARAM(r != NULL);
     CHECK_PARAM(s != NULL);
 
