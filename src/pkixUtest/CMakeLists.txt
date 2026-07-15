@@ -1,4 +1,3 @@
-cmake_minimum_required(VERSION 3.5)
 project(pkix-utest)
 
 file(GLOB SOURCE c/*.c)
