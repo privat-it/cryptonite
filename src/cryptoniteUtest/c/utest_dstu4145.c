@@ -179,6 +179,65 @@ cleanup:
     BA_FREE(key, qx, qy, hash, r, s, seed);
 }
 
+static void dstu4145_sign_hashlen_test(void)
+{
+    /* Signing/verification must accept 256/384/512-bit digests (the Kupyna
+     * and SHA-2 families) and reject any other length. The round-trips are
+     * self-consistent (the same hash is verified), so no external vector is
+     * needed. */
+    ByteArray *key = ba_alloc_from_le_hex_string("4854f9d1eeeaab9516288183f164044ec3cdbd00288856db40b4cdf07dfc140900");
+    ByteArray *qx = ba_alloc_from_le_hex_string("01799b65a6d2d1cecd08b044d599eecfab8412f599f52ca38ddb431bba38e66c00");
+    ByteArray *qy = ba_alloc_from_le_hex_string("e54176a56aaf5e5bea7c7dbbacfbe6ad1c35bf9743cb534d839d62be68bc4c5a01");
+    /* 384-bit (48-byte) and 512-bit (64-byte) digests, and a 320-bit
+     * (40-byte) one that must be rejected. */
+    ByteArray *hash48 = ba_alloc_from_le_hex_string(
+            "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f");
+    ByteArray *hash64 = ba_alloc_from_le_hex_string(
+            "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+            "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f");
+    ByteArray *hash40 = ba_alloc_from_le_hex_string(
+            "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f2021222324252627");
+    ByteArray *r = NULL;
+    ByteArray *s = NULL;
+    Dstu4145Ctx *ctx = NULL;
+    PrngCtx *prng = NULL;
+    ByteArray *seed = ba_alloc_by_len(40);
+
+    ASSERT_RET_OK(rs_std_next_bytes(seed));
+    ASSERT_NOT_NULL(prng = prng_alloc(PRNG_MODE_DSTU, seed));
+    ASSERT_NOT_NULL(ctx = dstu4145_alloc(DSTU4145_PARAMS_ID_M257_PB));
+
+    /* 384-bit digest: sign + verify round-trip. */
+    ASSERT_RET_OK(dstu4145_init_sign(ctx, key, prng));
+    ASSERT_RET_OK(dstu4145_sign(ctx, hash48, &r, &s));
+    ASSERT_RET_OK(dstu4145_init_verify(ctx, qx, qy));
+    ASSERT_RET_OK(dstu4145_verify(ctx, hash48, r, s));
+    BA_FREE(r, s);
+    r = NULL;
+    s = NULL;
+
+    /* 512-bit digest: sign + verify round-trip. */
+    ASSERT_RET_OK(dstu4145_init_sign(ctx, key, prng));
+    ASSERT_RET_OK(dstu4145_sign(ctx, hash64, &r, &s));
+    ASSERT_RET_OK(dstu4145_init_verify(ctx, qx, qy));
+    ASSERT_RET_OK(dstu4145_verify(ctx, hash64, r, s));
+
+    /* A non-standard digest length must be rejected. */
+    {
+        ByteArray *r2 = NULL;
+        ByteArray *s2 = NULL;
+        ASSERT_RET(RET_INVALID_PARAM, dstu4145_sign(ctx, hash40, &r2, &s2));
+        ASSERT_RET(RET_INVALID_PARAM, dstu4145_verify(ctx, hash40, r, s));
+        BA_FREE(r2, s2);
+    }
+
+cleanup:
+
+    prng_free(prng);
+    dstu4145_free(ctx);
+    BA_FREE(key, qx, qy, hash48, hash64, hash40, r, s, seed);
+}
+
 static void dstu4145_verify_test(void)
 {
     Dstu4145Ctx *ctx = NULL;
@@ -642,6 +701,7 @@ void utest_dstu4145(void)
     PR("%s\n", __FILE__);
 
     dstu4145_sign_test();
+    dstu4145_sign_hashlen_test();
     dstu4145_verify_test();
     dstu4145_verify_367_test();
     dstu4145_keys_test();
