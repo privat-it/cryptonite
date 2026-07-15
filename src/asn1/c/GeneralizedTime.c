@@ -717,18 +717,28 @@ asn_time2GT_frac(GeneralizedTime_t *opt_gt, const struct tm *_tm, int frac_value
 
     gmtoff = GMTOFF(*tm);
 
-    /* Коррекция летнего времени. */
+    /* Daylight-saving correction.
+     * The struct is normalised explicitly via gmtime_r() on the result
+     * of timegm(): glibc normalises the fields inside timegm(), but other
+     * libc implementations (musl, Emscripten) do not guarantee it, and
+     * without normalisation the negative tm_sec breaks later formatting. */
     if (tm->tm_isdst > 0) {
+        time_t fixed;
+
         tm_s = *tm;
         tm_s.tm_sec -= 3600;
-        timegm(&tm_s);  /* Fix the time */
+        fixed = timegm(&tm_s);  /* Fix the time */
+        gmtime_r(&fixed, &tm_s);
         tm = &tm_s;
     }
 
     if (force_gmt && gmtoff) {
+        time_t fixed;
+
         tm_s = *tm;
         tm_s.tm_sec -= gmtoff;
-        timegm(&tm_s);  /* Fix the time */
+        fixed = timegm(&tm_s);  /* Fix the time */
+        gmtime_r(&fixed, &tm_s);
         tm = &tm_s;
 #ifdef  HAVE_TM_GMTOFF
         ASSERT(!GMTOFF(tm_s));  /* Will fix itself */
