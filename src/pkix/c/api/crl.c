@@ -3,6 +3,14 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Модуль роботи зі списком відкликаних сертифікатів (CRL, структура
+ * CertificateList за RFC 5280). Містить функції створення/звільнення,
+ * DER-кодування та декодування, перевірки підпису CRL, доступу до полів
+ * TBS-частини, а також пошуку сертифіката серед відкликаних і зчитування
+ * розширень CRL (номер CRL, точки розповсюдження, ознаки повного/дельта-CRL).
+ */
+
 #include "crl.h"
 
 #include <stdlib.h>
@@ -17,6 +25,7 @@
 #undef FILE_MARKER
 #define FILE_MARKER "pki/api/crl.c"
 
+/* Виділяє та обнуляє нову структуру CertificateList (CRL). Повертає NULL у разі помилки. */
 CertificateList_t *crl_alloc(void)
 {
     CertificateList_t *crl = NULL;
@@ -31,6 +40,7 @@ cleanup:
     return crl;
 }
 
+/* Звільняє пам'ять, зайняту структурою CRL. */
 void crl_free(CertificateList_t *crl)
 {
     LOG_ENTRY();
@@ -38,6 +48,10 @@ void crl_free(CertificateList_t *crl)
     ASN_FREE(&CertificateList_desc, crl);
 }
 
+/*
+ * Ініціалізує CRL готовими складовими: копіює TBS-частину, ідентифікатор
+ * алгоритму підпису та значення підпису у структуру. Підпис не обчислюється.
+ */
 int crl_init_by_sign(CertificateList_t *crl,
         const TBSCertList_t *tbs_crl,
         const AlgorithmIdentifier_t *aid,
@@ -68,6 +82,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Формує підписаний CRL за допомогою SignAdapter: копіює TBS-частину, отримує
+ * ідентифікатор алгоритму підпису, DER-кодує TBS та обчислює над ним підпис.
+ */
 int crl_init_by_adapter(CertificateList_t *crl, const TBSCertList_t *tbs_crl, const SignAdapter *adapter)
 {
     int ret = RET_OK;
@@ -107,6 +125,7 @@ cleanup:
     return ret;
 }
 
+/* DER-кодує CRL у байтовий масив. */
 int crl_encode(const CertificateList_t *crl, ByteArray **out)
 {
     int ret = RET_OK;
@@ -120,6 +139,7 @@ cleanup:
     return ret;
 }
 
+/* Декодує CRL із DER-подання (попередньо звільняє поточний вміст структури). */
 int crl_decode(CertificateList_t *crl, const ByteArray *in)
 {
     int ret = RET_OK;
@@ -137,6 +157,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію TBS-частини CRL. */
 int crl_get_tbs(const CertificateList_t *crl, TBSCertList_t **tbs_crl)
 {
     int ret = RET_OK;
@@ -157,6 +178,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює TBS-частину CRL (замінює наявну копією tbs_crl). */
 int crl_set_tbs(CertificateList_t *crl, const TBSCertList_t *tbs_crl)
 {
     int ret = RET_OK;
@@ -175,6 +197,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію ідентифікатора алгоритму підпису CRL. */
 int crl_get_sign_aid(const CertificateList_t *crl, AlgorithmIdentifier_t **aid)
 {
     int ret = RET_OK;
@@ -192,6 +215,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює ідентифікатор алгоритму підпису CRL (замінює наявний). */
 int crl_set_sign_aid(CertificateList_t *crl, const AlgorithmIdentifier_t *aid)
 {
     int ret = RET_OK;
@@ -210,6 +234,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію значення підпису CRL (BIT STRING). */
 int crl_get_sign(const CertificateList_t *crl, BIT_STRING_t **sign)
 {
     int ret = RET_OK;
@@ -225,6 +250,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює значення підпису CRL (замінює наявне). */
 int crl_set_sign(CertificateList_t *crl, const BIT_STRING_t *sign)
 {
     int ret = RET_OK;
@@ -243,6 +269,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Перевіряє, чи відкликано сертифікат: шукає у списку revokedCertificates запис
+ * із серійним номером, що збігається із серійним номером cert. flag=true при знаходженні.
+ */
 int crl_check_cert(const CertificateList_t *crl, const Certificate_t *cert, bool *flag)
 {
     int ret = RET_OK;
@@ -286,6 +316,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає запис про відкликання для заданого сертифіката (пошук за його серійним номером). */
 int crl_get_cert_info(const CertificateList_t *crl, const Certificate_t *cert, RevokedCertificate_t **rc)
 {
     int ret = RET_OK;
@@ -308,6 +339,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Шукає у списку відкликаних запис із заданим серійним номером і повертає його
+ * копію. Якщо запис не знайдено — RET_PKIX_OBJ_NOT_FOUND.
+ */
 int crl_get_cert_info_by_sn(const CertificateList_t *crl, const INTEGER_t *cert_sn, RevokedCertificate_t **rc)
 {
     int ret = RET_OK;
@@ -351,6 +386,7 @@ cleanup:
     return ret;
 }
 
+/* Визначає, чи є CRL повним: перевіряє наявність розширення freshestCRL (flag=true). */
 int crl_is_full(const CertificateList_t *crl, bool *flag)
 {
     int ret = RET_OK;
@@ -390,6 +426,7 @@ cleanup:
     return ret;
 }
 
+/* Визначає, чи є CRL дельта-списком: перевіряє наявність розширення deltaCRLIndicator (flag=true). */
 int crl_is_delta(const CertificateList_t *crl, bool *flag)
 {
     int i;
@@ -429,6 +466,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Перевіряє підпис CRL: DER-кодує TBS-частину, перетворює BIT STRING підпису на
+ * байтовий масив і викликає verify_data адаптера перевірки.
+ */
 int crl_verify(const CertificateList_t *crl, const VerifyAdapter *adapter)
 {
     int ret = RET_OK;
@@ -453,6 +494,7 @@ cleanup:
     return ret;
 }
 
+/* Зчитує значення розширення cRLNumber (порядковий номер CRL) як байтовий масив. */
 int crl_get_crl_number(const CertificateList_t *crl, ByteArray **crl_number)
 {
     int ret = RET_OK;
@@ -474,6 +516,10 @@ cleanup:
 
     return ret;
 }
+/*
+ * Зчитує з розширення cRLDistributionPoints перелік точок розповсюдження і
+ * повертає масив рядків-URI (обходить fullName, відбираючи елементи типу URI).
+ */
 int crl_get_distribution_points(const CertificateList_t *crl, char ***url, size_t *url_len)
 {
     int ret = RET_OK;
@@ -531,6 +577,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає час формування CRL (поле thisUpdate) як time_t. */
 int crl_get_this_update(const CertificateList_t *crl, time_t *this_update)
 {
     int ret = RET_OK;

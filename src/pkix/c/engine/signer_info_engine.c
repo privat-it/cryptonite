@@ -3,6 +3,15 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Двигун побудови структури CMS SignerInfo (інформація про одного підписувача).
+ * Формує ідентифікатор підписувача (issuerAndSerialNumber), збирає підписувані атрибути -
+ * за замовчуванням обов'язкові атрибути CAdES-BES (contentType, messageDigest,
+ * SigningCertificateV2 з ESSCertIDv2) плюс користувацькі, - потім підписує їх DER-подання
+ * через SignAdapter і повертає готовий SignerInfo з алгоритмами гешування й підпису та
+ * непідписуваними атрибутами.
+ */
+
 #include "signer_info_engine.h"
 
 #include "oids.h"
@@ -112,6 +121,9 @@ cleanup:
     return ret;
 }
 
+/* Виділяє контекст SignerInfo: зберігає адаптери підпису й гешування (ess_da за замовчуванням
+ * дорівнює data_da), отримує сертифікат підписувача з адаптера й будує ідентифікатор
+ * підписувача (issuerAndSerialNumber). За замовчуванням увімкнено додавання атрибутів CAdES-BES. */
 int esigner_info_alloc(const SignAdapter *sa,
         const DigestAdapter *data_da,
         const DigestAdapter *ess_da,
@@ -159,6 +171,8 @@ cleanup:
     return ret;
 }
 
+/* Звільняє контекст SignerInfo разом із сертифікатом, ідентифікатором, наборами атрибутів
+ * і даними. Адаптери належать викликаючому коду. */
 void esigner_info_free(SignerInfoEngine *ctx)
 {
     LOG_ENTRY();
@@ -176,6 +190,7 @@ void esigner_info_free(SignerInfoEngine *ctx)
     }
 }
 
+/* Встановлює прапорець додавання обов'язкових атрибутів CAdES-BES під час генерації. */
 int esigner_info_set_bes_attrs(SignerInfoEngine *ctx, bool flag)
 {
     int ret = RET_OK;
@@ -189,6 +204,8 @@ cleanup:
     return ret;
 }
 
+/* Задає набір підписуваних атрибутів, попередньо прогнавши його через DER-кодування та
+ * BER-декодування для примусового впорядкування (сортування) атрибутів. */
 int esigner_info_set_signed_attrs(SignerInfoEngine *ctx, const SignedAttributes_t *signed_attrs)
 {
     ByteArray *encoded = NULL;
@@ -211,6 +228,7 @@ cleanup:
     return ret;
 }
 
+/* Задає (замінює) набір непідписуваних атрибутів SignerInfo. */
 int esigner_info_set_unsigned_attrs(SignerInfoEngine *ctx, const Attributes_t *unsigned_attrs)
 {
     int ret = RET_OK;
@@ -228,6 +246,7 @@ cleanup:
     return ret;
 }
 
+/* Додає один підписуваний атрибут до набору контексту. */
 int esigner_info_add_signed_attr(SignerInfoEngine *ctx, const Attribute_t *signed_attr)
 {
     int ret = RET_OK;
@@ -252,6 +271,7 @@ cleanup:
     return ret;
 }
 
+/* Додає один непідписуваний атрибут до набору контексту. */
 int esigner_info_add_unsigned_attr(SignerInfoEngine *ctx, const Attribute_t *unsigned_attr)
 {
     int ret = RET_OK;
@@ -276,6 +296,7 @@ cleanup:
     return ret;
 }
 
+/* Задає тип та байтове подання підписуваних даних (геш обчислюється під час генерації). */
 int esigner_info_set_data(SignerInfoEngine *ctx,
         const OBJECT_IDENTIFIER_t *data_type_oid,
         const OCTET_STRING_t *data)
@@ -295,6 +316,7 @@ cleanup:
     return ret;
 }
 
+/* Задає тип даних та готовий геш підписуваних даних, коли самі дані недоступні. */
 int esigner_info_set_hash_data(SignerInfoEngine *ctx,
         const OBJECT_IDENTIFIER_t *data_type_oid,
         const OCTET_STRING_t *hash_data)
@@ -439,6 +461,9 @@ cleanup:
     return ret;
 }
 
+/* Будує SignerInfo: формує підписувані атрибути (get_signed_attrs), підписує їх DER-подання
+ * адаптером, отримує алгоритми підпису й гешування, після чого ініціалізує SignerInfo
+ * ідентифікатором підписувача, атрибутами та значенням підпису. */
 int esigner_info_generate(const SignerInfoEngine *ctx, SignerInfo_t **sinfo)
 {
     int ret = RET_OK;

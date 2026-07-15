@@ -3,6 +3,28 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Огляд модуля.
+ *
+ * Шар криптоадаптерів PKIX і фабрика, що зʼєднує обʼєкти PKI (сертифікати,
+ * AlgorithmIdentifier, SubjectPublicKeyInfo, ключі) з реалізаціями криптоядра
+ * Cryptonite: dstu4145, ecdsa, gost28147/gost34311, sha1/sha2, aes, prng.
+ *
+ * Кожен адаптер (DigestAdapter, CipherAdapter, SignAdapter, VerifyAdapter,
+ * DhAdapter) складається з набору вказівників на функції-обгортки та прихованого
+ * контексту ctx, у якому лежать параметри (Cryptonite*Params) і виділені
+ * контексти криптоядра. Функції *_init_* (init_default / init_by_aid /
+ * init_by_cert / init_by_spki) створюють адаптер із конкретного джерела
+ * параметрів, а *_copy_with_alloc клонують уже готовий адаптер. Методи-обгортки
+ * (update/final, encrypt/decrypt, sign_data/sign_hash, verify_data/verify_hash,
+ * dh) делегують роботу відповідній функції криптоядра.
+ *
+ * Диспетчеризація виконується за OID алгоритму: pkix_check_oid_equal і
+ * pkix_check_oid_parent порівнюють OID з еталонами, отриманими через
+ * oids_get_oid_numbers_by_id(OID_*), і за результатом обирають гілку
+ * (ДСТУ 4145 / ECDSA / ГОСТ 28147 / ГОСТ 34.311 / SHA-1 / SHA-2 / AES).
+ */
+
 #include "sha1.h"
 #include "sha2.h"
 #include "cryptonite_manager.h"
@@ -227,6 +249,16 @@ cleanup:
     return ret;
 }
 
+/**
+ * Створює контекст ГОСТ 28147 з таблиці замін (DKE), заданої у вигляді
+ * OCTET STRING. Розпаковує 64-байтний ДКЕ у 128-байтну таблицю замін і
+ * ініціалізує нею контекст.
+ *
+ * @param sbox_os упакована таблиця замін (очікується довжина SBOX_SIZE/2)
+ * @param params  буфер для створеного контексту ГОСТ 28147
+ *
+ * @return код помилки
+ */
 int get_gost28147_params_by_os(const OCTET_STRING_t *sbox_os, Gost28147Ctx **params)
 {
     int ret = RET_OK;
@@ -379,6 +411,15 @@ static void da_free(DigestAdapter *da)
     free(da);
 }
 
+/**
+ * Створює геш-адаптер з параметрами за замовчуванням: режим ГОСТ 34.311
+ * на стандартній таблиці замін (GOST28147_SBOX_ID_1) з нульовою синхропосилкою.
+ * Прикріплює методи-обгортки da_update/da_final/da_get_alg/da_free.
+ *
+ * @param da буфер для створеного геш-адаптера
+ *
+ * @return код помилки
+ */
 int digest_adapter_init_default(DigestAdapter **da)
 {
     int ret = RET_OK;
@@ -424,6 +465,18 @@ cleanup:
     return ret;
 }
 
+/**
+ * Створює геш-адаптер за ідентифікатором алгоритму. За OID у aid обирає режим
+ * гешування: ДСТУ 4145/ГОСТ 3411 -> ГОСТ 34.311 (таблиця замін береться з aid),
+ * SHA-1, SHA-224/256/384/512 -> відповідний варіант SHA-2, ГОСТ 3410 KZ ->
+ * ГОСТ 34.311 на SBOX_ID_11; для невідомого OID використовує SHA-1 за
+ * замовчуванням.
+ *
+ * @param aid ідентифікатор алгоритму (передумова: != NULL)
+ * @param da  буфер для створеного геш-адаптера
+ *
+ * @return код помилки
+ */
 int digest_adapter_init_by_aid(const AlgorithmIdentifier_t *aid, DigestAdapter **da)
 {
     int ret = RET_OK;
@@ -511,6 +564,17 @@ cleanup:
     return ret;
 }
 
+/**
+ * Створює геш-адаптер за сертифікатом. Для ДСТУ 4145 геш-параметри беруться з
+ * алгоритму відкритого ключа субʼєкта, для ECDSA-with-SHA* - з алгоритму
+ * підпису сертифіката; далі делегує до digest_adapter_init_by_aid().
+ * Для інших OID повертає RET_PKIX_UNSUPPORTED_OID.
+ *
+ * @param cert ASN1-структура Certificate (передумова: != NULL)
+ * @param da   буфер для створеного геш-адаптера
+ *
+ * @return код помилки
+ */
 int digest_adapter_init_by_cert(const Certificate_t *cert, DigestAdapter **da)
 {
     int ret = RET_OK;
@@ -537,6 +601,15 @@ cleanup:
     return ret;
 }
 
+/**
+ * Створює глибоку копію геш-адаптера: копіює вказівники на методи-обгортки та
+ * контекст (клонує активний контекст гешування за режимом mode_id і копіює
+ * digest_aid).
+ *
+ * @param da геш-адаптер, що копіюється (передумова: != NULL)
+ *
+ * @return новий геш-адаптер або NULL у разі помилки
+ */
 DigestAdapter *digest_adapter_copy_with_alloc(const DigestAdapter *da)
 {
     DigestAdapter *adapter = NULL;
@@ -581,6 +654,17 @@ cleanup:
     return adapter;
 }
 
+/**
+ * Ініціалізує параметри шифрування з ASN1-структури алгоритму. За OID обирає
+ * гілку: ГОСТ 28147 - зчитує вектор ініціалізації та таблицю замін (з DKE aid
+ * або стандартну SBOX_ID_1); AES-256-CBC - зчитує лише вектор ініціалізації.
+ * Для інших алгоритмів повертає RET_PKIX_UNSUPPORTED_CIPHER_ALG.
+ *
+ * @param cipher_params_struct структура параметрів з уже встановленим
+ *                             asn_cipher_aid (передумова: != NULL)
+ *
+ * @return код помилки
+ */
 static int cryptonite_cipher_params_init(CryptoniteCipherParams *cipher_params_struct)
 {
     int ret = RET_OK;
@@ -821,6 +905,11 @@ static void ca_free(CipherAdapter *ca)
     free(ca);
 }
 
+/**
+ * Звільняє адаптер шифрування, делегуючи виклик його власному методу free.
+ *
+ * @param ca адаптер шифрування (може бути NULL)
+ */
 void cipher_adapter_free(CipherAdapter *ca)
 {
     if (ca) {
@@ -828,6 +917,16 @@ void cipher_adapter_free(CipherAdapter *ca)
     }
 }
 
+/**
+ * Створює адаптер шифрування за ідентифікатором алгоритму: прикріплює
+ * методи-обгортки encrypt/decrypt/get_alg/free, копіює alg_id у контекст і
+ * ініціалізує параметри через cryptonite_cipher_params_init().
+ *
+ * @param alg_id ідентифікатор алгоритму шифрування (передумова: != NULL)
+ * @param ca     буфер для створеного адаптера шифрування
+ *
+ * @return код помилки
+ */
 int cipher_adapter_init(const AlgorithmIdentifier_t *alg_id, CipherAdapter **ca)
 {
     int ret = RET_OK;
@@ -864,6 +963,14 @@ cleanup:
     return ret;
 }
 
+/**
+ * Створює глибоку копію адаптера шифрування: копіює вказівники на методи та
+ * контекст (asn_cipher_aid, таблицю замін і вектор ініціалізації).
+ *
+ * @param ca адаптер шифрування, що копіюється (передумова: != NULL)
+ *
+ * @return новий адаптер шифрування або NULL у разі помилки
+ */
 CipherAdapter *cipher_adapter_copy_with_alloc(const CipherAdapter *ca)
 {
     CipherAdapter *adapter = NULL;
@@ -915,6 +1022,7 @@ static int cryptonite_sign_params_asn_init(CryptoniteSignParams *sign_parameters
     LOG_ENTRY();
     CHECK_PARAM(sign_parameters_str != NULL);
 
+    /* Гілка ДСТУ 4145: параметри ключа розбираються як DSTU4145Params. */
     if (pkix_check_oid_parent(&sign_parameters_str->signature_aid->algorithm,
             oids_get_oid_numbers_by_id(OID_PKI_DSTU4145_WITH_GOST3411_ID))) {
         sign_parameters_str->alg_marker = DSTU4145;
@@ -928,6 +1036,7 @@ static int cryptonite_sign_params_asn_init(CryptoniteSignParams *sign_parameters
             pkix_check_oid_equal(&sign_parameters_str->signature_aid->algorithm, oids_get_oid_numbers_by_id(OID_ECDSA_WITH_SHA512_ID)) ||
             pkix_check_oid_equal(&sign_parameters_str->signature_aid->algorithm, oids_get_oid_numbers_by_id(OID_ECDSA_WITH_SHA1_ID))) {
 
+        /* Гілка ECDSA: параметри ключа розбираються як ECParameters. */
         sign_parameters_str->alg_marker = ECDSA;
         CHECK_NOT_NULL(params_buf = asn_any2type(sign_parameters_str->params_aid->parameters, &ECParameters_desc));
         ASN_FREE(&ECParameters_desc, sign_parameters_str->asn_ec_params);
@@ -1144,6 +1253,18 @@ cleanup:
     return ret;
 }
 
+/**
+ * Метод-обгортка формування підпису безпосередньо над готовим гешем (без
+ * попереднього гешування даних). Підтримується лише режим ДСТУ 4145: ініціалізує
+ * підписання закритим ключем і разовим ГПСЧ, обчислює пару (r, s) і зʼєднує її
+ * в підпис. Для інших режимів повертає RET_PKIX_INVALID_CTX_MODE.
+ *
+ * @param sa   адаптер формування підпису
+ * @param hash геш, що підписується
+ * @param sign буфер для підпису
+ *
+ * @return код помилки
+ */
 static int sa_sign_hash(const SignAdapter *sa, const ByteArray *hash, ByteArray **sign)
 {
     int ret = RET_OK;
@@ -1466,6 +1587,15 @@ cleanup:
     return ret;
 }
 
+/**
+ * Метод-обгортка адаптера перевірки: повертає обʼєкт відкритого ключа,
+ * делегуючи до cryptonite_sign_params_get_pub_key() над контекстом va.
+ *
+ * @param va   адаптер перевірки підпису
+ * @param info буфер для обʼєкта відкритого ключа
+ *
+ * @return код помилки
+ */
 static int va_get_pub_key(const VerifyAdapter *va, SubjectPublicKeyInfo_t **info)
 {
     int ret = RET_OK;
@@ -1481,6 +1611,17 @@ cleanup:
     return ret;
 }
 
+/**
+ * Перевіряє, чи відповідає сертифікат уже наявним параметрам підпису. Якщо в
+ * контексті вже є сертифікат - вимагає його рівності; звіряє OID алгоритму
+ * підпису та відкритий ключ (обчислений з параметрів) з відповідними полями
+ * сертифіката. Розбіжність дає RET_PKIX_NO_CERTIFICATE.
+ *
+ * @param sign_params_str структура параметрів підпису
+ * @param cert            сертифікат для звірки
+ *
+ * @return код помилки
+ */
 static int check_cert_corresponding(const CryptoniteSignParams *sign_params_str, const Certificate_t *cert)
 {
     int ret = RET_OK;
@@ -1578,6 +1719,17 @@ cleanup:
     return ret;
 }
 
+/**
+ * Метод-обгортка адаптера формування підпису: встановлює алгоритм гешування.
+ * За OID у da_id визначає геш (ГОСТ 3411 / SHA-1 / SHA-224/256/384/512), зберігає
+ * digest_aid і для ECDSA-підпису синхронно змінює signature_aid на відповідний
+ * ecdsaWithSHA*; для ГОСТ 3411 дозволяє лише сумісний геш.
+ *
+ * @param sa    адаптер формування підпису
+ * @param da_id ідентифікатор алгоритму гешування
+ *
+ * @return код помилки
+ */
 static int sa_set_digest_alg(SignAdapter *sa, const DigestAlgorithmIdentifier_t *da_id)
 {
     OidId hash_checker = 0;
@@ -1655,6 +1807,17 @@ cleanup:
     return ret;
 }
 
+/**
+ * Метод-обгортка адаптера перевірки підпису: встановлює алгоритм гешування
+ * (аналог sa_set_digest_alg для VerifyAdapter). За OID у da_id визначає геш,
+ * зберігає digest_aid і для ECDSA-підпису переустановлює signature_aid на
+ * відповідний ecdsaWithSHA*; для ГОСТ 3411 дозволяє лише сумісний геш.
+ *
+ * @param va    адаптер перевірки підпису
+ * @param da_id ідентифікатор алгоритму гешування
+ *
+ * @return код помилки
+ */
 static int va_set_digest_alg(VerifyAdapter *va, const DigestAlgorithmIdentifier_t *da_id)
 {
     OidId hash_checker = 0;
@@ -1755,6 +1918,15 @@ cleanup:
     return ret;
 }
 
+/**
+ * Метод-обгортка адаптера перевірки: встановлює сертифікат, делегуючи до
+ * cryptonite_sign_params_set_cert() над контекстом va.
+ *
+ * @param va   адаптер перевірки підпису
+ * @param cert сертифікат
+ *
+ * @return код помилки
+ */
 static int va_set_cert(const VerifyAdapter *va, const Certificate_t *cert)
 {
     int ret = RET_OK;
@@ -1820,6 +1992,15 @@ cleanup:
     return ret;
 }
 
+/**
+ * Метод-обгортка адаптера перевірки: повертає раніше встановлений сертифікат,
+ * делегуючи до cryptonite_sign_params_get_cert() над контекстом va.
+ *
+ * @param va   адаптер перевірки підпису
+ * @param cert буфер для сертифіката
+ *
+ * @return код помилки
+ */
 static int va_get_cert(const VerifyAdapter *va, Certificate_t **cert)
 {
     int ret = RET_OK;
@@ -1861,6 +2042,15 @@ cleanup:
     return ret;
 }
 
+/**
+ * Метод-обгортка адаптера перевірки: повертає ознаку наявності сертифіката в
+ * контексті.
+ *
+ * @param va       адаптер перевірки підпису
+ * @param has_cert результат: true - сертифікат встановлено, false - ні
+ *
+ * @return код помилки
+ */
 static int va_has_cert(const VerifyAdapter *va, bool *has_cert)
 {
     int ret = RET_OK;
@@ -1941,6 +2131,15 @@ cleanup:
     return ret;
 }
 
+/**
+ * Метод-обгортка адаптера перевірки: повертає поточний ідентифікатор алгоритму
+ * гешування, делегуючи до cryptonite_sign_params_get_digest_aid() над контекстом va.
+ *
+ * @param va            адаптер перевірки підпису
+ * @param digest_alg_id буфер для ідентифікатора алгоритму гешування
+ *
+ * @return код помилки
+ */
 static int va_get_digest_aid(const VerifyAdapter *va, DigestAlgorithmIdentifier_t **digest_alg_id)
 {
     int ret = RET_OK;
@@ -2009,6 +2208,15 @@ cleanup:
     return ret;
 }
 
+/**
+ * Метод-обгортка адаптера перевірки: повертає поточний ідентифікатор алгоритму
+ * підпису, делегуючи до cryptonite_sign_params_get_sign_aid() над контекстом va.
+ *
+ * @param va          адаптер перевірки підпису
+ * @param sign_alg_id буфер для ідентифікатора алгоритму підпису
+ *
+ * @return код помилки
+ */
 static int va_get_sign_aid(const VerifyAdapter *va, SignatureAlgorithmIdentifier_t **sign_alg_id)
 {
     int ret = RET_OK;
@@ -2050,6 +2258,11 @@ static void sa_free(SignAdapter *sa)
     }
 }
 
+/**
+ * Звільняє адаптер формування підпису, делегуючи виклик його власному методу free.
+ *
+ * @param sa адаптер формування підпису (може бути NULL)
+ */
 void sign_adapter_free(SignAdapter *sa)
 {
     if (sa) {
@@ -2072,6 +2285,11 @@ static void va_free(VerifyAdapter *va)
     }
 }
 
+/**
+ * Звільняє геш-адаптер, делегуючи виклик його власному методу free.
+ *
+ * @param da геш-адаптер (може бути NULL)
+ */
 void digest_adapter_free(DigestAdapter *da)
 {
     if (da) {
@@ -2079,6 +2297,11 @@ void digest_adapter_free(DigestAdapter *da)
     }
 }
 
+/**
+ * Звільняє адаптер перевірки підпису, делегуючи виклик його власному методу free.
+ *
+ * @param va адаптер перевірки підпису (може бути NULL)
+ */
 void verify_adapter_free(VerifyAdapter *va)
 {
     if (va) {
@@ -2086,6 +2309,20 @@ void verify_adapter_free(VerifyAdapter *va)
     }
 }
 
+/**
+ * Перевіряє відповідність закритого ключа параметрам і (за наявності) відкритому
+ * ключу. За alg_marker обчислює відкритий ключ з priv_key (ДСТУ 4145 або ECDSA);
+ * якщо задано pub_key - стискає/форматує обчислений ключ згідно з формою pub_key
+ * (0x04 - нестиснута, 0x02/0x03 - стиснута) і звіряє їх. Розбіжності дають
+ * RET_PKIX_PRIV_KEY_NOT_CORRESPOND_FOR_PARAMS або
+ * RET_PKIX_PUB_KEY_NOT_CORRESPOND_FOR_PRIV.
+ *
+ * @param sign_parameters_str структура параметрів підпису
+ * @param priv_key            закритий ключ (передумова: != NULL)
+ * @param pub_key             очікуваний відкритий ключ або NULL
+ *
+ * @return код помилки
+ */
 static int validate_priv_pub_key(const CryptoniteSignParams *sign_parameters_str, const ByteArray *priv_key,
         const ByteArray *pub_key)
 {
@@ -2164,6 +2401,16 @@ cleanup:
     return ret;
 }
 
+/**
+ * Визначає базовий OID алгоритму підпису за наданим OID (порівняння через
+ * pkix_check_oid_parent): ДСТУ 4145 з ГОСТ 3411 або ecdsaWithSHA1/224/256/384/512.
+ * Невідомий алгоритм дає RET_PKIX_UNSUPPORTED_SIGN_ALG.
+ *
+ * @param sign_alg OID алгоритму підпису
+ * @param id       буфер для розпізнаного ідентифікатора OID
+ *
+ * @return код помилки
+ */
 static __inline int check_signature_alg_params(const OBJECT_IDENTIFIER_t *sign_alg, OidId *id)
 {
     OidId sa_aid = 0;
@@ -2192,6 +2439,18 @@ cleanup:
     return ret;
 }
 
+/**
+ * Створює ідентифікатор алгоритму гешування, що відповідає алгоритму підпису
+ * (за розпізнаним OID id): для ДСТУ 4145 - ГОСТ 3411, для ecdsaWithSHA* -
+ * відповідний SHA-1/224/256/384/512. Опційно повертає маркер алгоритму підпису
+ * (ECDSA) через s_id.
+ *
+ * @param id   розпізнаний OID алгоритму підпису
+ * @param s_id буфер для маркера алгоритму підпису або NULL
+ * @param aid  буфер для створеного ідентифікатора алгоритму гешування
+ *
+ * @return код помилки
+ */
 static __inline int create_digest_aid_by_oid(const OidId id, SignAlgId *s_id, AlgorithmIdentifier_t **aid)
 {
     AlgorithmIdentifier_t *digest_aid = NULL;
@@ -2243,6 +2502,20 @@ cleanup:
     return ret;
 }
 
+/**
+ * Створює адаптер формування підпису за закритим ключем і ASN1-параметрами.
+ * Розпізнає алгоритм підпису з signature_aid, прикріплює методи-обгортки,
+ * будує геш- і параметричний AID, ініціалізує контекст криптоядра
+ * (cryptonite_sign_params_asn_init/init), звіряє закритий ключ з параметрами
+ * і зберігає його копію в контексті.
+ *
+ * @param priv_key      закритий ключ (передумова: != NULL)
+ * @param signature_aid ідентифікатор алгоритму підпису (передумова: != NULL)
+ * @param alg           ідентифікатор параметрів ключа (передумова: != NULL)
+ * @param sa            буфер для створеного адаптера формування підпису
+ *
+ * @return код помилки
+ */
 int sign_adapter_init_by_aid(const ByteArray *priv_key,
         const AlgorithmIdentifier_t *signature_aid,
         const AlgorithmIdentifier_t *alg,
@@ -2299,6 +2572,18 @@ cleanup:
     return ret;
 }
 
+/**
+ * Створює адаптер формування підпису за закритим ключем і сертифікатом.
+ * Алгоритм підпису та параметри ключа беруться із сертифіката; крім ініціалізації
+ * контексту криптоядра, звіряє закритий ключ з відкритим ключем із SPKI
+ * сертифіката. Контекст позначається як такий, що містить сертифікат.
+ *
+ * @param private_key закритий ключ (передумова: != NULL)
+ * @param cert        сертифікат (передумова: != NULL)
+ * @param sa          буфер для створеного адаптера формування підпису
+ *
+ * @return код помилки
+ */
 int sign_adapter_init_by_cert(const ByteArray *private_key, const Certificate_t *cert, SignAdapter **sa)
 {
     int ret = RET_OK;
@@ -2360,6 +2645,15 @@ cleanup:
     return ret;
 }
 
+/**
+ * Встановлює рівень оптимізації обчислень у контексті криптоядра підпису.
+ * За alg_marker делегує до dstu4145_set_opt_level() або ecdsa_set_opt_level().
+ *
+ * @param ctx       структура параметрів підпису (передумова: != NULL)
+ * @param opt_level рівень оптимізації
+ *
+ * @return код помилки
+ */
 static int cryptonite_sign_params_set_opt_level(CryptoniteSignParams *ctx, OptLevelId opt_level)
 {
     int ret;
@@ -2379,6 +2673,15 @@ cleanup:
     return ret;
 }
 
+/**
+ * Встановлює рівень оптимізації для адаптера формування підпису, делегуючи до
+ * cryptonite_sign_params_set_opt_level() над контекстом sa.
+ *
+ * @param sa        адаптер формування підпису (передумова: != NULL)
+ * @param opt_level рівень оптимізації
+ *
+ * @return код помилки
+ */
 int sign_adapter_set_opt_level(SignAdapter *sa, OptLevelId opt_level)
 {
     int ret = RET_OK;
@@ -2394,6 +2697,15 @@ cleanup:
     return ret;
 }
 
+/**
+ * Встановлює рівень оптимізації для адаптера перевірки підпису, делегуючи до
+ * cryptonite_sign_params_set_opt_level() над контекстом va.
+ *
+ * @param va        адаптер перевірки підпису (передумова: != NULL)
+ * @param opt_level рівень оптимізації
+ *
+ * @return код помилки
+ */
 int verify_adapter_set_opt_level(VerifyAdapter *va, OptLevelId opt_level)
 {
     int ret = RET_OK;
@@ -2409,6 +2721,16 @@ cleanup:
     return ret;
 }
 
+/**
+ * Створює глибоку копію структури параметрів підпису: копіює відкритий ключ,
+ * ASN1-параметри (ДСТУ/EC), контекст криптоядра за alg_marker, закритий ключ,
+ * ідентифікатори (params/signature/digest), сертифікат і таблицю замін. Для ГПСЧ
+ * породжує новий контекст із свіжим seed, взятим із наявного prng_ctx.
+ *
+ * @param ctx структура параметрів підпису, що копіюється
+ *
+ * @return нова структура параметрів або NULL у разі помилки
+ */
 static CryptoniteSignParams *cryptonite_sign_params_copy_with_alloc(CryptoniteSignParams *ctx)
 {
     CryptoniteSignParams *sign_params = NULL;
@@ -2481,6 +2803,14 @@ cleanup:
     return sign_params;
 }
 
+/**
+ * Створює глибоку копію адаптера формування підпису: копіює вказівники на
+ * методи-обгортки та клонує контекст через cryptonite_sign_params_copy_with_alloc().
+ *
+ * @param sa адаптер формування підпису, що копіюється (передумова: != NULL)
+ *
+ * @return новий адаптер формування підпису або NULL у разі помилки
+ */
 SignAdapter *sign_adapter_copy_with_alloc(const SignAdapter *sa)
 {
     SignAdapter *adapter = NULL;
@@ -2512,6 +2842,18 @@ cleanup:
 
     return adapter;
 }
+/**
+ * Створює адаптер перевірки підпису за алгоритмом підпису та обʼєктом відкритого
+ * ключа (SPKI). Прикріплює методи-обгортки, розпізнає алгоритм підпису, будує
+ * геш-AID, копіює параметри й відкритий ключ з pkey та ініціалізує контекст
+ * криптоядра. Сертифікат при цьому не встановлюється (has_cert = false).
+ *
+ * @param signature_aid ідентифікатор алгоритму підпису (передумова: != NULL)
+ * @param pkey          обʼєкт відкритого ключа (передумова: != NULL)
+ * @param va            буфер для створеного адаптера перевірки підпису
+ *
+ * @return код помилки
+ */
 int verify_adapter_init_by_spki(const AlgorithmIdentifier_t *signature_aid, const SubjectPublicKeyInfo_t *pkey,
         VerifyAdapter **va)
 {
@@ -2565,6 +2907,16 @@ cleanup:
     return ret;
 }
 
+/**
+ * Створює адаптер перевірки підпису за сертифікатом. Алгоритм підпису, параметри
+ * та відкритий ключ беруться із сертифіката; контекст позначається як такий, що
+ * містить сертифікат (has_cert = true), і ініціалізується для криптоядра.
+ *
+ * @param cert сертифікат (передумова: != NULL)
+ * @param va   буфер для створеного адаптера перевірки підпису
+ *
+ * @return код помилки
+ */
 int verify_adapter_init_by_cert(const Certificate_t *cert, VerifyAdapter **va)
 {
     int ret = RET_OK;
@@ -2621,6 +2973,14 @@ cleanup:
     return ret;
 }
 
+/**
+ * Створює глибоку копію адаптера перевірки підпису: копіює вказівники на
+ * методи-обгортки та клонує контекст через cryptonite_sign_params_copy_with_alloc().
+ *
+ * @param va адаптер перевірки підпису, що копіюється (передумова: != NULL)
+ *
+ * @return новий адаптер перевірки підпису або NULL у разі помилки
+ */
 VerifyAdapter *verify_adapter_copy_with_alloc(const VerifyAdapter *va)
 {
     VerifyAdapter *adapter = NULL;
@@ -2727,6 +3087,14 @@ static void iso15946_shared_info(const ByteArray *entity_info, const void *oid, 
     iso15946_int2be(KEY_LENGTH, shared_info, shared_info_len - supp_pub_info_len + 4);
 }
 
+/**
+ * Повертає копію zx, усічену так, щоб останній (старший) байт був ненульовим:
+ * відкидає кінцеві нульові байти. Якщо все значення нульове - повертає NULL.
+ *
+ * @param zx вхідний масив байтів
+ *
+ * @return усічена копія або NULL
+ */
 static ByteArray *iso15946_get_not_zero(ByteArray *zx)
 {
     size_t len;
@@ -2747,6 +3115,20 @@ static ByteArray *iso15946_get_not_zero(ByteArray *zx)
     return NULL;
 }
 
+/**
+ * Обчислює ключ шифрування ключа (KEK) за KDF-функцією у циклічній групі поля
+ * (ДСТУ). Формує SharedInfo з oid та entity_info і гешує ГОСТ 34.311 конкатенацію
+ * координати спільного секрету zx (усіченої до ненульового старшого байта і
+ * переставленої), лічильника та SharedInfo.
+ *
+ * @param zx          x-координата спільного секрету
+ * @param entity_info випадкові дані сторони або NULL
+ * @param oid         OID алгоритму для SharedInfo
+ * @param oid_len     довжина oid у байтах
+ * @param secret      буфер для похідного ключа
+ *
+ * @return код помилки
+ */
 static int iso15946_generate_secretc(ByteArray *zx, const ByteArray *entity_info, const void *oid,
         int oid_len, ByteArray **secret)
 {
@@ -2952,6 +3334,19 @@ cleanup:
     return ret;
 }
 
+/**
+ * Зашифровує (wrap) сесійний ключ. Через DH-адаптер обчислює спільний секрет із
+ * pub_key, будує з нього KEK (iso15946_generate_secretc), дістає таблицю замін з
+ * AID адаптера і шифрує сесійний ключ алгоритмом GOST28147Wrap.
+ *
+ * @param dha         адаптер обчислення спільного секрету (передумова: != NULL)
+ * @param pub_key     відкритий ключ отримувача
+ * @param session_key сесійний ключ (передумова: != NULL)
+ * @param rnd_bytes   випадкові дані для SharedInfo (передумова: != NULL)
+ * @param wrapped_key буфер для зашифрованого ключа
+ *
+ * @return код помилки
+ */
 int wrap_session_key(const DhAdapter *dha, const ByteArray *pub_key, const ByteArray *session_key,
         const ByteArray *rnd_bytes, ByteArray **wrapped_key)
 {
@@ -2998,6 +3393,19 @@ cleanup:
     return ret;
 }
 
+/**
+ * Розшифровує (unwrap) сесійний ключ. Через DH-адаптер обчислює спільний секрет
+ * із issuer_pub_key, відновлює KEK (iso15946_generate_secretc), дістає таблицю
+ * замін з AID адаптера і розшифровує ключ алгоритмом GOST28147Wrap.
+ *
+ * @param dha            адаптер обчислення спільного секрету (передумова: != NULL)
+ * @param wrapped_key    зашифрований ключ (передумова: != NULL)
+ * @param rnd_bytes      випадкові дані для SharedInfo (за наявності - 64 байти)
+ * @param issuer_pub_key відкритий ключ видавця (передумова: != NULL)
+ * @param session_key    буфер для розшифрованого сесійного ключа
+ *
+ * @return код помилки
+ */
 int unwrap_session_key(const DhAdapter *dha, const ByteArray *wrapped_key, const ByteArray *rnd_bytes,
         const ByteArray *issuer_pub_key, ByteArray **session_key)
 {
@@ -3072,6 +3480,20 @@ cleanup:
     return ret;
 }
 
+/**
+ * Формує SubjectPublicKeyInfo для ДСТУ 4145. Перевіряє, що signature_alg_oid
+ * належить сімейству ДСТУ 4145 з ГОСТ 3411, будує AID з параметрів кривої та
+ * шифрування (з урахуванням little-endian ознаки OID) і кодує відкритий ключ у
+ * BIT STRING.
+ *
+ * @param signature_alg_oid OID алгоритму підпису (передумова: != NULL)
+ * @param ec_params         параметри еліптичної кривої ДСТУ 4145 (передумова: != NULL)
+ * @param cipher_params     параметри ГОСТ 28147 (таблиця замін) або NULL
+ * @param pub_key           відкритий ключ у байтах (передумова: != NULL)
+ * @param dstu_spki         буфер для сформованого SubjectPublicKeyInfo
+ *
+ * @return код помилки
+ */
 int create_dstu4145_spki(const OBJECT_IDENTIFIER_t *signature_alg_oid,
         const Dstu4145Ctx *ec_params,
         const Gost28147Ctx *cipher_params,
@@ -3114,6 +3536,20 @@ cleanup:
     return ret;
 }
 
+/**
+ * Формує SubjectPublicKeyInfo для ECDSA. Перевіряє належність signature_alg_oid
+ * типу ecPublicKey, за OID у pub_key_params обирає іменовану криву (secp192r1,
+ * secp224r1, secp256r1, secp384r1, secp521r1, secp256k1), будує AID і кодує
+ * відкритий ключ у BIT STRING.
+ *
+ * @param signature_alg_oid OID алгоритму підпису (передумова: != NULL)
+ * @param pub_key_params    ASN1 ANY з OID параметрів кривої (передумова: != NULL)
+ * @param ec_params         контекст ECDSA (передумова: != NULL)
+ * @param pub_key           відкритий ключ у байтах (передумова: != NULL)
+ * @param ecdsa_spki        буфер для сформованого SubjectPublicKeyInfo
+ *
+ * @return код помилки
+ */
 int create_ecdsa_spki(const OBJECT_IDENTIFIER_t *signature_alg_oid,
         const ANY_t *pub_key_params,
         const EcdsaCtx *ec_params,
@@ -3177,6 +3613,17 @@ cleanup:
     return ret;
 }
 
+/**
+ * Повертає таблицю замін (ДКЕ) ГОСТ 28147 у вигляді OCTET STRING за AID. Для
+ * ДСТУ 4145 бере ДКЕ з параметрів aid або, за його відсутності, стандартну
+ * SBOX_ID_1 (стиснуту до 64 байтів); для ГОСТ 3411 (без параметрів) - стандартну
+ * SBOX_ID_1. Інакше повертає RET_PKIX_UNSUPPORTED_DIGEST_ALG.
+ *
+ * @param aid ідентифікатор алгоритму (передумова: != NULL)
+ * @param dke буфер для таблиці замін
+ *
+ * @return код помилки
+ */
 int get_gost28147_cipher_params(const AlgorithmIdentifier_t *aid, OCTET_STRING_t **dke)
 {
     int ret = RET_OK;
@@ -3231,6 +3678,18 @@ cleanup:
     return ret;
 }
 
+/**
+ * Формує AID шифрування ГОСТ 28147: генерує 8-байтний вектор ініціалізації через
+ * ГПСЧ, бере таблицю замін (ДКЕ) з алгоритму відкритого ключа сертифіката
+ * (get_gost28147_cipher_params) і збирає GOST28147Params із заданим oid.
+ *
+ * @param prng          контекст ГПСЧ (передумова: != NULL)
+ * @param oid           OID алгоритму шифрування (передумова: != NULL)
+ * @param cert_with_dke сертифікат з таблицею замін (передумова: != NULL)
+ * @param aid_gost      буфер для сформованого AID
+ *
+ * @return код помилки
+ */
 int get_gost28147_aid(PrngCtx *prng, const OBJECT_IDENTIFIER_t *oid, const Certificate_t *cert_with_dke,
         AlgorithmIdentifier_t **aid_gost)
 {
@@ -3346,6 +3805,18 @@ cleanup:
     return ret;
 }
 
+/**
+ * Метод-обгортка DH-адаптера: обчислює спільний секрет за протоколом Діффі-Геллмана
+ * на ДСТУ 4145. Відновлює параметри кривої з AID, розтискає відкритий ключ
+ * контрагента і викликає dstu4145_dh() із закритим ключем з контексту.
+ *
+ * @param dha     DH-адаптер
+ * @param pub_key стиснутий відкритий ключ контрагента
+ * @param zx      буфер для x-координати спільного секрету
+ * @param zy      буфер для y-координати спільного секрету
+ *
+ * @return код помилки
+ */
 static int dha_dh(const DhAdapter *dha, const ByteArray *pub_key, ByteArray **zx, ByteArray **zy)
 {
     int ret = RET_OK;
@@ -3443,6 +3914,14 @@ cleanup:
     return ret;
 }
 
+/**
+ * Створює глибоку копію DH-адаптера: копіює вказівники на методи та контекст
+ * (AID алгоритму і закритий ключ).
+ *
+ * @param dha DH-адаптер, що копіюється (передумова: != NULL)
+ *
+ * @return новий DH-адаптер або NULL у разі помилки
+ */
 DhAdapter *dh_adapter_copy_with_alloc(const DhAdapter *dha)
 {
     DhAdapter *adapter = NULL;

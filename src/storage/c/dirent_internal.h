@@ -21,9 +21,13 @@ struct dirent {
     char *d_name;
 };
 
+/** Відкриває каталог для обходу; повертає дескриптор DIR або NULL. */
 DIR           *opendir(const char *);
+/** Завершує обхід каталогу та вивільняє дескриптор DIR. */
 int           closedir(DIR *);
+/** Повертає наступний елемент каталогу або NULL наприкінці обходу. */
 struct dirent *readdir(DIR *);
+/** Перезапускає обхід каталогу з початку. */
 void          rewinddir(DIR *);
 
 #ifdef __cplusplus
@@ -37,6 +41,7 @@ void          rewinddir(DIR *);
 #  include <dirent.h>
 #endif /* _WIN32 */
 
+/** Перевіряє, чи є заданий шлях каталогом. */
 bool is_dir(const char *path);
 
 #endif /* _DIRENT_COMMON_H_ */

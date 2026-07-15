@@ -17,6 +17,11 @@ extern "C" {
 #endif
 
 /**
+ * @addtogroup pkix_engine
+ * @{
+ */
+
+/**
  * @defgroup cryptos_pkix_tsp_req_signer_info_engine Генератор запиту мітки часу
  * @{
  */
@@ -51,8 +56,20 @@ CRYPTONITE_EXPORT int etspreq_generate_from_hash(AlgorithmIdentifier_t *digest_a
 CRYPTONITE_EXPORT int etspreq_generate(const DigestAdapter *da, const ByteArray *msg, const ByteArray *rnd,
                                        OBJECT_IDENTIFIER_t *policy, bool cert_req, TimeStampReq_t **tsp_req);
 
+/**
+ * Генерує TSP запит з готового гешу GOST 34311.
+ *
+ * @param hash геш від повідомлення (GOST 34311)
+ * @param policy політика формування мітки часу у вигляді текстового OID
+ * @param cert_req вимога включення сертифіката TSA у відповідь
+ * @param tsp_req запит TSP
+ *
+ * @return код помилки
+ */
 CRYPTONITE_EXPORT int etspreq_generate_from_gost34311(const ByteArray *hash, const char *policy, bool cert_req,
                                                       TimeStampReq_t **tsp_req);
+
+/** @} */
 
 /** @} */
 

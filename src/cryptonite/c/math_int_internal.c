@@ -3,6 +3,20 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Цілочисельна арифметика великих беззнакових чисел (WordArray, little-endian
+ * порядок слів). Нижній рівень — операції над "сирими" масивами слів
+ * (words_*), реалізовані у двох варіантах: *_64 через структуру Dword
+ * (пара lo/hi) для 64-бітних платформ і *_32 через рідний 64-бітний
+ * dword_t для 32-бітних. Верхній рівень — функції int_* над WordArray:
+ * порівняння, зсуви, множення/ділення, квадратний корінь, генерація
+ * випадкових чисел, тести простоти та генерація простих чисел.
+ *
+ * Інваріанти розмірів: додавання/віднімання вимагають операндів однакової
+ * довжини n; множення дає результат довжини 2n; ділення приймає ділене
+ * довжини 2n та дільник довжини n.
+ */
+
 #include <memory.h>
 
 #include "rs.h"
@@ -13,6 +27,7 @@
 #undef FILE_MARKER
 #define FILE_MARKER "cryptonite/math_int_internal.c"
 
+/* Повертає фактичну довжину числа у словах без ведучих нулів (мінімум 1). */
 static int words_len(const word_t *a, size_t len)
 {
     int i;
@@ -105,6 +120,8 @@ static void word_lshift_64(word_t a, int shift, Dword *out)
     }
 }
 
+/* out = a + b (подвійне слово + слово); перенос визначається за переповненням
+ * молодшої частини (out_lo < a->lo). */
 static void word_add_word_64(const Dword *a, word_t b, Dword *out)
 {
     word_t out_lo = a->lo + b;
@@ -116,6 +133,7 @@ static void word_add_word_64(const Dword *a, word_t b, Dword *out)
     out->lo = out_lo;
 }
 
+/* out = a + b (подвійні слова), переповнення старшої частини відкидається. */
 static void word_add_64(const Dword *a, const Dword *b, Dword *out)
 {
     word_t out_lo = a->lo + b->lo;
@@ -127,6 +145,7 @@ static void word_add_64(const Dword *a, const Dword *b, Dword *out)
     out->lo = out_lo;
 }
 
+/* out = a - b (подвійні слова); займ молодшої частини враховується у старшій. */
 static void word_sub_64(const Dword *a, const Dword *b, Dword *out)
 {
     if (a->lo < b->lo) {
@@ -137,6 +156,7 @@ static void word_sub_64(const Dword *a, const Dword *b, Dword *out)
     out->lo = a->lo - b->lo;
 }
 
+/* out = a - b (подвійне слово - слово). */
 static void word_sub_word_64(const Dword *a, word_t b, Dword *out)
 {
     if (a->lo < b) {
@@ -147,6 +167,7 @@ static void word_sub_word_64(const Dword *a, word_t b, Dword *out)
     out->lo = a->lo - b;
 }
 
+/* out = a + b для масивів з len слів з поширенням переносу; повертає вихідний перенос (0 або 1). */
 int words_add_64(const word_t *a, const word_t *b, size_t len, word_t *out)
 {
     Dword sum = {0, 0};
@@ -163,6 +184,9 @@ int words_add_64(const word_t *a, const word_t *b, size_t len, word_t *out)
     return (int) sum.hi;
 }
 
+/* out = a - b для масивів з len слів з поширенням займу;
+ * повертає вихідний займ (0 або -1). Займ від попередньої ітерації
+ * визначається за знаковим бітом sub.hi. */
 int words_sub_64(const word_t *a, const word_t *b, size_t len, word_t *out)
 {
     Dword sub = {0, 0};
@@ -187,6 +211,7 @@ int words_sub_64(const word_t *a, const word_t *b, size_t len, word_t *out)
     return (int) sub.hi;
 }
 
+/* Порівнює подвійні слова: 1 — a > b, -1 — a < b, 0 — рівні. */
 static int word_cmp_64(const Dword *a, const Dword *b)
 {
     if (a->hi > b->hi) {
@@ -204,6 +229,10 @@ static int word_cmp_64(const Dword *a, const Dword *b)
     }
 }
 
+/* Ділення подвійного слова на слово: a = q * b + r, r < b.
+ * Побітове ділення: на кожній ітерації від залишку віднімається дільник,
+ * зсунутий до найстаршої можливої позиції, а у частку додається
+ * відповідний степінь двійки. */
 void word_div(Dword *a, word_t b, Dword *q, word_t *r)
 {
     Dword qh = {0, 0};
@@ -248,6 +277,9 @@ void word_div(Dword *a, word_t b, Dword *q, word_t *r)
     }
 }
 
+/* Множення слово * слово з подвійним результатом. Операнди розбиваються на
+ * половини слова, чотири часткові добутки складаються з урахуванням переносу
+ * із середніх доданків. */
 static void word_mul_64(word_t a, word_t b, Dword *out)
 {
     word_t a_lo = WORD_LO(a);
@@ -264,6 +296,8 @@ static void word_mul_64(word_t a, word_t b, Dword *out)
     out->hi = ab_hi + WORD_HI(ab_mid) + WORD_HI(ba_mid) + carry_bit;
 }
 
+/* out = a * b (масиви з len слів, результат — 2*len слів).
+ * Шкільне множення, складність O(len^2). */
 void words_mul_64(const word_t *a, const word_t *b, size_t len, word_t *out)
 {
     size_t i, j;
@@ -285,6 +319,12 @@ void words_mul_64(const word_t *a, const word_t *b, size_t len, word_t *out)
     }
 }
 
+/* Ділення з остачею: a (2*len слів) = q * b (len слів) + r.
+ * Класичне ділення "в стовпчик" за словами: дільник нормалізується зсувом
+ * уліво до встановленого старшого біта, цифра частки оцінюється діленням
+ * двох старших слів залишку на старше слово дільника з подальшою корекцією
+ * (не більше двох зменшень оцінки та однієї компенсації після віднімання).
+ * q (2*len слів) та/або r (len слів) можуть бути NULL, якщо не потрібні. */
 void words_div(const word_t *a, const word_t *b, size_t len, word_t *q, word_t *r)
 {
     word_t *aa = NULL;
@@ -422,6 +462,8 @@ cleanup:
 
 typedef uint64_t dword_t;
 
+/* 32-бітний варіант words_add_64: перенос накопичується у старшій половині
+ * рідного 64-бітного акумулятора. */
 static int words_add_32(const word_t *a, const word_t *b, size_t len, word_t *out)
 {
     dword_t sum = 0;
@@ -435,6 +477,7 @@ static int words_add_32(const word_t *a, const word_t *b, size_t len, word_t *ou
     return (int)(sum >> WORD_BIT_LENGTH);
 }
 
+/* 32-бітний варіант words_sub_64; займ — старший (знаковий) біт акумулятора. */
 int words_sub_32(const word_t *a, const word_t *b, size_t len, word_t *out)
 {
     dword_t sub = 0;
@@ -448,6 +491,7 @@ int words_sub_32(const word_t *a, const word_t *b, size_t len, word_t *out)
     return (int)(sub >> WORD_BIT_LENGTH);
 }
 
+/* Зсув 64-бітного значення вліво з коректною обробкою зсувів >= 32 біт. */
 static dword_t word_lshift_32(dword_t a, int shift)
 {
     word_t low = (word_t)(a & WORD_MASK);
@@ -465,6 +509,8 @@ static dword_t word_lshift_32(dword_t a, int shift)
     }
 }
 
+/* Ділення подвійного слова на слово (32-бітний варіант word_div):
+ * побітове ділення відніманням зсунутого дільника від залишку. */
 void word_div_32(dword_t a, word_t b, dword_t *q, word_t *r)
 {
     dword_t qh = 0;
@@ -499,6 +545,8 @@ static dword_t word_mul_32(word_t a, word_t b)
     return (dword_t)a * b;
 }
 
+/* out = a * b (масиви з len слів, результат — 2*len слів).
+ * Шкільне множення O(len^2) з рідним 64-бітним акумулятором. */
 void words_mul_32(const word_t *a, const word_t *b, size_t len, word_t *out)
 {
     size_t i, j;
@@ -678,6 +726,9 @@ bool int_equals(const WordArray *a, const WordArray *b)
     return !int_cmp(a, b);
 }
 
+/* Числове порівняння: спочатку перевіряються "зайві" старші слова довшого
+ * операнда, далі слова порівнюються від старших до молодших.
+ * Операнди можуть мати різну довжину. */
 int int_cmp(const WordArray *a, const WordArray *b)
 {
     size_t i;
@@ -761,6 +812,7 @@ size_t int_bit_len(const WordArray *a)
     return (w_len - 1) * WORD_BIT_LENGTH + word_bit_len(a->buf[w_len - 1]);
 }
 
+/* Обнуляє всі біти числа, старші за bit_len (усічення за модулем 2^bit_len). */
 void int_truncate(WordArray *a, size_t bit_len)
 {
     size_t word_off = bit_len >> WORD_BIT_LEN_SHIFT;
@@ -773,6 +825,7 @@ void int_truncate(WordArray *a, size_t bit_len)
     }
 }
 
+/* Повертає біт з номером bit_num (0 для номерів за межами числа). */
 int int_get_bit(const WordArray *a, size_t bit_num)
 {
     size_t word_off = bit_num >> WORD_BIT_LEN_SHIFT;
@@ -850,6 +903,10 @@ void int_div(const WordArray *a, const WordArray *b, WordArray *q, WordArray *r)
     words_div(a->buf, b->buf, b->len, q_buf, r_buf);
 }
 
+/* Ціла частина квадратного кореня методом Ньютона:
+ * x_{n+1} = (x_n + in / x_n) / 2, початкове наближення in / 2.
+ * Ітерації тривають, доки послідовність спадає; результат — останнє
+ * найменше наближення. */
 void int_sqrt(const WordArray *in, WordArray *out)
 {
     size_t len = in->len;
@@ -895,6 +952,9 @@ cleanup:
     wa_free(dt_sqrt);
 }
 
+/* Випадкове число з [1, in - 1] методом відкидання: генеруються випадкові
+ * байти, усікаються до бітової довжини in; значення поза діапазоном
+ * відкидаються і генерація повторюється. */
 int int_rand(PrngCtx *prng, const WordArray *in, WordArray *out)
 {
     ByteArray *e = NULL;
@@ -922,6 +982,8 @@ cleanup:
     return ret;
 }
 
+/* Псевдовипадкове число з [1, in - 1] на основі rand() —
+ * не криптографічно стійке; буфер out заповнюється 16-бітними порціями. */
 int int_prand(const WordArray *in, WordArray *out)
 {
     size_t i;
@@ -948,6 +1010,8 @@ int int_prand(const WordArray *in, WordArray *out)
     return RET_OK;
 }
 
+/* Генерує випадкове непарне число довжиною не більше bits біт
+ * (системний генератор випадковості; молодший біт примусово = 1). */
 static int int_gen_odd(const size_t bits, WordArray **out)
 {
     WordArray *wa = NULL;
@@ -974,6 +1038,9 @@ cleanup:
     return ret;
 }
 
+/* Тест простоти Ферма: для випадкової основи a перевіряється
+ * a^(num-1) mod num == 1. Ймовірнісний тест — складене число може
+ * пройти перевірку. */
 int int_fermat_primary_test(WordArray *num, bool *is_prime)
 {
     WordArray *rnd_num = NULL;
@@ -1014,6 +1081,10 @@ cleanup:
     return ret;
 }
 
+/* Тест простоти Рабіна-Міллера: num - 1 подається як 2^r * d (d непарне),
+ * далі для випадкової основи перевіряються степені a^(2^i * d) mod num;
+ * якщо на якійсь ітерації результат дорівнює 1 або num - 1, число
+ * вважається ймовірно простим. */
 int int_rabin_miller_primary_test(WordArray *num, bool *is_prime)
 {
     WordArray *rnd_num = NULL;
@@ -1107,6 +1178,8 @@ cleanup:
     return ret;
 }
 
+/* Комбінована ймовірнісна перевірка простоти: спочатку тест Ферма,
+ * при успіху — додатково тест Рабіна-Міллера. */
 int int_is_prime(WordArray *a, bool *is_prime)
 {
     int ret = RET_OK;
@@ -1202,6 +1275,10 @@ cleanup:
     return ret;
 }
 
+/* Обчислює кількість додаткових холостих додавань для вирівнювання числа
+ * операцій при скалярному множенні за NAF: очікувана кількість ненульових
+ * цифр оцінюється як 0.9 * bitlen / (width + 1), від неї віднімається
+ * фактична кількість; від'ємний результат замінюється на -1. */
 int int_get_naf_extra_add(const WordArray *in, const int *naf, int width, int *extra_addition)
 {
     size_t i = 0;
@@ -1234,6 +1311,11 @@ cleanup:
     return ret;
 }
 
+/* Обчислює віконне NAF-представлення числа (несуміжна форма ширини width):
+ * непарні залишки за модулем 2^width зводяться до діапазону
+ * (-2^(width-1), 2^(width-1)], після чого число зсувається вправо на 1 біт.
+ * Хвіст вихідного масиву доповнюється нулями. Масив цифр виділяється
+ * функцією і звільняється викликачем через free. */
 int int_get_naf(const WordArray *in, int width, int **out)
 {
     WordArray *k_naf = NULL;
@@ -1248,6 +1330,8 @@ int int_get_naf(const WordArray *in, int width, int **out)
 
     bitlen = in->len << WORD_BIT_LEN_SHIFT;
     word_t carry = 0;
+    /* mod = 2^width; mask вибирає width молодших бітів;
+     * mask_div2 = 2^(width - 1) - 1 — поріг, вище якого залишок кодується від'ємною цифрою. */
     word_t mod = (word_t)1 << width;
     word_t mask = ((word_t)(-1)) >> (WORD_BIT_LENGTH - width);
     word_t mask_div2 = mask >> 1;
@@ -1296,6 +1380,8 @@ cleanup:
     return ret;
 }
 
+/* Таблиця перших 2048 простих чисел для попереднього просіювання
+ * кандидатів при генерації простих чисел. */
 #define NUMPRIMES 2048
 static const uint32_t PRIMES[NUMPRIMES] = {
     2, 3, 5, 7, 11, 13, 17, 19,
@@ -1556,6 +1642,8 @@ static const uint32_t PRIMES[NUMPRIMES] = {
     17789, 17791, 17807, 17827, 17837, 17839, 17851, 17863
 };
 
+/* Повертає a mod w для 32-бітного w (через загальне ділення int_div;
+ * a трактується як ділене подвійної довжини). */
 static uint32_t int_mod_word(const WordArray *a, uint32_t w)
 {
     ByteArray *ba = NULL;
@@ -1583,8 +1671,18 @@ cleanup:
 }
 
 /**
- * @param bits - число бітов для генерации случайного числа
- * @return  - сгенерированное случайное число
+ * Генерує просте число заданої бітової довжини.
+ *
+ * Генерується випадкове непарне число з встановленими двома старшими бітами;
+ * для довжин, кратних 256 бітам, кандидат попередньо просіюється за таблицею
+ * малих простих PRIMES (пошук зсуву delta, за якого кандидат не ділиться на
+ * жодне з них), після чого перевіряється тестами int_is_prime. Невдалий
+ * кандидат збільшується на 2 і перевірка повторюється.
+ *
+ * @param bits бітова довжина простого числа, bits >= 8
+ * @param prng контекст ГПВЧ
+ * @param out згенероване просте число
+ * @return код помилки
  */
 int int_gen_prime(const size_t bits, PrngCtx *prng, WordArray **out)
 {

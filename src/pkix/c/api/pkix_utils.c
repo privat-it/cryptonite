@@ -28,6 +28,16 @@
 #undef FILE_MARKER
 #define FILE_MARKER "pki/api/pkix_utils.c"
 
+/*
+ * Модуль містить допоміжні утиліти рівня PKI: робота з OID (порівняння,
+ * створення, встановлення), перетворення підпису між форматами (ByteArray,
+ * BIT STRING, OCTET STRING) для ДСТУ 4145 та ECDSA, перетворення відкритого
+ * ключа, розбір рядка виду {ключ=значення}, перекодування UTF-16BE<->UTF-8,
+ * пошук сертифікатів у наборі за ідентифікатором підписувача/ключем та
+ * обчислення ідентифікатора ключа з SubjectPublicKeyInfo.
+ */
+
+/* Звільняє NULL-термінований масив ByteArray із сертифікатами. */
 void certs_free(ByteArray **certs)
 {
     int i;
@@ -43,6 +53,7 @@ void certs_free(ByteArray **certs)
     LOG_FREE(certs);
 }
 
+/* Кодує TBSCertificate у DER і повертає результат як ByteArray. */
 ByteArray *get_encoded_tbs_from_tbs(TBSCertificate_t *tbs)
 {
     ByteArray *tbs_ba = NULL;
@@ -55,6 +66,7 @@ cleanup:
     return tbs_ba;
 }
 
+/* Будує CertificateSet, декодуючи сертифікати з NULL-термінованого масиву. */
 int get_cert_set_from_cert_array(const ByteArray **certs, CertificateSet_t **certs_set)
 {
     int ret = RET_OK;
@@ -89,6 +101,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Шукає в наборі сертифікат, що відповідає ідентифікатору підписувача sid і
+ * має всі потрібні біти призначення ключа (key_usage). Повертає копію першого
+ * відповідного сертифіката.
+ */
 int get_cert_by_sid_and_usage(const SignerIdentifier_t *sid,
         int key_usage,
         const CertificateSet_t *certs,
@@ -156,6 +173,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає true, якщо OID відповідає ДСТУ 4145 з little-endian параметрами (PB або ONB). */
 bool is_dstu_le_params(const OBJECT_IDENTIFIER_t *oid)
 {
     LOG_ENTRY();
@@ -164,6 +182,7 @@ bool is_dstu_le_params(const OBJECT_IDENTIFIER_t *oid)
             || pkix_check_oid_equal(oid, oids_get_oid_numbers_by_id(OID_PKI_DSTU4145_ONB_LE_ID));
 }
 
+/* Повертає true, якщо OID відповідає ДСТУ 4145 з big-endian параметрами (PB або ONB). */
 bool is_dstu_be_params(const OBJECT_IDENTIFIER_t *oid)
 {
     LOG_ENTRY();
@@ -172,6 +191,11 @@ bool is_dstu_be_params(const OBJECT_IDENTIFIER_t *oid)
             || pkix_check_oid_equal(oid, oids_get_oid_numbers_by_id(OID_PKI_DSTU4145_ONB_BE_ID));
 }
 
+/*
+ * Перетворює "сирий" підпис (ByteArray) на BIT STRING відповідно до алгоритму:
+ * для ДСТУ 4145 — через OCTET STRING (з урахуванням LE/BE), для ECDSA —
+ * кодуванням у структуру ECDSA-Sig-Value (r, s).
+ */
 int sign_ba_to_bs(const ByteArray *sign, const AlgorithmIdentifier_t *aid, BIT_STRING_t *sign_bitstring)
 {
     ECDSA_Sig_Value_t *ec_str = NULL;
@@ -241,6 +265,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Перетворює "сирий" підпис (ByteArray) на OCTET STRING відповідно до
+ * алгоритму: для ДСТУ 4145 — напряму (для BE з перестановкою байтів), для
+ * ECDSA — кодуванням у структуру ECDSA-Sig-Value.
+ */
 int sign_ba_to_os(const ByteArray *sign,
         const AlgorithmIdentifier_t *aid,
         OCTET_STRING_t **sign_octet)
@@ -297,6 +326,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Зворотне перетворення підпису з BIT STRING на "сирий" ByteArray: для ДСТУ
+ * 4145 декодує OCTET STRING (для BE переставляє байти), для ECDSA розбирає
+ * ECDSA-Sig-Value на r, s та об'єднує їх.
+ */
 int sign_bs_to_ba(const BIT_STRING_t *sign_bitstring, const AlgorithmIdentifier_t *aid,
         ByteArray **sign)
 {
@@ -361,6 +395,7 @@ cleanup:
     return ret;
 }
 
+/* Перетворює підпис ДСТУ 4145 з OCTET STRING на "сирий" ByteArray (для BE — з перестановкою байтів). */
 int sign_os_to_ba(const OCTET_STRING_t *sign_os,
         const AlgorithmIdentifier_t *aid,
         ByteArray **sign)
@@ -388,6 +423,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Виділяє наступну пару ключ-значення з рядка виду {ключ=значення}...
+ * *start пересувається на початок наступного блоку у фігурних дужках.
+ */
 static int get_next_key(const char **start, char **key, char **value)
 {
     int key_size;
@@ -427,6 +466,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Розбирає рядок виду {ключ=значення}{...} на масиви ключів і значень.
+ * Ключі приводяться до верхнього регістру; count повертає кількість пар.
+ */
 int parse_key_value(const char *str, char ***keys, char ***values, size_t *count)
 {
     int ret = RET_OK;
@@ -472,6 +515,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Витягає "сире" значення відкритого ключа з BIT STRING: для ДСТУ 4145 —
+ * через OCTET STRING (для BE-параметрів переставляє байти), для EC-ключа —
+ * напряму з бітового рядка.
+ */
 int convert_pub_key_bs_to_ba(const OBJECT_IDENTIFIER_t *oid,
         const BIT_STRING_t *pub_key_asn,
         ByteArray **pub_key_ba)
@@ -522,6 +570,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Перетворює "сирі" байти відкритого ключа на BIT STRING: для ДСТУ 4145 —
+ * через OCTET STRING (для BE-параметрів переставляє байти), для EC та інших —
+ * безпосередньо з байтів.
+ */
 int convert_pubkey_bytes_to_bitstring(const OBJECT_IDENTIFIER_t *signature_oid,
         const ByteArray *pub_key,
         BIT_STRING_t **out_pub_key_bs)
@@ -565,6 +618,7 @@ cleanup:
     return ret;
 }
 
+/* Створює атрибут (Attribute) із заданим OID типу та значенням указаного ASN.1-типу. */
 int init_attr(Attribute_t **attr, const OidNumbers *oid, asn_TYPE_descriptor_t *descriptor, void *value)
 {
     int ret = RET_OK;
@@ -591,6 +645,7 @@ cleanup:
     return ret;
 }
 
+/* Шукає атрибут за OID у наборі й повертає його копію; інакше — помилка "не знайдено". */
 int get_attr_by_oid(const Attributes_t *attrs, const OBJECT_IDENTIFIER_t *oid, Attribute_t **attr)
 {
     int ret = RET_OK;
@@ -638,6 +693,7 @@ cleanup:
     return ret;
 }
 
+/* Шукає в наборі сертифікат за ідентифікатором підписувача (sid) і повертає його копію. */
 static int get_cert_by_sid(const CertificateSet_t *cert_set, const SignerIdentifier_t *sid, Certificate_t **cert)
 {
     int i;
@@ -666,6 +722,7 @@ cleanup:
     return ret;
 }
 
+/* Шукає в наборі сертифікат за ідентифікатором ключа суб'єкта (SKI) і повертає його копію. */
 static int get_cert_by_ski(const CertificateSet_t *cert_set, const ByteArray *subj_key_id, Certificate_t **cert)
 {
     int i;
@@ -704,6 +761,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Будує ланцюжок сертифікатів: від сертифіката підписувача (за sid) вгору за
+ * ідентифікаторами ключів (AKI -> SKI), доки такі сертифікати знаходяться у
+ * вхідному наборі. Результат — новий CertificateSet із ланцюжком.
+ */
 int get_cert_set_by_sid(const CertificateSet_t *cert_set_in, const SignerIdentifier_t *sid,
         CertificateSet_t **cert_set_out)
 {
@@ -764,6 +826,7 @@ cleanup:
     return ret;
 }
 
+/* Перекодовує рядок з UTF-16BE в UTF-8 (реалізація залежить від платформи). */
 int utf16be_to_utf8(const unsigned char *in, size_t in_len, char **out)
 {
     int ret = RET_OK;
@@ -831,6 +894,7 @@ cleanup:
     return ret;
 }
 
+/* Перекодовує рядок з UTF-8 в UTF-16BE (реалізація залежить від платформи). */
 int utf8_to_utf16be(const char *in, unsigned char **out, size_t *out_len)
 {
     int ret = RET_OK;
@@ -900,6 +964,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію рядка у щойно виділеній пам'яті (аналог strdup). */
 char *dupstr(const char *str)
 {
     char *str_cpy = NULL;
@@ -916,6 +981,7 @@ char *dupstr(const char *str)
     return str_cpy;
 }
 
+/* Повертає true, якщо parent_oid є префіксом (батьківським OID) для oid. */
 bool pkix_check_oid_parent(const OBJECT_IDENTIFIER_t *oid, const OidNumbers *parent_oid)
 {
     if (parent_oid != NULL) {
@@ -925,6 +991,7 @@ bool pkix_check_oid_parent(const OBJECT_IDENTIFIER_t *oid, const OidNumbers *par
     }
 }
 
+/* Повертає true, якщо oid точно дорівнює oid_arr. */
 bool pkix_check_oid_equal(const OBJECT_IDENTIFIER_t *oid, const OidNumbers *oid_arr)
 {
     if (oid_arr != NULL) {
@@ -934,6 +1001,7 @@ bool pkix_check_oid_equal(const OBJECT_IDENTIFIER_t *oid, const OidNumbers *oid_
     }
 }
 
+/* Створює новий ASN.1-об'єкт OBJECT IDENTIFIER з дуг OidNumbers. */
 int pkix_create_oid(const OidNumbers *oid, OBJECT_IDENTIFIER_t **dst)
 {
     int ret = RET_OK;
@@ -946,6 +1014,7 @@ cleanup:
     return ret;
 }
 
+/* Записує дуги OidNumbers у наявний ASN.1-об'єкт OBJECT IDENTIFIER. */
 int pkix_set_oid(const OidNumbers *oid, OBJECT_IDENTIFIER_t *dst)
 {
     int ret = RET_OK;
@@ -958,6 +1027,7 @@ cleanup:
     return ret;
 }
 
+/* Обчислює ідентифікатор ключа як геш відкритого ключа з SubjectPublicKeyInfo. */
 int pkix_get_key_id_from_spki(const SubjectPublicKeyInfo_t *spki, ByteArray **key_id)
 {
     ByteArray *pubkey = NULL;

@@ -3,6 +3,21 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/**
+ * Арифметика двійкового скінченного поля GF(2^m) (ДСТУ 4145).
+ *
+ * Елементи поля — многочлени над GF(2) степеня < m у поліноміальному базисі;
+ * коефіцієнти зберігаються бітами WordArray (little-endian масив слів word_t,
+ * див. word_internal.h). Редукція розріджена: за незвідним тричленом
+ * x^m + x^k + 1 або п'ятичленом x^m + x^k + x^j + x^l + 1, степені яких
+ * задані масивом Gf2mCtx->f.
+ *
+ * Операції: додавання (побітовий XOR), множення (метод Карацуби для коротких
+ * полів, "зсув-і-XOR" для довгих), квадрат (таблична розрядка бітів),
+ * обернений елемент (розширений алгоритм Евкліда для многочленів),
+ * слід і напівслід, розв'язання x^2 + x = a, квадратний корінь.
+ */
+
 #include <stdint.h>
 #include <string.h>
 
@@ -13,7 +28,13 @@
 #undef FILE_MARKER
 #define FILE_MARKER "cryptonite/math_gf2m_internal.c"
 
-/* Таблица предварительных вычислений для возведения у квадрат. */
+/*
+ * Таблиця для піднесення до квадрата: байт b відображається у 16-бітне слово,
+ * де біти b розріджені нулями (біт i переходить у позицію 2i, тому значення
+ * складаються лише з бітів на парних позиціях — шаблон 0x5555).
+ * Квадрат многочлена над GF(2) — саме така розрядка коефіцієнтів:
+ * (sum a_i * x^i)^2 = sum a_i * x^(2i).
+ */
 static const uint16_t GF2M_SQR_PRECOMP[256] = {
     0x0000, 0x0001, 0x0004, 0x0005, 0x0010, 0x0011, 0x0014, 0x0015,
     0x0040, 0x0041, 0x0044, 0x0045, 0x0050, 0x0051, 0x0054, 0x0055,
@@ -50,9 +71,14 @@ static const uint16_t GF2M_SQR_PRECOMP[256] = {
 };
 
 /**
- * @param ctx
- * @param f
- * @param f_len
+ * Ініціалізує контекст GF(2^m): зберігає масив степенів f, обчислює довжину
+ * елемента поля у словах і будує бітове представлення редукційного
+ * многочлена f_ext (встановлює біти у позиціях f[i]).
+ *
+ * @param ctx контекст GF(2^m)
+ * @param f степені ненульових членів за спаданням із завершальним нулем:
+ *          {m, k, 0} — тричлен, {m, k, j, l, 0} — п'ятичлен
+ * @param f_len кількість елементів масиву f
  */
 static void gf2m_init(Gf2mCtx *ctx, const int *f, size_t f_len)
 {
@@ -66,9 +92,10 @@ static void gf2m_init(Gf2mCtx *ctx, const int *f, size_t f_len)
     MALLOC_CHECKED(ctx->f, f_len * sizeof(int));
     memcpy(ctx->f, f, f_len * sizeof(int));
 
-    ctx->len = (f[0] >> WORD_BIT_LEN_SHIFT) + 1;
+    ctx->len = (f[0] >> WORD_BIT_LEN_SHIFT) + 1;    /* слів достатньо, щоб умістити біт степеня m = f[0] */
 
     CHECK_NOT_NULL(ctx->f_ext = wa_alloc_with_zero(ctx->len));
+    /* f[2] == 0 — тричлен (3 ненульові члени), інакше — п'ятичлен (5). */
     for (i = (f[2] == 0 ? 2 : 4); i >= 0; i--) {
         ctx->f_ext->buf[(f[i] >> WORD_BIT_LEN_SHIFT)] |= (word_t)1 << (f[i] & WORD_BIT_LEN_MASK);
     }
@@ -78,6 +105,12 @@ cleanup:
     return;
 }
 
+/**
+ * Створює контекст поля GF(2^m) за масивом степенів редукційного
+ * многочлена (див. gf2m_init).
+ *
+ * @return контекст GF(2^m) або NULL у разі помилки
+ */
 Gf2mCtx *gf2m_alloc(const int *f, size_t f_len)
 {
     Gf2mCtx *ctx = NULL;
@@ -95,6 +128,10 @@ cleanup:
     return ctx;
 }
 
+/**
+ * Додавання у полі GF(2^m): out = a + b — побітовий XOR слів.
+ * Редукція не потрібна, степінь результату не зростає.
+ */
 void gf2m_mod_add(const WordArray *a, const WordArray *b, WordArray *out)
 {
     /*comparsion signed/unsigned types*/
@@ -109,6 +146,19 @@ void gf2m_mod_add(const WordArray *a, const WordArray *b, WordArray *out)
     for (i = 0; i < a->len; out->buf[i] = a->buf[i] ^ b->buf[i], i++);
 }
 
+/**
+ * Розріджена редукція многочлена за модулем тричлена/п'ятичлена f:
+ * out = a mod f. Старші біти (степені >= m) "скидаються" вниз XOR-ами
+ * за тотожністю x^m = x^k (+ x^j + x^l) + 1: спершу обробляється неповне
+ * старше слово, далі — цілі слова, доки степінь a не стане меншим за m.
+ *
+ * Передумови: a має подвійну довжину контексту, deg a <= 2m - 2;
+ * вміст a руйнується у процесі обчислення.
+ *
+ * @param ctx контекст GF(2^m)
+ * @param a многочлен подвійної довжини (модифікується)
+ * @param out буфер довжини ctx->len для результату
+ */
 void gf2m_mod(const Gf2mCtx *ctx, WordArray *a, WordArray *out)
 {
     ASSERT(ctx != NULL);
@@ -122,10 +172,10 @@ void gf2m_mod(const Gf2mCtx *ctx, WordArray *a, WordArray *out)
     int alen = (int)(2 * ctx->len);
     int i;
 
-    /* Слова, содержащие x^f[0], x^f[1], x^f[2] і т.д. */
+    /* Індекси слів (від старшого краю), що містять x^f[0], x^f[1], x^f[2] і т.д. */
     int a_woff0, a_woff1, a_woff2, a_woff3 = 0;
 
-    /* Смещение в битах от границы слова для x^f[0], x^f[1] і т.д. */
+    /* Зсув у бітах від межі слова для x^f[0], x^f[1] і т.д. */
     word_t a_boff0, a_boff1, a_boff2, a_boff3 = 0;
 
     ASSERT(degA <= (degF << 1) - 2);
@@ -148,7 +198,8 @@ void gf2m_mod(const Gf2mCtx *ctx, WordArray *a, WordArray *out)
 
     i = (degA - (degF - (int)a_boff0)) >> WORD_BIT_LEN_SHIFT;
 
-    /* XOR сложение неполного старшего слова "a" с последовательностями, начинающимися с t-го бита, с k-го бита и т.д. */
+    /* XOR-додавання неповного старшого слова "a" у позиції, що відповідають
+     * членам f (біти T переносяться на зсуви a_boff1, a_boff2 і т.д.). */
     if (a_woff0 == i) {
         word_t T = WORD_RSHIFT(a->buf[alen - 1], a_boff0);
         int j;
@@ -178,7 +229,8 @@ void gf2m_mod(const Gf2mCtx *ctx, WordArray *a, WordArray *out)
         i--;
     }
 
-    /* XOR сложение полных слов, начиная з m-того бита с последовательностями, начинающимися з t-го бита, с k-го бита и т.д. */
+    /* XOR-додавання цілих слів: кожне слово старших бітів (>= m) скидається
+     * у позиції членів f, доки степінь a не стане меншим за m. */
     while (degA >= degF) {
         for (; i >= 0; i--) {
             word_t a_woff0i = a_woff0 - i;
@@ -217,6 +269,12 @@ void gf2m_mod(const Gf2mCtx *ctx, WordArray *a, WordArray *out)
     wa_copy_part(a, 0, ctx->len, out);
 }
 
+/**
+ * Піднесення до квадрата у полі GF(2^m): out = a^2 mod f.
+ * Квадрат над GF(2) — лінійна операція: біти a розріджуються нулями
+ * (байт за байтом, за таблицею GF2M_SQR_PRECOMP), результат подвійної
+ * довжини редукується gf2m_mod.
+ */
 void gf2m_mod_sqr(const Gf2mCtx *ctx, const WordArray *a, WordArray *out)
 {
     ASSERT(ctx != NULL);
@@ -258,8 +316,17 @@ cleanup:
 
 #if defined(ARCH64)
 
+/* Якщо біт _i множника _y встановлено — XOR-иться (_x << _i) у 128-бітний акумулятор _res (hi:lo). */
 #define WORD_LSHIFT_AND_XOR(_x, _y, _res, _i)    if ((_y) & ((word_t)1 << (_i))) { (_res)->hi ^= ((_x) >> (64 - (_i))); (_res)->lo ^= (_x) << (_i); }
 
+/**
+ * Множення многочленів над GF(2): 64x64 -> 128 біт (множення без переносів).
+ * Повністю розгорнутий цикл "зсув-і-XOR" за бітами y.
+ *
+ * @param x перший множник
+ * @param y другий множник
+ * @param res буфер для 128-бітного добутку (hi:lo)
+ */
 void gf2m_mul_64_fast(const word_t x, const word_t y, Dword *res)
 {
     res->hi = 0;
@@ -335,10 +402,16 @@ void gf2m_mul_64_fast(const word_t x, const word_t y, Dword *res)
 
 #else
 
+/**
+ * Множення многочленів над GF(2): 32x32 -> 64 біт (множення без переносів),
+ * без розгалужень. Для кожного біта y будується маска зі знакового
+ * розширення: (uint64_t)(s << i) >> 32 дає 0xffffffff, якщо біт (31 - i)
+ * у y встановлено, і 0 інакше; маска обирає доданок x із відповідним зсувом.
+ */
 static uint64_t gf2m_mul_32(word_t x, word_t y)
 {
     uint64_t res;
-    int32_t s = (int32_t)y;
+    int32_t s = (int32_t)y;    /* знаковий тип: зсув s << i виносить біт (31 - i) у знаковий розряд */
 
     res  = ((((uint64_t)(s      ) >> 32) & 0xffffffff) & x) << 31;
     res ^= ((((uint64_t)(s << 1 ) >> 32) & 0xffffffff) & x) << 30;
@@ -378,13 +451,17 @@ static uint64_t gf2m_mul_32(word_t x, word_t y)
 #endif
 
 /**
- * Выполняет умножение многочленов, степень которых меньше 256. Используется метод Карацубы.
+ * Виконує множення многочленів, степінь яких менша за 256 (метод Карацуби:
+ * два рівні розбиття до базових множень 64x64 або 32x32 біт).
+ * Слова x, y — у зворотному порядку (старше слово першим, див. wa_swap).
  *
  * @param x многочлен 1
  * @param y многочлен 2
- * @param len длина многочленов в словах
- * @param mode указывает на изменения в многочлене r
- * @param r буфер для произведения многочленов
+ * @param len довжина многочленів у словах
+ * @param mode спосіб укладання результату: true — добуток записується у r,
+ *             false — крайові слова добутку комбінуються XOR-ом
+ *             із наявним вмістом r
+ * @param r буфер для добутку многочленів
  */
 static void gf2m_mul_256(const word_t *x, const word_t *y, int len, bool mode, word_t *r)
 {
@@ -666,6 +743,8 @@ static void gf2m_mul_256(const word_t *x, const word_t *y, int len, bool mode, w
 #endif
 }
 
+/* Копіює слова x у y у зворотному порядку (перехід між little-endian
+ * та big-endian порядком слів для внутрішніх процедур множення). */
 static void wa_swap(const WordArray *x, WordArray *y)
 {
     size_t i;
@@ -676,11 +755,12 @@ static void wa_swap(const WordArray *x, WordArray *y)
 }
 
 /**
-* Выполняет умножение многочленов, степень которых больше 32 и меньше 64.
+* Виконує множення многочленів, степінь яких більша за 32 і менша за 64
+* (на 32-бітній платформі — один крок Карацуби з трьох множень 32x32).
 *
 * @param x многочлен 1
 * @param y многочлен 2
-* @param r буфер для произведения многочленов
+* @param r буфер для добутку многочленів
 */
 static void gf2m_mul_64(const word_t *x, const word_t *y, word_t *r)
 {
@@ -712,12 +792,13 @@ static void gf2m_mul_64(const word_t *x, const word_t *y, word_t *r)
 }
 
 /**
-* Выполняет умножение многочленов, степень которых больше 64 и меньше 128.
+* Виконує множення многочленів, степінь яких більша за 64 і менша за 128
+* (один-два рівні Карацуби над базовими множеннями 32x32 або 64x64).
 *
 * @param x многочлен 1
 * @param y многочлен 2
-* @param len длина многочленов в словах
-* @param z буфер для произведения многочленов
+* @param len довжина многочленів у словах
+* @param z буфер для добутку многочленів
 */
 static void gf2m_mul_128(const word_t *x, const word_t *y, int len, word_t *z)
 {
@@ -815,6 +896,18 @@ static void gf2m_mul_128(const word_t *x, const word_t *y, int len, word_t *z)
 #endif
 }
 
+/**
+ * Множення многочленів у GF(2)[x] без редукції: r1 = x1 * y1 (подвійна довжина).
+ * Для полів, довших за 512 біт, — простий алгоритм "зсув-і-XOR" за бітами y1;
+ * інакше — множення Карацуби 256x256 (gf2m_mul_256) з докладанням "хвостів"
+ * через gf2m_mul_64/gf2m_mul_128 залежно від довжини поля (внутрішня робота
+ * ведеться у зворотному порядку слів, див. wa_swap).
+ *
+ * @param ctx контекст GF(2^m)
+ * @param x1 перший множник (довжина ctx->len)
+ * @param y1 другий множник (довжина ctx->len)
+ * @param r1 буфер подвійної довжини для добутку
+ */
 void gf2m_mul_opt(const Gf2mCtx *ctx, const WordArray *x1, const WordArray *y1, WordArray *r1)
 {
     word_t xPoly[32];
@@ -868,7 +961,7 @@ void gf2m_mul_opt(const Gf2mCtx *ctx, const WordArray *x1, const WordArray *y1, 
     wa_swap(x1, x);
     wa_swap(y1, y);
 
-    /* Степень полинома, порождающего полиномиальный базис меньше 257. */
+    /* Степінь многочлена, що породжує поліноміальний базис, менша за 257. */
     if (n <= WA_LEN(32)) {
         gf2m_mul_256(x->buf, y->buf, n, true, r->buf);
         wa_swap(r, r1);
@@ -876,7 +969,8 @@ void gf2m_mul_opt(const Gf2mCtx *ctx, const WordArray *x1, const WordArray *y1, 
         goto cleanup;
     }
 
-    /* Степень полинома, порождающего полиномиальный базис равна 257. */
+    /* Степінь многочлена, що породжує поліноміальний базис, дорівнює 257:
+     * старший біт операндів обробляється окремо. */
     if (ctx->f[0] == 257) {
 
         r->buf[0] = 0;
@@ -902,9 +996,10 @@ void gf2m_mul_opt(const Gf2mCtx *ctx, const WordArray *x1, const WordArray *y1, 
     }
 
     /*
-     * Степень полинома больше 257. Многочлены x и y представляются в виде:
+     * Степінь многочлена більша за 257. Многочлени x та y подаються у вигляді:
      * x(t) = x0(t) * t^256 + x1(t),
-     * y(t) = y0(t) * t^256 + y1(t)
+     * y(t) = y0(t) * t^256 + y1(t),
+     * добуток збирається з часткових добутків за схемою Карацуби.
      */
     s = (2 * n > WA_LEN(96)) ? (2 * n - WA_LEN(96)) : 0;
 
@@ -979,6 +1074,11 @@ cleanup:
     wa_free(r);
 }
 
+/**
+ * Множення у полі GF(2^m): out = (a * b) mod f.
+ * Повний добуток подвійної довжини (gf2m_mul_opt), потім розріджена
+ * редукція gf2m_mod.
+ */
 void gf2m_mod_mul(const Gf2mCtx *ctx, const WordArray *a, const WordArray *b, WordArray *out)
 {
     ASSERT(ctx != NULL);
@@ -1002,6 +1102,13 @@ cleanup:
     wa_free(out2);
 }
 
+/**
+ * Обернений елемент у полі GF(2^m): out = a^(-1) mod f.
+ * Зводиться до розширеного алгоритму Евкліда для многочленів
+ * (gf2m_mod_gcd з редукційним многочленом f_ext): оскільки f незвідний,
+ * НСД(a, f) = 1, і з ka * a = 1 (mod f) випливає out = ka.
+ * Передумова: a != 0.
+ */
 void gf2m_mod_inv(const Gf2mCtx *ctx, const WordArray *a, WordArray *out)
 {
     ASSERT(!int_is_zero(a));
@@ -1014,6 +1121,19 @@ void gf2m_mod_inv(const Gf2mCtx *ctx, const WordArray *a, WordArray *out)
     gf2m_mod_gcd(a, ctx->f_ext, NULL, out, NULL);
 }
 
+/**
+ * Розширений алгоритм Евкліда для многочленів над GF(2) без ділень:
+ * на кожному кроці старший член довшого операнда скорочується XOR-ом
+ * коротшого, зсунутого на різницю степенів (при потребі операнди міняються
+ * місцями). Підтримується інваріант t1 = t3 * a (mod b), тож наприкінці
+ * ka * a = НСД(a, b) (mod b); kb — супутній множник при b.
+ *
+ * @param a многочлен
+ * @param b многочлен (тієї ж довжини)
+ * @param gcd буфер для НСД(a, b) або NULL
+ * @param ka буфер для множника при a або NULL
+ * @param kb буфер для множника при b або NULL
+ */
 void gf2m_mod_gcd(const WordArray *a, const WordArray *b, WordArray *gcd, WordArray *ka, WordArray *kb)
 {
     ASSERT(a != NULL && b != NULL && a->len == b->len);
@@ -1071,6 +1191,11 @@ cleanup:
     wa_free(dt);
 }
 
+/**
+ * Слід елемента поля GF(2^m): Tr(a) = a + a^2 + a^4 + ... + a^(2^(m-1)),
+ * обчислюється m-1 послідовними піднесеннями до квадрата з додаванням a.
+ * Результат — елемент GF(2), тобто 0 або 1 (молодший біт суми).
+ */
 int gf2m_mod_trace(const Gf2mCtx *ctx, const WordArray *a)
 {
     WordArray *tr = NULL;
@@ -1092,11 +1217,13 @@ cleanup:
 }
 
 /**
- * Вычисляет полуслед элемента поля GF(2^m).
+ * Обчислює напівслід елемента поля GF(2^m) (m непарне):
+ * HTr(a) = a + a^4 + a^16 + ... = сума a^(2^(2i)), i = 0..(m-1)/2.
+ * Якщо Tr(a) = 0, напівслід є розв'язком рівняння x^2 + x = a.
  *
  * @param ctx параметри GF(2^m)
- * @param a элемент поля
- * @param htrace полуслед размера n
+ * @param a елемент поля
+ * @param htrace буфер для напівсліду розміру n
  */
 static void gf2m_mod_htrace(const Gf2mCtx *ctx, const WordArray *a, WordArray *htrace)
 {
@@ -1118,6 +1245,13 @@ cleanup:
     wa_free(ht);
 }
 
+/**
+ * Розв'язує квадратне рівняння x^2 + x = a у полі GF(2^m).
+ * Розв'язок існує тоді й лише тоді, коли Tr(a) = 0; у цьому разі
+ * out = напівслід a (другий корінь — out + 1).
+ *
+ * @return true — розв'язок знайдено і записано в out, false — розв'язку немає
+ */
 bool gf2m_mod_solve_quad(const Gf2mCtx *ctx, const WordArray *a, WordArray *out)
 {
     if (gf2m_mod_trace(ctx, a) != 0) {
@@ -1129,6 +1263,11 @@ bool gf2m_mod_solve_quad(const Gf2mCtx *ctx, const WordArray *a, WordArray *out)
     return true;
 }
 
+/**
+ * Квадратний корінь у полі GF(2^m): out = sqrt(a) = a^(2^(m-1)),
+ * обчислюється m-1 послідовними піднесеннями до квадрата
+ * (оскільки a^(2^m) = a для будь-якого елемента поля).
+ */
 void gf2m_mod_sqrt(const Gf2mCtx *ctx, const WordArray *a, WordArray *out)
 {
     int i;
@@ -1141,6 +1280,12 @@ void gf2m_mod_sqrt(const Gf2mCtx *ctx, const WordArray *a, WordArray *out)
     }
 }
 
+/**
+ * Створює глибоку копію контексту поля GF(2^m).
+ *
+ * @param ctx контекст GF(2^m)
+ * @return копія контексту або NULL у разі помилки
+ */
 Gf2mCtx *gf2m_copy_with_alloc(const Gf2mCtx *ctx)
 {
     Gf2mCtx *ctx_copy = NULL;
@@ -1150,7 +1295,7 @@ Gf2mCtx *gf2m_copy_with_alloc(const Gf2mCtx *ctx)
 
     CALLOC_CHECKED(ctx_copy, sizeof(Gf2mCtx));
 
-    len = (ctx->f[2] == 0 ? 3 : 5);
+    len = (ctx->f[2] == 0 ? 3 : 5);    /* тричлен зберігає 3 степені, п'ятичлен — 5 */
     MALLOC_CHECKED(ctx_copy->f, len * sizeof(int));
     memcpy(ctx_copy->f, ctx->f, len * sizeof(int));
 
@@ -1167,6 +1312,9 @@ cleanup:
     return NULL;
 }
 
+/**
+ * Звільняє контекст поля GF(2^m).
+ */
 void gf2m_free(Gf2mCtx *ctx)
 {
     if (ctx) {

@@ -3,6 +3,14 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Реалізація базових операцій над WordArray — представленням великих
+ * беззнакових цілих чисел у вигляді масиву машинних слів (little-endian
+ * порядок слів: buf[0] — наймолодше слово). Модуль містить лише операції
+ * керування пам'яттю, копіювання та конвертації байти <-> слова;
+ * арифметика реалізована у math_int_internal.c.
+ */
+
 #include <memory.h>
 
 #include "word_internal.h"
@@ -12,6 +20,7 @@
 #undef FILE_MARKER
 #define FILE_MARKER "cryptonite/word_internal.c"
 
+/* Виділяє WordArray на len слів; буфер не ініціалізується. */
 WordArray *wa_alloc(size_t len)
 {
     WordArray *wa = NULL;
@@ -99,6 +108,8 @@ cleanup:
     return ans;
 }
 
+/* Створює WordArray з байтового масиву у little-endian порядку;
+ * довжина округлюється вгору до цілої кількості слів, хвіст зануляється. */
 WordArray *wa_alloc_from_le(const uint8_t *in, size_t in_len)
 {
     WordArray *wa = NULL;
@@ -125,6 +136,8 @@ cleanup:
     return wa;
 }
 
+/* Створює WordArray з байтового масиву у big-endian порядку:
+ * спочатку розвертає копію вхідних байтів, далі — як wa_alloc_from_le. */
 WordArray *wa_alloc_from_be(const uint8_t *in, size_t in_len)
 {
     WordArray *wa = NULL;
@@ -156,6 +169,8 @@ cleanup:
     return wa;
 }
 
+/* Заповнює наявний WordArray вмістом ByteArray (little-endian);
+ * буфер wa перевиділяється під потрібну кількість слів. */
 int wa_from_ba(const ByteArray *ba, WordArray *wa)
 {
     int ret = RET_OK;
@@ -235,6 +250,7 @@ cleanup:
     return NULL;
 }
 
+/* Копіює число у буфер не меншої довжини; старші слова out доповнюються нулями. */
 int wa_copy(const WordArray *in, WordArray *out)
 {
     if (in == NULL || out == NULL || in->len > out->len) {
@@ -252,6 +268,7 @@ int wa_copy(const WordArray *in, WordArray *out)
     return RET_OK;
 }
 
+/* Копіює len слів числа, починаючи зі зсуву off; out мусить мати довжину рівно len. */
 int wa_copy_part(const WordArray *in, size_t off, size_t len, WordArray *out)
 {
     if (in == NULL || out == NULL || in->len < off + len || out->len != len || in == out) {
@@ -282,6 +299,8 @@ cleanup:
     return ans;
 }
 
+/* Змінює довжину числа у словах: перевиділяє буфер,
+ * при розширенні зануляє нові старші слова. */
 void wa_change_len(WordArray *wa, size_t len)
 {
     int ret = RET_OK;
@@ -304,6 +323,8 @@ void wa_free(WordArray *in)
     }
 }
 
+/* Звільняє число з попереднім затиранням буфера (secure_zero) —
+ * для ключового матеріалу та інших секретних значень. */
 void wa_free_private(WordArray *in)
 {
     if (in) {
@@ -317,6 +338,9 @@ void wa_free_private(WordArray *in)
 
 #define U64(a) ((uint64_t)(a))
 
+/* Повертає бітову довжину слова (позицію найстаршого одиничного біта, 0 для a == 0).
+ * Реалізовано як розгорнуте двійкове дерево порівнянь із константами-степенями 2 —
+ * фіксована глибина log2(WORD_BIT_LENGTH) порівнянь без циклів. */
 int word_bit_len(word_t a)
 {
 #ifdef ARCH64
@@ -364,6 +388,9 @@ int word_bit_len(word_t a)
 #endif
 }
 
+/* Порівнює масиви слів: спочатку за довжиною, далі побайтово через memcmp.
+ * Придатне для перевірки рівності; порядок не відповідає числовому порівнянню
+ * (для нього див. int_cmp). */
 int wa_cmp(const WordArray *a, const WordArray *b)
 {
     if (a->len != b->len) {

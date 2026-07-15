@@ -3,6 +3,14 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Двигун випуску сертифікатів X.509.
+ * За запитом на сертифікацію будує TBSCertificate (версія, серійний номер,
+ * алгоритм підпису, імена видавця й власника, термін дії, відкритий ключ,
+ * розширення) і підписує його через SignAdapter, формуючи готовий Certificate.
+ * Підтримує самопідписані сертифікати (видавець == власник, дані беруться із запиту).
+ */
+
 #include "cert_engine.h"
 
 #include "log_internal.h"
@@ -22,6 +30,9 @@ struct CertificateEngine_st {
     is_self_signed;     /**< Флаг генерации самоподписанного сертификата */
 };
 
+/* Виділяє й ініціалізує контекст випуску сертифіката: зберігає адаптери підпису
+ * та гешування і ознаку самопідпису. Передумова: для несамопідписаного сертифіката
+ * адаптер підпису має містити сертифікат видавця. */
 int ecert_alloc(const SignAdapter *sa, const DigestAdapter *da, bool is_self_signed, CertificateEngine **ctx)
 {
     int ret = RET_OK;
@@ -60,6 +71,7 @@ cleanup:
     return ret;
 }
 
+/* Звільняє контекст випуску сертифіката. Адаптери належать викликаючому коду. */
 void ecert_free(CertificateEngine *ctx)
 {
     LOG_ENTRY();
@@ -67,6 +79,8 @@ void ecert_free(CertificateEngine *ctx)
     free(ctx);
 }
 
+/* Формує PKIXTime з time_t: до межі TIME_LIMIT (кінець 2049 р.) - у форматі UTCTime,
+ * починаючи з 2050 р. - у форматі GeneralizedTime. */
 static int get_pkix_time(time_t utc_time, PKIXTime_t **pkix_time)
 {
     struct tm tm_time;
@@ -105,6 +119,12 @@ cleanup:
     return ret;
 }
 
+/* Будує TBSCertificate й підписує його адаптером, повертаючи готовий Certificate.
+ * Заповнює версію, серійний номер, алгоритм підпису, імена видавця й власника,
+ * термін дії (not_before/not_after), відкритий ключ та розширення. Для самопідписаного
+ * сертифіката видавець і власник беруться із запиту й використовується алгоритм підпису
+ * запиту; інакше видавець та алгоритм підпису беруться із сертифіката адаптера.
+ * Фактичний підпис формується у cert_init_by_adapter через SignAdapter. */
 int ecert_generate(const CertificateEngine *ctx,
         const CertificationRequest_t *req,
         int ver,

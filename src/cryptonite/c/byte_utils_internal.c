@@ -3,6 +3,15 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Внутрішні утиліти конвертації байтових масивів у масиви 32/64-бітних слів
+ * і навпаки. Байтові масиви трактуються як little-endian представлення даних
+ * незалежно від порядку байтів платформи: на big-endian хостах після
+ * копіювання виконується перестановка байтів у межах кожного слова.
+ * Додатково: розворот порядку байтів (uint8_swap*) та гарантоване затирання
+ * пам'яті (secure_zero).
+ */
+
 #include <stddef.h>
 #include <string.h>
 
@@ -12,9 +21,13 @@
 #undef FILE_MARKER
 #define FILE_MARKER "cryptonite/byte_utils_internal.c"
 
+/* Визначення порядку байтів хоста під час виконання:
+ * якщо молодший байт одиниці лежить не першим — платформа big-endian. */
 const int big_endian_test = 1;
 #define is_bigendian() ((*(char*)&big_endian_test) == 0)
 
+/* Розвертає порядок байтів у кожному 8-байтному слові буфера
+ * (size — довжина у байтах, кратна 8; in може збігатися з out). */
 #define swap_word64(in, out, size)              \
     {                                           \
         uint8_t *_in = (uint8_t *)(in);         \
@@ -42,6 +55,8 @@ const int big_endian_test = 1;
         }                                            \
     }
 
+/* Розвертає порядок байтів у кожному 4-байтному слові буфера
+ * (size — довжина у байтах, кратна 4; in може збігатися з out). */
 #define swap_word32(in, out, size)              \
     {                                           \
         uint8_t *_in = (uint8_t *)(in);         \
@@ -62,6 +77,8 @@ const int big_endian_test = 1;
         }                                       \
     }
 
+/* Пакує little-endian байти у масив uint32; хвіст out зануляється.
+ * Вимога: out_len * 4 >= in_len. */
 int uint8_to_uint32(const uint8_t *in, size_t in_len, uint32_t *out, size_t out_len)
 {
     int ret = RET_OK;
@@ -85,6 +102,8 @@ cleanup:
     return ret;
 }
 
+/* Розпаковує масив uint32 у little-endian байти; хвіст out зануляється.
+ * Вимога: out_len >= in_len * 4. */
 int uint32_to_uint8(const uint32_t *in, size_t in_len, uint8_t *out, size_t out_len)
 {
     int ret = RET_OK;
@@ -108,6 +127,8 @@ cleanup:
     return ret;
 }
 
+/* Пакує little-endian байти у масив uint64; хвіст out зануляється.
+ * Вимога: out_len * 8 >= in_len. */
 int uint8_to_uint64(const uint8_t *in, size_t in_len, uint64_t *out, size_t out_len)
 {
     int ret = RET_OK;
@@ -131,6 +152,8 @@ cleanup:
     return ret;
 }
 
+/* Розпаковує масив uint64 у little-endian байти; хвіст out зануляється.
+ * Вимога: out_len >= in_len * 8. */
 int uint64_to_uint8(const uint64_t *in, size_t in_len, uint8_t *out, size_t out_len)
 {
     int ret = RET_OK;
@@ -154,6 +177,9 @@ cleanup:
     return ret;
 }
 
+/* Перепаковує масив uint32 у масив uint64 зі збереженням little-endian
+ * семантики (на big-endian хості 32-бітні половини кожного 64-бітного слова
+ * міняються місцями). Вимога: out_len * 8 == in_len * 4. */
 int uint32_to_uint64(const uint32_t *in, size_t in_len, uint64_t *out, size_t out_len)
 {
     size_t i;
@@ -178,6 +204,8 @@ cleanup:
     return ret;
 }
 
+/* Перепаковує масив uint64 у масив uint32 (обернене до uint32_to_uint64).
+ * Вимога: out_len * 4 == in_len * 8. */
 int uint64_to_uint32(const uint64_t *in, size_t in_len, uint32_t *out, size_t out_len)
 {
     size_t i;
@@ -202,6 +230,8 @@ cleanup:
     return ret;
 }
 
+/* Повертає новий буфер з байтами in у зворотному порядку
+ * (конвертація little-endian <-> big-endian). */
 uint8_t *uint8_swap_with_alloc(const uint8_t *in, size_t in_len)
 {
     size_t i;
@@ -219,6 +249,8 @@ cleanup:
     return out;
 }
 
+/* Записує в out байти in у зворотному порядку; підтримує роботу на місці
+ * (in == out). Вимога: out_len == in_len. */
 int uint8_swap(const uint8_t *in, size_t in_len, uint8_t *out, size_t out_len)
 {
     size_t i;
@@ -247,6 +279,9 @@ cleanup:
     return ret;
 }
 
+/* Гарантоване затирання пам'яті: запис через volatile-вказівник
+ * не дозволяє компілятору вилучити очищення як "мертвий" код
+ * (для секретних даних перед звільненням пам'яті). */
 void secure_zero(void *s, size_t n)
 {
     if (s == NULL) {

@@ -3,6 +3,15 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Двигун побудови відповіді OCSP (OCSPResponse) на запит статусу сертифікатів.
+ * Перевіряє вхідні дані (сертифікат OCSP-відповідача, списки відкликаних сертифікатів),
+ * обчислює еталонні гЕші імені та ключа видавця, за кожним CertID запиту визначає статус
+ * (good/revoked) за списками CRL, формує ResponseData, підписує її SignAdapter'ом OCSP-служби
+ * і пакує у BasicOCSPResponse з ланцюжком сертифікатів. Містить також функції формування
+ * відповідей зі статусами помилок (malformedRequest, internalError, tryLater, unauthorized).
+ */
+
 #include "ocsp_response_engine.h"
 
 #include "log_internal.h"
@@ -888,6 +897,10 @@ cleanup:
     return ret;
 }
 
+/* Виділяє й ініціалізує генератор OCSP-відповідей: копіює списки CRL, перевіряє вхідні дані
+ * (verify_input_data), обчислює еталонні ідентифікатори видавця та ідентифікатор відповідача.
+ * Передумова: усі адаптери й списки CRL задані; сертифікат підпису має бути OCSP-сертифікатом,
+ * підписаним кореневим. */
 int eocspresp_alloc(const VerifyAdapter *root_va,
         const SignAdapter *ocsp_sign,
         const CertificateLists_t *crls,
@@ -935,6 +948,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює прапорець обов'язковості підпису у вхідному запиті OCSP. */
 void eocspresp_set_sign_required(OcspResponseEngine *ctx, bool sign_required)
 {
     LOG_ENTRY();
@@ -944,6 +958,8 @@ void eocspresp_set_sign_required(OcspResponseEngine *ctx, bool sign_required)
     }
 }
 
+/* Замінює у контексті списки відкликаних сертифікатів новими, попередньо перевіривши їх підписи
+ * кореневим адаптером (verify_crls). */
 int eocspresp_set_crls(OcspResponseEngine *ctx, const CertificateLists_t *crls)
 {
     int ret = RET_OK;
@@ -966,6 +982,9 @@ cleanup:
     return ret;
 }
 
+/* Генерує OCSP-відповідь на запит: делегує обробку try_check_status і за її кодом повернення
+ * встановлює статус відповіді (successful або відповідний код помилки), пакуючи результат у
+ * OCSPResponse з ResponseBytes (за наявності). */
 int eocspresp_generate(OcspResponseEngine *ctx,
         const OCSPRequest_t *req,
         const VerifyAdapter *req_va,
@@ -1037,6 +1056,7 @@ cleanup:
     return ret;
 }
 
+/* Формує OCSP-відповідь лише зі статусом malformedRequest (без тіла відповіді). */
 int eocspresp_form_malformed_req(OCSPResponse_t **resp)
 {
     int ret = RET_OK;
@@ -1066,6 +1086,7 @@ cleanup:
     return ret;
 }
 
+/* Формує OCSP-відповідь лише зі статусом internalError (без тіла відповіді). */
 int eocspresp_form_internal_error(OCSPResponse_t **resp)
 {
     int ret = RET_OK;
@@ -1095,6 +1116,7 @@ cleanup:
     return ret;
 }
 
+/* Формує OCSP-відповідь лише зі статусом tryLater (без тіла відповіді). */
 int eocspresp_form_try_later(OCSPResponse_t **resp)
 {
     int ret = RET_OK;
@@ -1124,6 +1146,7 @@ cleanup:
     return ret;
 }
 
+/* Формує OCSP-відповідь лише зі статусом unauthorized (без тіла відповіді). */
 int eocspresp_form_unauthorized(OCSPResponse_t **resp)
 {
     int ret = RET_OK;
@@ -1152,6 +1175,8 @@ cleanup:
     return ret;
 }
 
+/* Звільняє контекст генератора OCSP-відповідей разом зі списками CRL та гЕшами.
+ * Адаптери належать викликаючому коду. */
 void eocspresp_free(OcspResponseEngine *ctx)
 {
     LOG_ENTRY();

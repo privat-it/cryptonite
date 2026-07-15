@@ -3,6 +3,13 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Внутрішні операції над ByteArray (buf + len): конвертації у масиви
+ * 32/64-бітних слів через утиліти byte_utils_internal та числові операції
+ * над вмістом, який трактується як little-endian число (buf[0] — наймолодший
+ * байт, ведучі нулі — у кінці буфера).
+ */
+
 #include <string.h>
 
 #include "byte_array_internal.h"
@@ -12,6 +19,8 @@
 #undef FILE_MARKER
 #define FILE_MARKER "cryptonite/byte_array_internal.c"
 
+/* Створює ByteArray з big-endian байтового масиву: байти зберігаються
+ * у зворотному порядку (внутрішнє представлення — little-endian). */
 ByteArray *ba_alloc_from_uint8_be(const uint8_t *buf, size_t buf_len)
 {
     ByteArray *ba = NULL;
@@ -33,6 +42,8 @@ cleanup:
     return ba;
 }
 
+/* Створює ByteArray довжиною buf_len * 8 байтів за масивом 64-бітних слів
+ * (little-endian порядок байтів). */
 ByteArray *ba_alloc_from_uint64(const uint64_t *buf, size_t buf_len)
 {
     ByteArray *ba = NULL;
@@ -55,6 +66,9 @@ cleanup:
     return ba;
 }
 
+/* Конвертує ByteArray у масив 64-бітних слів з виділенням пам'яті;
+ * довжина округлюється вгору до цілої кількості слів, хвіст зануляється.
+ * Вимога: *buf == NULL на вході. */
 int ba_to_uint64_with_alloc(const ByteArray *ba, uint64_t **buf, size_t *buf_len)
 {
     size_t buf_len_;
@@ -90,6 +104,8 @@ cleanup:
     return ret;
 }
 
+/* Створює ByteArray довжиною buf_len * 4 байтів за масивом 32-бітних слів
+ * (little-endian порядок байтів). */
 ByteArray *ba_alloc_from_uint32(const uint32_t *buf, size_t buf_len)
 {
     ByteArray *ba = NULL;
@@ -127,6 +143,8 @@ cleanup:
     return ret;
 }
 
+/* Заповнює наявний ByteArray масивом 64-бітних слів;
+ * буфер перевиділяється під buf_len * 8 байтів. */
 int ba_from_uint64(const uint64_t *buf, size_t buf_len, ByteArray *ba)
 {
     int ret = RET_OK;
@@ -144,6 +162,8 @@ cleanup:
     return ret;
 }
 
+/* Заповнює наявний ByteArray масивом 32-бітних слів;
+ * буфер перевиділяється під buf_len * 4 байтів. */
 int ba_from_uint32(const uint32_t *buf, size_t buf_len, ByteArray *ba)
 {
     int ret = RET_OK;
@@ -161,6 +181,8 @@ cleanup:
     return ret;
 }
 
+/* Відкидає старші нульові байти числа (нулі у кінці буфера, оскільки
+ * представлення little-endian); залишається щонайменше один байт. */
 int ba_trim_leading_zeros(ByteArray *ba)
 {
     size_t i;
@@ -183,6 +205,8 @@ cleanup:
     return ret;
 }
 
+/* Обнуляє всі біти числа, старші за bit_len: маскує частковий байт
+ * за зсувом bit_len / 8 і зануляє всі наступні байти. */
 int ba_truncate(ByteArray *a, size_t bit_len)
 {
     int ret = RET_OK;

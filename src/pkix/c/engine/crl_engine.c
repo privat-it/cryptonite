@@ -3,6 +3,15 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Двигун випуску списків відкликаних сертифікатів (CRL / CertificateList).
+ * Накопичує записи відкликаних сертифікатів (за сертифікатом або серійним номером
+ * з причиною та датою компрометації), за потреби зливає дельта- та повний CRL,
+ * після чого будує TBSCertList (версія, видавець, алгоритм підпису, часи оновлення,
+ * записи, розширення) і підписує його через SignAdapter. Підтримує повний та
+ * дельта-CRL, а також оновлення на основі попереднього CRL.
+ */
+
 #include "crl_engine.h"
 
 #include "exts.h"
@@ -29,6 +38,10 @@ struct CrlEngine_st {
     char                  *crl_description;    /**< Опис CRL */
 };
 
+/* Виділяє й ініціалізує контекст випуску CRL: зберігає адаптери підпису й перевірки,
+ * тип CRL, ім'я та опис шаблону, розширення. Передумова: адаптер підпису має містити
+ * сертифікат. Якщо переданий попередній CRL, його підпис перевіряється, а для дельта-CRL
+ * успадковується набір записів відкликаних сертифікатів. */
 int ecrl_alloc(const CertificateList_t *crl,
         const SignAdapter *sa,
         const VerifyAdapter *va,
@@ -106,6 +119,8 @@ cleanup:
     return ret;
 }
 
+/* Звільняє контекст випуску CRL разом із накопиченими записами й розширеннями.
+ * Адаптери належать викликаючому коду. */
 void ecrl_free(CrlEngine *ctx)
 {
     LOG_ENTRY();
@@ -122,6 +137,7 @@ void ecrl_free(CrlEngine *ctx)
     }
 }
 
+/* Повертає копію імені шаблону CRL. Виділена пам'ять потребує вивільнення. */
 int ecrl_get_template_name(const CrlEngine *ctx, char **crl_templ_name)
 {
     int ret = RET_OK;
@@ -140,6 +156,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає тип CRL (повний або дельта), збережений у контексті. */
 int ecrl_get_type(const CrlEngine *ctx, CRLType *type)
 {
     int ret = RET_OK;
@@ -155,6 +172,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію опису CRL. Виділена пам'ять потребує вивільнення. */
 int ecrl_get_description(const CrlEngine *ctx, char **crl_desc)
 {
     int ret = RET_OK;
@@ -173,6 +191,8 @@ cleanup:
     return ret;
 }
 
+/* Додає запис відкликаного сертифіката за самим сертифікатом: перевіряє його підпис
+ * адаптером перевірки, витягує серійний номер і делегує ecrl_add_revoked_cert_by_sn. */
 int ecrl_add_revoked_cert(CrlEngine *ctx, const Certificate_t *cert, CRLReason_t *reason, const time_t *inv_date)
 {
     int ret = RET_OK;
@@ -194,6 +214,9 @@ cleanup:
     return ret;
 }
 
+/* Формує запис RevokedCertificate за серійним номером і додає його до набору записів
+ * контексту. Дата відклику - поточний час (UTCTime). За наявності причини (reason) або
+ * дати компрометації (inv_date) до запису додаються відповідні розширення crlEntryExtensions. */
 int ecrl_add_revoked_cert_by_sn(CrlEngine *ctx,
         const ByteArray *cert_sn,
         CRLReason_t *reason,
@@ -274,6 +297,9 @@ cleanup:
     return ret;
 }
 
+/* Зливає записи попереднього повного CRL (із контексту) із записами переданого повного CRL,
+ * оновлюючи набір записів контексту. Передумова: контекст має бути типу CRL_FULL, а підпис
+ * переданого CRL успішно перевірятися адаптером перевірки. */
 int ecrl_merge_delta(CrlEngine *ctx, const CertificateList_t *full)
 {
     int ret = RET_OK;
@@ -393,6 +419,7 @@ cleanup:
     return ret;
 }
 
+/* Генерує CRL з часом наступного оновлення, заданим як зсув diff_next_update від поточного часу. */
 int ecrl_generate_diff_next_update(CrlEngine *ctx, time_t diff_next_update, CertificateList_t **crl)
 {
     int ret = RET_OK;
@@ -414,6 +441,7 @@ cleanup:
     return ret;
 }
 
+/* Генерує CRL з поточним часом як thisUpdate та явно заданим часом next_update. */
 int ecrl_generate_next_update(CrlEngine *ctx, time_t *next_update, CertificateList_t **crl)
 {
     int ret = RET_OK;
@@ -431,6 +459,8 @@ cleanup:
     return ret;
 }
 
+/* Генерує CRL, перевикористовуючи час наступного оновлення з попереднього CRL контексту.
+ * Передумова: контекст ініціалізований попереднім CRL, у якому задано nextUpdate. */
 int ecrl_generate(CrlEngine *ctx, CertificateList_t **crl)
 {
     int ret = RET_OK;

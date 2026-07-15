@@ -3,6 +3,16 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Файловий огляд: реалізація сховища ключів та сертифікатів у форматі PKCS#12
+ * (контейнер PFX). Модуль надає створення порожнього сховища, декодування
+ * готового контейнера з перевіркою MAC цілісності, перелік та вибір ключів,
+ * генерацію й збереження ключів, роботу з сертифікатами, а також формування
+ * адаптерів підпису/перевірки/узгодження ключів на базі обраного ключа.
+ * Низькорівневі операції (SafeBag, шифрування вмісту, обчислення MAC)
+ * винесені у pkcs12_utils_internal.
+ */
+
 #include "pkcs12.h"
 
 #include "storage_errors.h"
@@ -36,6 +46,7 @@ struct Pkcs12StorageCtx_st {
     PrivateKeyInfo_t *curr_key;
 };
 
+/* Повертає користувацьке ім'я сховища. */
 int pkcs12_get_storage_name(const Pkcs12Ctx *this, const char *const *name)
 {
     int ret = RET_OK;
@@ -51,6 +62,7 @@ cleanup:
     return ret;
 }
 
+/* Змінює пароль сховища: перезаписує його лише якщо old_pass збігається з поточним. */
 int pkcs12_change_password(Pkcs12Ctx *this, const char *old_pass, const char *new_pass)
 {
     int ret = RET_OK;
@@ -70,6 +82,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Перелічує ключі сховища та наповнює масив this->kprs (alias, внутрішній ід,
+ * тип аутентифікації). Для PKCS8SHROUDEDKEY_BAG пробує розшифрувати ключ
+ * паролем сховища, щоб визначити, чи потрібен окремий пароль до ключа.
+ */
 int pkcs12_enum_keys(Pkcs12Ctx *this, const Pkcs12Keypair *const *keys, const size_t *cnt)
 {
     int ret = RET_OK;
@@ -180,6 +197,10 @@ static const Pkcs12Keypair *store_alias2key(const char *alias, const Pkcs12Keypa
     return NULL;
 }
 
+/*
+ * Обирає поточний ключ за alias (або перший ключ, якщо alias == NULL).
+ * Для зашифрованого ключа виконує розшифрування паролем pwd або паролем сховища.
+ */
 int pkcs12_select_key(Pkcs12Ctx *this, const char *alias, const char *pwd)
 {
     int ret = RET_OK;
@@ -264,6 +285,7 @@ cleanup:
     return ret;
 }
 
+/* Повідомляє, чи є згенерований, але ще не збережений ключ. */
 int pkcs12_is_key_generated(const Pkcs12Ctx *this, bool *is_generated)
 {
     int ret = RET_OK;
@@ -278,6 +300,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Генерує нову ключову пару. Якщо aid не задано, використовує параметри
+ * ДСТУ 4145 (крива M257_PB) з ГОСТ 28147. Ключ зберігається в this->genkey.
+ */
 int pkcs12_generate_key(Pkcs12Ctx *this, const ByteArray *aid)
 {
     int ret = RET_OK;
@@ -312,6 +338,7 @@ cleanup:
     return ret;
 }
 
+/* Додає згенерований ключ (this->genkey) новим контейнером сховища та оновлює список ключів. */
 int pkcs12_store_key(Pkcs12Ctx *this, const char *alias, const char *pwd, int rounds)
 {
     int ret = RET_OK;
@@ -339,6 +366,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Додає сертифікати новим контейнером сховища та готує параметри шифрування
+ * (сіль та ітерації беруться з mac_data): ГОСТ 28147 CFB для ГОСТ 34.311,
+ * інакше AES-256-CBC з випадковим IV.
+ */
 int pkcs12_set_certificates(Pkcs12Ctx *this, const ByteArray **certs)
 {
     int ret = RET_OK;
@@ -403,6 +435,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає всі сертифікати сховища в байтовому представленні (null-terminated). */
 int pkcs12_get_certificates(const Pkcs12Ctx *this, ByteArray ***certs)
 {
     int ret = RET_OK;
@@ -419,6 +452,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Шукає сертифікат поточного ключа за відкритим ключем та областю застосування
+ * (key_usage): спершу серед сертифікатів сховища, потім у зовнішньому сховищі сертифікатів.
+ */
 int pkcs12_get_certificate(const Pkcs12Ctx *this, int key_usage, ByteArray **cert)
 {
     int ret = RET_OK;
@@ -475,6 +512,7 @@ cleanup:
     return ret;
 }
 
+/* Вивільняє поля елемента ключової пари (alias). */
 static void keypair_free(Pkcs12Keypair *keypair)
 {
     LOG_ENTRY();
@@ -486,6 +524,7 @@ static void keypair_free(Pkcs12Keypair *keypair)
     free((char *)keypair->alias);
 }
 
+/* Вивільняє вміст внутрішнього сховища та скидає його стан; пароль перезаписується нулями. */
 static int pkcs12_keystore_clean(Pkcs12IntStorage *storage)
 {
     int ret = RET_OK;
@@ -514,6 +553,7 @@ cleanup:
     return ret;
 }
 
+/* Вивільняє контекст сховища та всі пов'язані ресурси (генерований і поточний ключі, список ключів). */
 void pkcs12_free(Pkcs12Ctx *this)
 {
     LOG_ENTRY();
@@ -537,6 +577,7 @@ void pkcs12_free(Pkcs12Ctx *this)
     }
 }
 
+/* Створює адаптер підпису для поточного ключа, за можливості пов'язуючи його з сертифікатом. */
 int pkcs12_get_sign_adapter(const Pkcs12Ctx *this, SignAdapter **sa)
 {
     int ret = RET_OK;
@@ -565,6 +606,7 @@ cleanup:
     return ret;
 }
 
+/* Створює адаптер узгодження ключів (DH) для поточного ключа. */
 int pkcs12_get_dh_adapter(const Pkcs12Ctx *this, DhAdapter **dha)
 {
     int ret = RET_OK;
@@ -583,6 +625,7 @@ cleanup:
     return ret;
 }
 
+/* Створює адаптер перевірки підпису для поточного ключа. */
 int pkcs12_get_verify_adapter(const Pkcs12Ctx *this, VerifyAdapter **va)
 {
     int ret = RET_OK;
@@ -602,6 +645,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Формує AuthenticatedSafe контейнера PFX: кожен контейнер сховища кодується
+ * як ContentInfo типу data, а за наявності params — як encryptedData
+ * (вміст шифрується pkcs5_encrypt_dstu паролем сховища).
+ */
 static int pkcs12_set_contents(PFX_t *container, Pkcs12IntStorage *storage)
 {
     int ret = RET_OK;
@@ -677,6 +725,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Кодує сховище в байтове представлення PFX. За потреби (стан не актуальний)
+ * переобчислює MAC цілісності паролем сховища.
+ */
 int pkcs12_encode(const Pkcs12Ctx *this, ByteArray **storage_body)
 {
     int ret = RET_OK;
@@ -753,6 +805,7 @@ static void pkcs12_int_free(Pkcs12IntStorage *storage)
     }
 }
 
+/* Виділяє порожню структуру внутрішнього сховища. */
 static Pkcs12IntStorage *pkcs12_keystore_alloc(void)
 {
     Pkcs12IntStorage *storage = NULL;
@@ -766,6 +819,10 @@ static Pkcs12IntStorage *pkcs12_keystore_alloc(void)
     return storage;
 }
 
+/*
+ * Створює нове порожнє сховище PKCS#12 заданого типу MAC з початковим паролем
+ * і кількістю раундів; ініціалізує порожні дані MAC.
+ */
 int pkcs12_create(Pkcs12MacType id, const char *password, int rounds, Pkcs12Ctx **storage)
 {
     int ret = RET_OK;
@@ -789,6 +846,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Декодує контейнер PFX із байтового представлення. За наявності macData
+ * перевіряє MAC цілісності паролем, після чого зчитує вміст сховища.
+ */
 int pkcs12_decode(const char *storage_name, const ByteArray *storage_body, const char *pass, Pkcs12Ctx **storage)
 {
     int ret = RET_OK;

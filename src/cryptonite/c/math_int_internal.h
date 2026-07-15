@@ -3,6 +3,16 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/**
+ * Внутрішній модуль цілочисельної арифметики великих чисел (WordArray).
+ *
+ * Операнди — беззнакові великі цілі у little-endian порядку слів
+ * (див. word_internal.h). Більшість операцій вимагає операндів однакової
+ * довжини у словах; множення/ділення працюють з результатом/діленим
+ * подвійної довжини 2n. Перенос при додаванні та займ при відніманні
+ * повертаються значенням функції.
+ */
+
 #ifndef CRYPTONITE_MATH_INT_H
 #define CRYPTONITE_MATH_INT_H
 
@@ -18,6 +28,8 @@
 extern "C" {
 #endif
 
+/** Подвійне слово: результат операцій, що не вміщується в одне машинне слово
+ * (lo — молодша частина, hi — старша). */
 typedef struct Dword_st {
     word_t lo;
     word_t hi;
@@ -179,15 +191,61 @@ void int_div(const WordArray *a, const WordArray *b, WordArray *q, WordArray *r)
  */
 void int_sqrt(const WordArray *in, WordArray *out);
 
+/**
+ * Генерує випадкове число out у діапазоні [1, in - 1] за допомогою
+ * криптографічного ГПВЧ (метод відкидання).
+ *
+ * @param prng контекст ГПВЧ
+ * @param in верхня межа (не включається)
+ * @param out буфер для результату довжиною in->len
+ * @return код помилки
+ */
 int int_rand(PrngCtx *prng, const WordArray *in, WordArray *out);
+
+/**
+ * Генерує псевдовипадкове число out у діапазоні [1, in - 1] на основі rand().
+ * Не є криптографічно стійким.
+ *
+ * @param in верхня межа (не включається)
+ * @param out буфер для результату довжиною in->len
+ * @return код помилки
+ */
 int int_prand(const WordArray *in, WordArray *out);
 
+/**
+ * Ймовірнісна перевірка числа на простоту (тест Ферма, далі тест Рабіна-Міллера).
+ *
+ * @param a число, що перевіряється
+ * @param is_prime true — число ймовірно просте, false — складене
+ * @return код помилки
+ */
 int int_is_prime(WordArray *a, bool *is_prime);
 
+/**
+ * Ймовірнісний тест простоти Рабіна-Міллера.
+ *
+ * @param num число, що перевіряється
+ * @param is_prime true — число ймовірно просте, false — складене
+ * @return код помилки
+ */
 int int_rabin_miller_primary_test(WordArray *num, bool *is_prime);
 
+/**
+ * Ймовірнісний тест простоти Ферма.
+ *
+ * @param num число, що перевіряється
+ * @param is_prime true — число ймовірно просте, false — складене
+ * @return код помилки
+ */
 int int_fermat_primary_test(WordArray *num, bool *is_prime);
 
+/**
+ * Обчислює факторіал n!.
+ * Буфер fac має бути достатнього розміру для розміщення n!.
+ *
+ * @param n ціле число
+ * @param fac буфер для результату
+ */
 void factorial(int n, WordArray *fac);
 
 /**
@@ -205,10 +263,36 @@ void factorial(int n, WordArray *fac);
  */
 int int_mult_and_div(const WordArray *a, word_t b, word_t c, int n, WordArray *abc);
 
+/**
+ * Обчислює NAF-представлення числа (несуміжна форма) заданої ширини вікна.
+ *
+ * @param in велике ціле число
+ * @param width ширина вікна у бітах
+ * @param out вихідний масив цифр NAF (виділяється функцією, звільняє викликач через free)
+ * @return код помилки
+ */
 int int_get_naf(const WordArray *in, int width, int **out);
 
+/**
+ * Обчислює кількість додаткових холостих додавань для вирівнювання
+ * числа операцій при обробці NAF-представлення.
+ *
+ * @param in велике ціле число
+ * @param naf NAF-представлення числа in
+ * @param width ширина вікна у бітах
+ * @param extra_addition кількість додаткових додавань або -1
+ * @return код помилки
+ */
 int int_get_naf_extra_add(const WordArray *in, const int *naf, int width, int *extra_addition);
 
+/**
+ * Генерує просте число заданої бітової довжини.
+ *
+ * @param bits бітова довжина простого числа, bits >= 8
+ * @param prng контекст ГПВЧ
+ * @param out згенероване просте число (виділяється функцією)
+ * @return код помилки
+ */
 int int_gen_prime(const size_t bits, PrngCtx *prng, WordArray **out);
 
 #ifdef  __cplusplus

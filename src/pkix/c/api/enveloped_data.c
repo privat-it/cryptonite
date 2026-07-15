@@ -18,6 +18,15 @@
 
 #undef FILE_MARKER
 #define FILE_MARKER "pki/api/enveloped_data.c"
+
+/*
+ * Модуль роботи із зашифрованим повідомленням CMS (структура EnvelopedData за
+ * RFC 5652). Містить функції створення/звільнення, DER-кодування та декодування,
+ * доступу до сертифіката й відкритого ключа відправника (originator), а також
+ * розшифрування вмісту: пошук потрібного одержувача серед recipientInfos,
+ * розгортання сеансового ключа за протоколом узгодження (key agreement) та
+ * розшифрування даних відповідним алгоритмом.
+ */
 /**
  * Проверяет соотвествие серийного номера и имени сертификату.
  *
@@ -34,6 +43,7 @@ static bool equals_issuer_and_sn(const IssuerAndSerialNumber_t *issuer_sn, const
             && asn_equals(&Name_desc, &issuer_sn->issuer, &issuer_cert->tbsCertificate.issuer));
 }
 
+/* Виділяє та обнуляє нову структуру EnvelopedData. Повертає NULL у разі помилки. */
 EnvelopedData_t *env_data_alloc(void)
 {
     EnvelopedData_t *env_data = NULL;
@@ -48,12 +58,18 @@ cleanup:
     return env_data;
 }
 
+/* Звільняє пам'ять, зайняту структурою EnvelopedData. */
 void env_data_free(EnvelopedData_t *env_data)
 {
     LOG_ENTRY();
     ASN_FREE(&EnvelopedData_desc, env_data);
 }
 
+/*
+ * Ініціалізує EnvelopedData: копіює версію, відомості про одержувачів
+ * (recipientInfos) та зашифрований вміст (обов'язкові), а також, за наявності,
+ * необов'язкові поля originatorInfo та unprotectedAttrs.
+ */
 int env_data_init(EnvelopedData_t *env_data,
         const CMSVersion_t *version,
         const OriginatorInfo_t *originator,
@@ -92,6 +108,7 @@ cleanup:
     return ret;
 }
 
+/* DER-кодує EnvelopedData у байтовий масив. */
 int env_data_encode(const EnvelopedData_t *env_data, ByteArray **out)
 {
     int ret = RET_OK;
@@ -105,6 +122,7 @@ cleanup:
     return ret;
 }
 
+/* Декодує EnvelopedData із DER-подання (попередньо звільняє поточний вміст структури). */
 int env_data_decode(EnvelopedData_t *env_data, const ByteArray *in)
 {
     int ret = RET_OK;
@@ -122,6 +140,7 @@ cleanup:
     return ret;
 }
 
+/* Визначає, чи містить originatorInfo хоча б один сертифікат відправника (flag=true). */
 int env_data_has_originator_cert(const EnvelopedData_t *env_data, bool *flag)
 {
     int ret = RET_OK;
@@ -135,6 +154,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію останнього сертифіката відправника з originatorInfo. */
 int env_data_get_originator_cert(const EnvelopedData_t *env_data, Certificate_t **originator_cert)
 {
     int ret = RET_OK;
@@ -159,6 +179,12 @@ cleanup:
     return ret;
 }
 
+/*
+ * Визначає відкритий ключ відправника для узгодження ключа (KeyAgreeRecipientInfo).
+ * Залежно від форми поля originator бере ключ безпосередньо (originatorKey) або з
+ * наданого сертифіката, попередньо звіривши його за issuerAndSerialNumber чи
+ * subjectKeyIdentifier, і перетворює його на байтовий масив.
+ */
 static int kari_get_originator_public_key(const KeyAgreeRecipientInfo_t *kari, const Certificate_t *originator_cert_opt,
         ByteArray **pub_key)
 {
@@ -214,6 +240,12 @@ cleanup:
     return ret;
 }
 
+/*
+ * Повертає відкритий ключ відправника, обходячи recipientInfos: для кожного запису
+ * бере ключ із originatorKey або зі звіреного сертифіката (issuerAndSerialNumber /
+ * subjectKeyIdentifier) і перетворює його на байтовий масив. Якщо ключ не знайдено —
+ * RET_PKIX_RECIPIENT_NOT_FOUND.
+ */
 int env_data_get_originator_public_key(const EnvelopedData_t *env_data, const Certificate_t *originator_cert,
         ByteArray **originator_pub_key)
 {
@@ -279,6 +311,14 @@ cleanup:
     return ret;
 }
 
+/*
+ * Збирає дані, потрібні для розгортання сеансового ключа для заданого одержувача.
+ * Обходить recipientInfos та їх зашифровані ключі, шукаючи запис, що відповідає
+ * recipient_cert (за issuerAndSerialNumber або subjectKeyIdentifier). Для
+ * знайденого запису повертає зашифрований сеансовий ключ, значення ukm (за
+ * наявності) та відкритий ключ відправника (шукає його спершу через kari, потім
+ * серед сертифікатів originatorInfo).
+ */
 static int env_get_info_for_unwrap(const EnvelopedData_t *env_data, const Certificate_t *originator_cert_opt,
         const Certificate_t *recipient_cert, ByteArray **encrypted_session_key, ByteArray **rnd_bytes,
         ByteArray **originator_pub_key)
@@ -391,6 +431,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію ідентифікатора алгоритму шифрування вмісту (contentEncryptionAlgorithm). */
 int env_get_content_encryption_aid(const EnvelopedData_t *env_data, AlgorithmIdentifier_t **encr_aid)
 {
     int ret = RET_OK;
@@ -413,6 +454,13 @@ cleanup:
     return ret;
 }
 
+/*
+ * Розшифровує вміст EnvelopedData для заданого одержувача. Бере зашифрований вміст
+ * зі структури або із зовнішнього enc_data_opt (звіряючи їх за наявності обох),
+ * ініціалізує адаптер шифру за contentEncryptionAlgorithm, збирає дані одержувача
+ * (env_get_info_for_unwrap), розгортає сеансовий ключ (unwrap_session_key за
+ * узгодженням DH) і розшифровує вміст у out.
+ */
 int env_decrypt_data(const EnvelopedData_t *env_data, const ByteArray *enc_data_opt,
         const Certificate_t *originator_cert_opt, const DhAdapter *recipient_dha,
         const Certificate_t *recipient_cert, ByteArray **out)

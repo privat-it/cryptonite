@@ -3,6 +3,14 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Реалізація блокового шифру ГОСТ 28147-89 («Магма»).
+ * Блок — 64 біти, ключ — 256 біт, 32 раунди мережі Фейстеля.
+ * Підтримувані режими: проста заміна (ECB), гамування (CTR),
+ * гамування зі зворотним зв'язком (CFB) та вироблення імітовставки (MAC).
+ * Таблиця замін (8 S-блоків по 16 значень) задається при створенні контексту.
+ */
+
 #include <string.h>
 #include <stdbool.h>
 
@@ -58,6 +66,8 @@ struct Gost28147Ctx_st {
     } mode;
 };
 
+/* Вбудовані таблиці замін: кожна — 8 рядків по 16 значень (один 4-бітовий S-блок на рядок). */
+/* Таблиця замін № 1. */
 static const uint8_t GOST28147_SBOX_1[SBOX_LEN] = {
     0xa, 0x9, 0xd, 0x6, 0xe, 0xb, 0x4, 0x5, 0xf, 0x1, 0x3, 0xc, 0x7, 0x0, 0x8, 0x2,
     0x8, 0x0, 0xc, 0x4, 0x9, 0x6, 0x7, 0xb, 0x2, 0x3, 0x1, 0xf, 0x5, 0xe, 0xa, 0xd,
@@ -69,6 +79,7 @@ static const uint8_t GOST28147_SBOX_1[SBOX_LEN] = {
     0x1, 0x2, 0x3, 0xe, 0x6, 0xd, 0xb, 0x8, 0xf, 0xa, 0xc, 0x5, 0x7, 0x9, 0x0, 0x4,
 };
 
+/* Таблиця замін № 2. */
 static const uint8_t GOST28147_SBOX_2[SBOX_LEN] = {
     0xe, 0x9, 0x3, 0x7, 0xf, 0x4, 0xc, 0xb, 0x6, 0xa, 0xd, 0x1, 0x0, 0x5, 0x8, 0x2,
     0xa, 0xd, 0xc, 0x7, 0x6, 0xe, 0x8, 0x1, 0xf, 0x3, 0xb, 0x4, 0x0, 0x9, 0x5, 0x2,
@@ -80,6 +91,7 @@ static const uint8_t GOST28147_SBOX_2[SBOX_LEN] = {
     0x4, 0x3, 0xe, 0xd, 0x5, 0x0, 0x2, 0xb, 0x1, 0xa, 0x7, 0x6, 0x9, 0xf, 0x8, 0xc,
 };
 
+/* Таблиця замін № 3. */
 static const uint8_t GOST28147_SBOX_3[SBOX_LEN] = {
     0xd, 0x9, 0x1, 0xe, 0x7, 0x2, 0xc, 0x5, 0x4, 0xb, 0x6, 0xf, 0x3, 0x8, 0xa, 0x0,
     0x7, 0x8, 0x6, 0xb, 0x0, 0x3, 0x4, 0xd, 0x9, 0x5, 0xf, 0xe, 0xa, 0xc, 0x2, 0x1,
@@ -91,6 +103,7 @@ static const uint8_t GOST28147_SBOX_3[SBOX_LEN] = {
     0x6, 0xd, 0xc, 0xa, 0xb, 0x7, 0x9, 0x3, 0xf, 0xe, 0x1, 0x2, 0x0, 0x8, 0x4, 0x5,
 };
 
+/* Таблиця замін № 4. */
 static const uint8_t GOST28147_SBOX_4[SBOX_LEN] = {
     0x9, 0xc, 0x3, 0xd, 0x7, 0x6, 0xe, 0x1, 0xa, 0x2, 0x0, 0x4, 0x8, 0xf, 0x5, 0xb,
     0xa, 0x5, 0xb, 0xe, 0x7, 0x6, 0x0, 0xc, 0x2, 0x8, 0xf, 0x4, 0xd, 0x3, 0x9, 0x1,
@@ -102,6 +115,7 @@ static const uint8_t GOST28147_SBOX_4[SBOX_LEN] = {
     0x1, 0x9, 0xc, 0xb, 0x7, 0x6, 0x8, 0x3, 0x2, 0xf, 0xe, 0x0, 0x5, 0xa, 0x4, 0xd,
 };
 
+/* Таблиця замін № 5. */
 static const uint8_t GOST28147_SBOX_5[SBOX_LEN] = {
     0x3, 0x4, 0xd, 0x8, 0xc, 0x7, 0xa, 0x2, 0x0, 0xe, 0x9, 0xf, 0xb, 0x1, 0x5, 0x6,
     0xc, 0x7, 0x6, 0x9, 0x3, 0x8, 0xb, 0x5, 0xf, 0xa, 0x0, 0xd, 0x4, 0x2, 0x1, 0xe,
@@ -113,6 +127,7 @@ static const uint8_t GOST28147_SBOX_5[SBOX_LEN] = {
     0xe, 0x9, 0x1, 0x8, 0x5, 0xf, 0xb, 0x0, 0x6, 0x2, 0xc, 0x7, 0xa, 0x4, 0xd, 0x3,
 };
 
+/* Таблиця замін № 6. */
 static const uint8_t GOST28147_SBOX_6[SBOX_LEN] = {
     0xf, 0xc, 0x9, 0x6, 0xe, 0x2, 0x1, 0xb, 0x0, 0xd, 0x4, 0xa, 0x7, 0x8, 0x3, 0x5,
     0xe, 0xc, 0x5, 0x0, 0x7, 0x4, 0xa, 0x3, 0x2, 0x6, 0x1, 0xd, 0x9, 0xb, 0xf, 0x8,
@@ -124,6 +139,7 @@ static const uint8_t GOST28147_SBOX_6[SBOX_LEN] = {
     0x1, 0x5, 0xe, 0xb, 0x2, 0xc, 0x3, 0x8, 0xa, 0x0, 0x9, 0x7, 0xf, 0x6, 0x4, 0xd,
 };
 
+/* Таблиця замін № 7. */
 static const uint8_t GOST28147_SBOX_7[SBOX_LEN] = {
     0xf, 0xd, 0xa, 0x5, 0xc, 0x0, 0x1, 0x6, 0x9, 0x2, 0xe, 0x7, 0x3, 0xb, 0x4, 0x8,
     0x2, 0x5, 0xa, 0x0, 0x6, 0x9, 0x1, 0xf, 0xd, 0x4, 0x7, 0xe, 0xb, 0x3, 0x8, 0xc,
@@ -135,6 +151,7 @@ static const uint8_t GOST28147_SBOX_7[SBOX_LEN] = {
     0x1, 0x5, 0x0, 0xf, 0x6, 0xa, 0x3, 0xe, 0x7, 0x2, 0xc, 0xd, 0xb, 0x8, 0x9, 0x4,
 };
 
+/* Таблиця замін № 8. */
 static const uint8_t GOST28147_SBOX_8[SBOX_LEN] = {
     0xe, 0x4, 0xb, 0x2, 0x8, 0x7, 0x5, 0xc, 0x9, 0xd, 0x0, 0x3, 0x1, 0xf, 0x6, 0xa,
     0x3, 0xe, 0xc, 0xa, 0x6, 0x2, 0xd, 0x1, 0x9, 0x8, 0x7, 0x4, 0x0, 0xf, 0x5, 0xb,
@@ -146,6 +163,7 @@ static const uint8_t GOST28147_SBOX_8[SBOX_LEN] = {
     0x3, 0x0, 0x5, 0xc, 0x8, 0xf, 0xd, 0xe, 0xb, 0x6, 0x2, 0x9, 0x7, 0x1, 0x4, 0xa,
 };
 
+/* Таблиця замін № 9. */
 static const uint8_t GOST28147_SBOX_9[SBOX_LEN] = {
     0x9, 0x0, 0xb, 0xc, 0x2, 0x4, 0x3, 0xf, 0xd, 0x6, 0xe, 0x1, 0xa, 0x7, 0x5, 0x8,
     0x3, 0x5, 0x0, 0xf, 0x8, 0x7, 0xe, 0xc, 0xd, 0xa, 0x1, 0x6, 0xb, 0x2, 0x4, 0x9,
@@ -157,6 +175,7 @@ static const uint8_t GOST28147_SBOX_9[SBOX_LEN] = {
     0xe, 0x2, 0x8, 0xf, 0x3, 0x0, 0x7, 0xc, 0xb, 0xd, 0x1, 0x5, 0x6, 0x4, 0x9, 0xa,
 };
 
+/* Таблиця замін № 10. */
 static const uint8_t GOST28147_SBOX_10[SBOX_LEN] = {
     0x8, 0x4, 0x6, 0x9, 0xb, 0xc, 0x1, 0x2, 0x3, 0x7, 0xe, 0x0, 0xd, 0xa, 0xf, 0x5,
     0x7, 0xd, 0x1, 0x8, 0xa, 0xe, 0x4, 0xf, 0x9, 0x0, 0x6, 0x3, 0x2, 0xc, 0xb, 0x5,
@@ -180,6 +199,7 @@ static const uint8_t GOST28147_SBOX_11[SBOX_LEN] = {
     0x1, 0xf, 0xd, 0x0, 0x5, 0x7, 0xa, 0x4, 0x9, 0x2, 0x3, 0xe, 0x6, 0xb, 0x8, 0xc
 };
 
+/* Таблиця замін № 12. */
 static const uint8_t GOST28147_SBOX_12[SBOX_LEN] = {
     0x4, 0x2, 0xf, 0x5, 0x9, 0x1, 0x0, 0x8, 0xe, 0x3, 0xb, 0xc, 0xd, 0x7, 0xa, 0x6,
     0xc, 0x9, 0xf, 0xe, 0x8, 0x1, 0x3, 0xa, 0x2, 0x7, 0x4, 0xd, 0x6, 0x0, 0xb, 0x5,
@@ -191,6 +211,7 @@ static const uint8_t GOST28147_SBOX_12[SBOX_LEN] = {
     0xc, 0x6, 0x5, 0x2, 0xb, 0x0, 0x9, 0xd, 0x3, 0xe, 0x7, 0xa, 0xf, 0x4, 0x1, 0x8
 };
 
+/* Таблиця замін № 13. */
 static const uint8_t GOST28147_SBOX_13[SBOX_LEN] = {
     0x9, 0x6, 0x3, 0x2, 0x8, 0xb, 0x1, 0x7, 0xa, 0x4, 0xe, 0xf, 0xc, 0x0, 0xd, 0x5,
     0x3, 0x7, 0xe, 0x9, 0x8, 0xa, 0xf, 0x0, 0x5, 0x2, 0x6, 0xc, 0xb, 0x4, 0xd, 0x1,
@@ -202,6 +223,7 @@ static const uint8_t GOST28147_SBOX_13[SBOX_LEN] = {
     0xb, 0xa, 0xf, 0x5, 0x0, 0xc, 0xe, 0x8, 0x6, 0x2, 0x3, 0x9, 0x1, 0x7, 0xd, 0x4
 };
 
+/* Таблиця замін № 14. */
 static const uint8_t GOST28147_SBOX_14[SBOX_LEN] = {
     0x8, 0x4, 0xb, 0x1, 0x3, 0x5, 0x0, 0x9, 0x2, 0xe, 0xa, 0xc, 0xd, 0x6, 0x7, 0xf,
     0x0, 0x1, 0x2, 0xa, 0x4, 0xd, 0x5, 0xc, 0x9, 0x7, 0x3, 0xf, 0xb, 0x8, 0x6, 0xe,
@@ -213,6 +235,7 @@ static const uint8_t GOST28147_SBOX_14[SBOX_LEN] = {
     0x0, 0x4, 0xb, 0xe, 0x8, 0x3, 0x7, 0x1, 0xa, 0x2, 0x9, 0x6, 0xf, 0xd, 0x5, 0xc
 };
 
+/* Таблиця замін № 15. */
 static const uint8_t GOST28147_SBOX_15[SBOX_LEN] = {
     0x1, 0xb, 0xc, 0x2, 0x9, 0xd, 0x0, 0xf, 0x4, 0x5, 0x8, 0xe, 0xa, 0x7, 0x6, 0x3,
     0x0, 0x1, 0x7, 0xd, 0xb, 0x4, 0x5, 0x2, 0x8, 0xe, 0xf, 0xc, 0x9, 0xa, 0x6, 0x3,
@@ -224,6 +247,7 @@ static const uint8_t GOST28147_SBOX_15[SBOX_LEN] = {
     0x7, 0x4, 0x0, 0x5, 0xa, 0x2, 0xf, 0xe, 0xc, 0x6, 0x1, 0xb, 0xd, 0x9, 0x3, 0x8
 };
 
+/* Таблиця замін № 16. */
 static const uint8_t GOST28147_SBOX_16[SBOX_LEN] = {
     0xf, 0xc, 0x2, 0xa, 0x6, 0x4, 0x5, 0x0, 0x7, 0x9, 0xe, 0xd, 0x1, 0xb, 0x8, 0x3,
     0xb, 0x6, 0x3, 0x4, 0xc, 0xf, 0xe, 0x2, 0x7, 0xd, 0x8, 0x0, 0x5, 0xa, 0x9, 0x1,
@@ -235,6 +259,7 @@ static const uint8_t GOST28147_SBOX_16[SBOX_LEN] = {
     0x1, 0xa, 0x6, 0x8, 0xf, 0xb, 0x0, 0x4, 0xc, 0x3, 0x5, 0x9, 0x7, 0xd, 0x2, 0xe
 };
 
+/* Таблиця замін № 17. */
 static const uint8_t GOST28147_SBOX_17[SBOX_LEN] = {
     0xa, 0x4, 0x5, 0x6, 0x8, 0x1, 0x3, 0x7, 0xd, 0xc, 0xe, 0x0, 0x9, 0x2, 0xb, 0xf,
     0x5, 0xf, 0x4, 0x0, 0x2, 0xd, 0xb, 0x9, 0x1, 0x7, 0x6, 0x3, 0xc, 0xe, 0xa, 0x8,
@@ -285,7 +310,10 @@ static const uint8_t MAC_KEY_ORDER[16] = {
     0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7
 };
 
+/* Підстановка S для 32-бітного слова: чотири побайтових пошуки в розгорнутих таблицях
+ * (циклічний зсув результату на 11 біт уже враховано в таблицях, див. gost28147_alloc_user_sbox_core). */
 #define SBOX_TRANSFORM(sbox0, sbox1, sbox2, sbox3, x) (sbox0[(x) & 0xff] | sbox1[((x) >> 8) & 0xff] | sbox2[((x) >> 16) & 0xff] | sbox3[((x) >> 24) & 0xff])
+/* XOR двох буферів 32-бітовими словами: _c = _a ^ _b (довжина _len кратна 4). */
 #define FAST_XOR4N(_a, _b, _len, _c)                                                     \
         {                                                                                \
             int _i;                                                                      \
@@ -294,9 +322,18 @@ static const uint8_t MAC_KEY_ORDER[16] = {
             }                                                                            \
         }
 
+/* Константи режиму гамування для інкременту лічильника (див. ctr_next_feed). */
 #define C1 0x01010101
 #define C2 0x01010104
 
+/**
+ * Основний цикл шифрування одного 64-бітного блоку (data[0], data[1] — половини блоку).
+ * Кожен раунд Фейстеля: додавання підключа за модулем 2^32, підстановка S
+ * (зі зсувом на 11 біт) та XOR з іншою половиною.
+ * len = 16 — 16 раундів (для імітовставки), len = 32 — повні 32 раунди
+ * з фінальним обміном половин; порядок підключів задає key_order
+ * (зашифрування чи розшифрування).
+ */
 static __inline void base_cycle8(uint32_t *data, const uint32_t *key, const uint8_t *key_order, int len,
         const uint32_t *sbox)
 {
@@ -318,6 +355,7 @@ static __inline void base_cycle8(uint32_t *data, const uint32_t *key, const uint
         data[0] ^= SBOX_TRANSFORM(sbox0, sbox1, sbox2, sbox3, s);
     }
 
+    /* Після повних 32 раундів половини блоку міняються місцями (XOR-swap). */
     if (len == 32) {
         data[0] ^= data[1];
         data[1] ^= data[0];
@@ -325,6 +363,11 @@ static __inline void base_cycle8(uint32_t *data, const uint32_t *key, const uint
     }
 }
 
+/**
+ * Той самий 32-раундовий цикл одночасно для трьох незалежних 64-бітних блоків
+ * (обробка кількох блоків за прохід — оптимізація швидкодії);
+ * наприкінці — обмін половин кожного блоку.
+ */
 static __inline void base_cycle24(uint32_t data[6], const uint32_t *key, const uint8_t *key_order,
         const uint32_t *sbox)
 {
@@ -353,6 +396,7 @@ static __inline void base_cycle24(uint32_t data[6], const uint32_t *key, const u
         data[4] ^= SBOX_TRANSFORM(sbox0, sbox1, sbox2, sbox3, x3);
     }
 
+    /* Обмін половин кожного з трьох блоків (XOR-swap). */
     data[0] ^= data[1];
     data[1] ^= data[0];
     data[0] ^= data[1];
@@ -364,6 +408,12 @@ static __inline void base_cycle24(uint32_t data[6], const uint32_t *key, const u
     data[4] ^= data[5];
 }
 
+/**
+ * 32-раундовий цикл зашифрування одночасно для чотирьох 64-бітних блоків,
+ * кожен зі своїм набором з восьми підключів (k1..k4): 24 раунди у прямому
+ * порядку ключів, потім 8 — у зворотному, наприкінці — обмін половин блоків.
+ * Використовується кроком гешування ГОСТ 34.311-95 (див. gost34_311.c).
+ */
 void base_cycle32(Gost28147Ctx *ctx, uint32_t src[8], const uint32_t k[32])
 {
     const uint32_t *k1 = k;
@@ -421,6 +471,7 @@ void base_cycle32(Gost28147Ctx *ctx, uint32_t src[8], const uint32_t k[32])
         src[6] ^= SBOX_TRANSFORM(sbox0, sbox1, sbox2, sbox3, r);
     }
 
+    /* Обмін половин кожного з чотирьох блоків (XOR-swap). */
     src[0] ^= src[1];
     src[1] ^= src[0];
     src[0] ^= src[1];
@@ -445,6 +496,7 @@ static __inline void ctr_next_feed(uint32_t *feed)
     int i;
     feed[1] = feed[3 * 2 - 1] + C2;
     feed[0] = feed[3 * 2 - 2] + C1;
+    /* Додавання C2 виконується за модулем 2^32 - 1: при переповненні додається 1. */
     if (feed[1] < C2) {
         feed[1] += 1;
     }
@@ -458,6 +510,11 @@ static __inline void ctr_next_feed(uint32_t *feed)
     }
 }
 
+/**
+ * Зашифрування/розшифрування в режимі простої заміни (ECB).
+ * Дані обробляються порціями по 24 байти (три блоки паралельно),
+ * залишок у 8 чи 16 байт — окремим викликом; довжина кратна 8 байтам.
+ */
 /*Используется в ДСТУ4145 и ГОСТ28147.*/
 int  gost28147_ecb_core(Gost28147Ctx *ctx, const uint8_t *src, size_t len, bool is_encrypt, uint8_t *dst)
 {
@@ -492,6 +549,12 @@ cleanup:
     return ret;
 }
 
+/**
+ * Режим гамування (CTR): гама виробляється зашифруванням лічильника
+ * (по 24 байти — три блоки за раз) і накладається на дані операцією XOR.
+ * Невикористаний залишок гами зберігається в контексті між викликами.
+ * Зашифрування та розшифрування збігаються.
+ */
 static int gost28147_ctr_crypt(Gost28147Ctx *ctx, const uint8_t *src, uint8_t *dst, size_t len)
 {
     Gost28147CtrCtx *ctr_ctx = &ctx->mode.ctr;
@@ -543,6 +606,12 @@ cleanup:
     return ret;
 }
 
+/**
+ * Режим гамування зі зворотним зв'язком (CFB): гама — результат зашифрування
+ * попереднього блоку шифротексту (першим шифрується синхропосилка).
+ * Гілки зашифрування та розшифрування відрізняються лише джерелом
+ * зворотного зв'язку: шифротекст береться з dst або зі src відповідно.
+ */
 static int gost28147_cfb_core(Gost28147Ctx *ctx, const uint8_t *src, size_t len, bool is_encrypt, uint8_t *dst)
 {
     Gost28147CfbCtx *cfb_ctx = &ctx->mode.cfb;
@@ -633,6 +702,12 @@ cleanup:
     return ret;
 }
 
+/**
+ * Створює контекст із таблицею замін, заданою 128 байтами (8 x 16 значень).
+ * Розгортає S-блоки в чотири таблиці по 256 32-бітних значень (по парі
+ * сусідніх S-блоків на байт) із заздалегідь виконаним циклічним зсувом
+ * на 11 біт — це дозволяє робити підстановку і зсув раунду одним пошуком.
+ */
 static Gost28147Ctx *gost28147_alloc_user_sbox_core(const uint8_t *sbox, size_t sbox_len)
 {
     Gost28147Ctx *ctx = NULL;
@@ -645,11 +720,13 @@ static Gost28147Ctx *gost28147_alloc_user_sbox_core(const uint8_t *sbox, size_t 
     CALLOC_CHECKED(ctx, sizeof (Gost28147Ctx));
 
     for (i = 0; i < 256; i++) {
+        /* Пакування пари 4-бітових S-блоків у байтові таблиці для кожного з чотирьох байтів слова. */
         ctx->sbox[i] = sbox[16 + (i >> 4)] << 4 | sbox[i & 0xf];
         ctx->sbox[256 + i] = (sbox[48 + (i >> 4)] << 4 | sbox[32 + (i & 0xf)]) << 8;
         ctx->sbox[512 + i] = (sbox[80 + (i >> 4)] << 4 | sbox[64 + (i & 0xf)]) << 16;
         ctx->sbox[768 + i] = (sbox[112 + (i >> 4)] << 4 | sbox[96 + (i & 0xf)]) << 24;
 
+        /* Попередній циклічний зсув на 11 біт (частина раундового перетворення). */
         ctx->sbox[i] = (ctx->sbox[i] << 11) | (ctx->sbox[i] >> 21);
         ctx->sbox[256 + i] = (ctx->sbox[256 + i] << 11) | (ctx->sbox[256 + i] >> 21);
         ctx->sbox[512 + i] = (ctx->sbox[512 + i] << 11) | (ctx->sbox[512 + i] >> 21);
@@ -671,6 +748,7 @@ cleanup:
     return ctx;
 }
 
+/* Створює контекст шифру з однією зі стандартних таблиць замін, обраною за ідентифікатором. */
 Gost28147Ctx *gost28147_alloc(Gost28147SboxId sbox_id)
 {
     Gost28147Ctx *ctx = NULL;
@@ -743,6 +821,7 @@ cleanup:
     return ctx;
 }
 
+/* Створює контекст шифру з таблицею замін, заданою користувачем (128 байтів). */
 Gost28147Ctx *gost28147_alloc_user_sbox(const ByteArray *sbox)
 {
     uint8_t buf[SBOX_LEN];
@@ -759,6 +838,7 @@ cleanup:
     return ctx;
 }
 
+/* Створює глибоку копію контексту (з окремою копією таблиці замін). */
 Gost28147Ctx *gost28147_copy_with_alloc(const Gost28147Ctx *ctx)
 {
     Gost28147Ctx *out = NULL;
@@ -780,6 +860,7 @@ cleanup:
     return out;
 }
 
+/* Повертає таблицю замін контексту в розгорнутому форматі (128 байтів, 8 x 16 значень). */
 int gost28147_get_ext_sbox(const Gost28147Ctx *ctx, ByteArray **sbox)
 {
     int ret = RET_OK;
@@ -794,6 +875,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає таблицю замін у стисненому форматі (64 байти — по 4 біти на значення). */
 int gost28147_get_compress_sbox(const Gost28147Ctx *ctx, ByteArray **sbox)
 {
     int i, j, ret = RET_OK;
@@ -817,6 +899,7 @@ cleanup:
     return ret;
 }
 
+/* Генерує випадковий 256-бітний (32 байти) ключ за допомогою ГПВЧ. */
 int gost28147_generate_key(PrngCtx *prng, ByteArray **key)
 {
     int ret = RET_OK;
@@ -830,6 +913,7 @@ cleanup:
 }
 
 
+/* Ініціалізує контекст для режиму простої заміни (ECB) заданим 256-бітним ключем. */
 int gost28147_init_ecb(Gost28147Ctx *ctx, const ByteArray *key)
 {
     int ret = RET_OK;
@@ -847,6 +931,8 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує режим гамування (CTR): задає ключ і синхропосилку та готує початкове
+ * значення лічильника (зашифровану синхропосилку). */
 int gost28147_init_ctr(Gost28147Ctx *ctx, const ByteArray *key, const ByteArray *iv)
 {
     Gost28147CtrCtx *ctr_ctx = &ctx->mode.ctr;
@@ -870,6 +956,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує режим гамування зі зворотним зв'язком (CFB): задає ключ і синхропосилку. */
 int gost28147_init_cfb(Gost28147Ctx *ctx, const ByteArray *key, const ByteArray *iv)
 {
     Gost28147CfbCtx *cfb_ctx = &ctx->mode.cfb;
@@ -892,6 +979,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує режим вироблення імітовставки (MAC): задає ключ і обнуляє накопичувач. */
 int gost28147_init_mac(Gost28147Ctx *ctx, const ByteArray *key)
 {
     Gost28147MacCtx *mac_ctx = &ctx->mode.mac;
@@ -912,6 +1000,7 @@ cleanup:
     return ret;
 }
 
+/* Зашифровує вхідні дані згідно з режимом, обраним під час ініціалізації контексту. */
 int gost28147_encrypt(Gost28147Ctx *ctx, const ByteArray *in, ByteArray **out)
 {
     size_t len;
@@ -957,6 +1046,7 @@ cleanup:
     return ret;
 }
 
+/* Розшифровує вхідні дані згідно з режимом, обраним під час ініціалізації контексту. */
 int gost28147_decrypt(Gost28147Ctx *ctx, const ByteArray *in, ByteArray **out)
 {
     size_t len;
@@ -1002,6 +1092,8 @@ cleanup:
     return ret;
 }
 
+/* Додає чергову порцію даних до обчислення імітовставки, обробляючи повні 8-байтові блоки;
+ * неповний залишок зберігається в контексті до наступного виклику. */
 int gost28147_update_mac(Gost28147Ctx *ctx, const ByteArray *in)
 {
     const uint8_t *src;
@@ -1062,6 +1154,7 @@ cleanup:
     return ret;
 }
 
+/* Завершує обчислення імітовставки і повертає її старші 4 байти. */
 int gost28147_final_mac(Gost28147Ctx *ctx, ByteArray **out)
 {
     Gost28147MacCtx *mac_ctx = NULL;
@@ -1096,6 +1189,7 @@ cleanup:
     return ret;
 }
 
+/* Завершує обчислення імітовставки і повертає повні 8 байтів. */
 int gost28147_final_mac8(Gost28147Ctx *ctx, ByteArray **out)
 {
     Gost28147MacCtx *mac_ctx;
@@ -1130,6 +1224,7 @@ cleanup:
     return ret;
 }
 
+/* Звільняє контекст, попередньо затираючи ключ у пам'яті. */
 void gost28147_free(Gost28147Ctx *ctx)
 {
     if (ctx != NULL) {

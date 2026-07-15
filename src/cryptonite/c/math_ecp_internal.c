@@ -3,6 +3,19 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Арифметика групи точок еліптичної кривої y^2 = x^3 + a*x + b над GF(p).
+ *
+ * Обчислення ведуться у якобіанських проєктивних координатах
+ * (x = X/Z^2, y = Y/Z^3): додавання і подвоєння точок виконуються без
+ * ділення в полі, обернений елемент обчислюється лише при переході до
+ * афінних координат. Точка на нескінченності — (0, 0, 1).
+ *
+ * Скалярне множення: двійковий метод double-and-add, а також оптимізовані
+ * варіанти з попередніми обчисленнями (віконний NAF-метод, метод гребеня).
+ * Модуль використовується реалізаціями ECDSA та ГОСТ 34.310.
+ */
+
 #include "math_ecp_internal.h"
 #include "math_int_internal.h"
 #include "macros_internal.h"
@@ -67,6 +80,7 @@ void ecp_init(EcGfpCtx *ctx, const WordArray *p, const WordArray *a, const WordA
     CHECK_NOT_NULL(ctx->a = wa_alloc(len));
     CHECK_NOT_NULL(ctx->b = wa_alloc(len));
 
+    /* -a = p - a: перевірка a == -3 (mod p) для швидшої формули подвоєння. */
     int_sub(p, a, ctx->a);
     ctx->a_equal_minus_3 = (int_bit_len(ctx->a) == 2) && (ctx->a->buf[0] == 3);
     ctx->len = p->len;
@@ -77,6 +91,10 @@ cleanup:
     return;
 }
 
+/**
+ * Перевіряє, чи задовольняє точка (px, py) в афінних координатах
+ * рівняння кривої: py^2 == px^3 + a*px + b (mod p).
+ */
 bool ecp_is_on_curve(const EcGfpCtx *ctx, const WordArray *px, const WordArray *py)
 {
     WordArray *x = NULL;
@@ -114,10 +132,14 @@ cleanup:
 }
 
 /**
- * Удваивает точку эллиптической кривой.
+ * Подвоює точку еліптичної кривої у якобіанських координатах (без ділення).
+ * Для кривих з a = -3 використовується швидша формула
+ * 3*x^2 + a*z^4 = 3*(x - z^2)*(x + z^2).
+ * Якщо y = 0, результат — точка на нескінченності (0, 0, 1).
  *
- * @param P точка эллиптической кривой
- * @param R  = 2*P
+ * @param ctx контекст еліптичної кривої
+ * @param p точка еліптичної кривої
+ * @param r = 2*P (може збігатися з p)
  */
 static void ecp_double_point(const EcGfpCtx *ctx, const ECPoint *p, ECPoint *r)
 {
@@ -197,14 +219,17 @@ cleanup:
 }
 
 /**
- * Складывает точку эллиптической кривой с другой точкой.
+ * Додає до точки P у якобіанських координатах точку Q, задану в афінних
+ * координатах (мішане додавання, без ділення в полі).
+ * Окремо обробляються випадки P = O, Q = O, Q = -P (результат — точка
+ * на нескінченності) та P = Q (виконується подвоєння).
  *
- * @param ctx
- * @param p точка эллиптической кривой
- * @param qx X-координата точки Q представленной в аффинных координатах
- * @param qy Y-координата точки Q представленной в аффинных координатах
- * @param sign = -1 або 1
- * @param r  = P + sign * Q
+ * @param ctx контекст еліптичної кривої
+ * @param p точка еліптичної кривої у якобіанських координатах
+ * @param qx X-координата точки Q в афінних координатах
+ * @param qy Y-координата точки Q в афінних координатах
+ * @param sign = -1 або 1 (додавання -Q або Q)
+ * @param r = P + sign * Q (може збігатися з p)
  */
 void ecp_add_point(const EcGfpCtx *ctx, const ECPoint *p, const WordArray *qx, const WordArray *qy, int sign,
         ECPoint *r)
@@ -315,6 +340,10 @@ cleanup:
     wa_free(t4);
 }
 
+/**
+ * Переводить точку з якобіанських координат в афінні:
+ * x = X/Z^2, y = Y/Z^3, Z = 1. Виконує одне обернення в полі.
+ */
 void ecp_point_to_affine(const EcGfpCtx *ctx, ECPoint *p)
 {
     WordArray *t;
@@ -340,6 +369,13 @@ void ecp_point_to_affine(const EcGfpCtx *ctx, ECPoint *p)
     wa_free(t);
 }
 
+/**
+ * Переводить масив точок array[off .. off+len-1] в афінні координати,
+ * використовуючи одночасне обернення: накопичуються добутки
+ * z0, z0*z1, ..., z0*...*zN, обертається лише останній добуток,
+ * після чого обернені z_i відновлюються зворотним проходом.
+ * Отже, на весь масив потрібне лише одне обернення в полі.
+ */
 static int ecp_points_to_affine(EcGfpCtx *ctx, ECPoint **array, int off, int len)
 {
     WordArray **k = NULL;
@@ -384,6 +420,9 @@ cleanup:
     return ret;
 }
 
+/**
+ * Встановлює точку в точку на нескінченності (0, 0, 1).
+ */
 static void ecp_point_zero(EcGfpCtx *ctx, ECPoint *p)
 {
     wa_zero(p->x);
@@ -391,6 +430,12 @@ static void ecp_point_zero(EcGfpCtx *ctx, ECPoint *p)
     wa_copy(ctx->gfp->one, p->z);
 }
 
+/**
+ * Обчислює таблицю попередніх обчислень для віконного методу:
+ * precomp[i] = (2i + 1) * P, i = 0 .. 2^(width - 2) - 1
+ * (непарні кратні точки; таблиця переводиться в афінні координати
+ * одночасним оберненням).
+ */
 int ecp_calc_win_precomp(EcGfpCtx *ctx, const ECPoint *p, int width, EcPrecomp **precomp1)
 {
     EcPrecomp *precomp = NULL;
@@ -445,6 +490,12 @@ cleanup:
     return ret;
 }
 
+/**
+ * Обчислює таблицю попередніх обчислень для методу гребеня:
+ * спочатку заповнюються точки 2^(i*comb_step) * P (індекси 2^i - 1),
+ * потім усі їх комбінації: precomp[i - 1] відповідає бітовій масці i
+ * зубців гребеня, i = 1 .. 2^width - 1.
+ */
 int ecp_calc_comb_precomp(EcGfpCtx *ctx, const ECPoint *p, int width, EcPrecomp **precomp1)
 {
     int i, j;
@@ -469,6 +520,7 @@ int ecp_calc_comb_precomp(EcGfpCtx *ctx, const ECPoint *p, int width, EcPrecomp 
     } else {
         CHECK_PARAM(ctx->len == p->x->len);
 
+        /* Крок гребеня: бітова довжина скаляра, поділена на width (заокруглення вгору). */
         comb_step = (8 * (int) ctx->len * sizeof(word_t) + width - 1) / width;
         comb_len = (1 << width) - 1;
 
@@ -510,6 +562,11 @@ cleanup:
     return ret;
 }
 
+/**
+ * Скалярне множення r = k * P двійковим методом double-and-add
+ * (обхід бітів скаляра від старшого до молодшого).
+ * Результат повертається в афінних координатах.
+ */
 void ecp_mul(EcGfpCtx *ctx, const ECPoint *p, const WordArray *k, ECPoint *r)
 {
     int len;
@@ -541,6 +598,11 @@ void ecp_mul(EcGfpCtx *ctx, const ECPoint *p, const WordArray *k, ECPoint *r)
     ecp_point_to_affine(ctx, r);
 }
 
+/**
+ * Одночасне скалярне множення r = k * P + n * Q без попередніх обчислень:
+ * спільний цикл подвоєнь з окремими додаваннями P і Q за бітами
+ * обох скалярів. Результат — в афінних координатах.
+ */
 void ecp_dual_mul(EcGfpCtx *ctx, const ECPoint *p, const WordArray *k,
         const ECPoint *q, const WordArray *n, ECPoint *r)
 {
@@ -578,6 +640,13 @@ void ecp_dual_mul(EcGfpCtx *ctx, const ECPoint *p, const WordArray *k,
     ecp_point_to_affine(ctx, r);
 }
 
+/**
+ * Один крок додавання оптимізованого скалярного множення на ітерації iter:
+ * - віконний метод: за ненульовою цифрою NAF-розкладання m_naf[iter]
+ *   додається (або віднімається) непарне кратне з таблиці;
+ * - метод гребеня: з бітів скаляра m з кроком comb_step збирається індекс
+ *   комбінації, і відповідна точка таблиці додається до r.
+ */
 static void ecp_dual_mul_opt_step(const EcGfpCtx *ctx, const EcPrecomp *p_precomp, const WordArray *m, int *m_naf,
         ECPoint *r, int iter, int max_iter)
 {
@@ -614,6 +683,12 @@ static void ecp_dual_mul_opt_step(const EcGfpCtx *ctx, const EcPrecomp *p_precom
     }
 }
 
+/**
+ * Виконує додаткові (фіктивні) операції додавання і подвоєння у буфері buf
+ * для скалярів з малою кількістю ненульових цифр NAF-розкладання, щоб
+ * вирівняти час виконання скалярного множення (протидія атакам за часом).
+ * На результат r не впливає. Застосовується лише для віконного методу.
+ */
 static void ecp_dual_mul_opt_extra_addition(const EcGfpCtx *ctx, const EcPrecomp *precomp, const WordArray *in, int *naf, ECPoint *buf)
 {
     int iter_p = 0;
@@ -643,6 +718,13 @@ static void ecp_dual_mul_opt_extra_addition(const EcGfpCtx *ctx, const EcPrecomp
 }
 
 
+/**
+ * Оптимізоване одночасне скалярне множення r = m * P + n * Q за таблицями
+ * попередніх обчислень: спільний цикл подвоєнь, на кожній ітерації —
+ * додавання з таблиці для P та Q (віконний NAF-метод чи метод гребеня,
+ * залежно від типу таблиці). Наприкінці виконуються фіктивні операції
+ * для вирівнювання часу і перехід до афінних координат.
+ */
 int ecp_dual_mul_opt(EcGfpCtx *ctx, const EcPrecomp *p_precomp, const WordArray *m,
         const EcPrecomp *q_precomp, const WordArray *n, ECPoint *r)
 {
@@ -709,6 +791,7 @@ int ecp_dual_mul_opt(EcGfpCtx *ctx, const EcPrecomp *p_precomp, const WordArray 
         }
     }
 
+    /* Фіктивні операції для вирівнювання часу на "слабких" NAF-скалярах. */
     ecp_dual_mul_opt_extra_addition(ctx, p_precomp, m, m_naf, tmp);
     ecp_dual_mul_opt_extra_addition(ctx, q_precomp, n, n_naf, tmp);
 

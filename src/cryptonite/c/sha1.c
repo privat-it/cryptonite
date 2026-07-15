@@ -3,6 +3,12 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Реалізація геш-функції SHA-1 (FIPS 180) з дайджестом 160 біт.
+ * Дані обробляються 512-бітними блоками; функція стиснення розгорнута
+ * у 80 раундів (чотири групи по 20) з окремими логічними функціями та константами.
+ */
+
 #include <stddef.h>
 #include <memory.h>
 
@@ -15,11 +21,14 @@
 #undef FILE_MARKER
 #define FILE_MARKER "cryptonite/sha1.c"
 
+/* Розширення розкладу повідомлення: нове слово як циклічний зсув XOR попередніх. */
 #define SCHEDULE(i)                                                             \
     temp = schedule[(i - 3) & 0xF] ^ schedule[(i - 8) & 0xF]^               \
                schedule[(i - 14) & 0xF] ^ schedule[(i - 16) & 0xF];             \
     schedule[i & 0xF] = temp << 1 | temp >> 31;
 
+/* Раунди чотирьох груп SHA-1 (ROUND0a/0b, ROUND1..3): логічна функція f та константа k
+ * для кожної групи по 20 раундів; ROUND0a також завантажує вхідне слово у розклад. */
 #define ROUND0a(a, b, c, d, e, i)                                               \
     schedule[i] = (block[i] << 24) | ((block[i] & 0xFF00) << 8) |           \
                       ((block[i] >> 8) & 0xFF00) | (block[i] >> 24);            \
@@ -41,10 +50,12 @@
     SCHEDULE(i)                                                             \
     ROUNDTAIL(a, b, e, (b ^ c ^ d), i, 0xCA62C1D6)
 
+/* Спільний хвіст раунду: оновлення e (з ROTL(a,5), f, k, словом розкладу) та ROTL(b,30). */
 #define ROUNDTAIL(a, b, e, f, i, k)                                             \
         e += ((((a << 5 | a >> 27) + f) + k) + schedule[i & 0xF]);              \
         b = b << 30 | b >> 2;
 
+/* Виводить стан (5 слів) у 20 байтів дайджесту у big-endian порядку. */
 #define OUTPUT_TRANSFORM(u32, u8)                       \
         u8[0] =  (uint8_t)(u32[0] >> 24);               \
         u8[1] =  (uint8_t)(u32[0] >> 16);               \
@@ -102,6 +113,7 @@
         ROUND3(c, d, e, a, b, (63 + i));      \
         ROUND3(b, c, d, e, a, (64 + i))
 
+/* Контекст SHA-1: залишок незавершеного блоку, стан геша, лічильники довжини. */
 struct Sha1Ctx_st {
     uint8_t msg_last_block[64];
     uint32_t state[5];
@@ -110,6 +122,7 @@ struct Sha1Ctx_st {
     uint8_t k_opad[64];
 };
 
+/* Функція стиснення SHA-1: оновлює стан одним 512-бітним блоком (80 раундів). */
 __inline static void sha1_compress(uint32_t *state, uint8_t *block8)
 {
     uint32_t block[16];
@@ -155,6 +168,7 @@ __inline static void sha1_compress(uint32_t *state, uint8_t *block8)
     uint32_to_uint8(block, 16, block8, 64);
 }
 
+/* Скидає контекст до початкового стану SHA-1 (стандартні константи H0). */
 static __inline int sha1_init(Sha1Ctx *ctx)
 {
     int ret = RET_OK;
@@ -176,6 +190,7 @@ cleanup:
     return ret;
 }
 
+/* Виділяє та ініціалізує контекст SHA-1. */
 Sha1Ctx *sha1_alloc(void)
 {
     Sha1Ctx *ctx = NULL;
@@ -193,6 +208,7 @@ cleanup:
     return ctx;
 }
 
+/* Створює копію контексту SHA-1 у новій пам'яті. */
 Sha1Ctx *sha1_copy_with_alloc(const Sha1Ctx *ctx)
 {
     Sha1Ctx *out = NULL;
@@ -206,6 +222,7 @@ cleanup:
     return out;
 }
 
+/* Додає дані: доповнює залишковий блок і стискає всі повні 64-байтні блоки. */
 int sha1_update(Sha1Ctx *ctx, const ByteArray *msg_ba)
 {
     uint8_t *msg_buf = NULL;
@@ -249,6 +266,7 @@ cleanup:
     return ret;
 }
 
+/* Завершує геш: додає біт 0x80, доповнення нулями та довжину повідомлення, повертає 20 байтів. */
 int sha1_final(Sha1Ctx *ctx, ByteArray **hash_code)
 {
     size_t i;
@@ -295,6 +313,7 @@ cleanup:
     return ret;
 }
 
+/* Звільняє контекст SHA-1. */
 void sha1_free(Sha1Ctx *ctx)
 {
     if (ctx != NULL) {

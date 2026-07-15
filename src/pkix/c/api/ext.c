@@ -3,6 +3,15 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Модуль реалізує роботу з окремим розширенням сертифіката/CRL
+ * (Extension, RFC 5280). Містить набір конструкторів ext_create_*, кожен
+ * з яких формує конкретне розширення (ключ уповноваженого, доступ до
+ * інформації ЦС, базові обмеження, політики, точки розподілу CRL, призначення
+ * ключа тощо): значення розширення кодується в ASN.1 та поміщається у поле
+ * extnValue. Також надає доступ до значення розширення та звільнення об'єкта.
+ */
+
 #include "ext.h"
 
 #include "pkix_macros_internal.h"
@@ -69,6 +78,7 @@ cleanup:
     return ret;
 }
 
+/* Створює довільне розширення із заданими OID та вже готовим значенням. */
 int ext_create_any(bool critical, OidNumbers *oid, const ByteArray *value, Extension_t **ext)
 {
     int ret = RET_OK;
@@ -90,6 +100,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Створює розширення AuthorityKeyIdentifier, обчислюючи ідентифікатор ключа
+ * як геш відкритого ключа з переданого SubjectPublicKeyInfo.
+ */
 int ext_create_auth_key_id_from_spki(bool critical,
         const SubjectPublicKeyInfo_t *spki,
         Extension_t **ext)
@@ -136,6 +150,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Створює розширення AuthorityKeyIdentifier, беручи ідентифікатор ключа з
+ * розширення SubjectKeyIdentifier сертифіката видавця.
+ */
 int ext_create_auth_key_id_from_cert(bool critical, const Certificate_t *issuer_cert, Extension_t **ext)
 {
     int ret = RET_OK;
@@ -166,6 +184,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Створює розширення AuthorityInfoAccess: для кожного i формує запис
+ * "метод доступу (OID) -> URI", де метод — oids[i], а локація — name_uris[i].
+ */
 int ext_create_auth_info_access(bool critical, OidNumbers **oids, const char **name_uris, int cnt, Extension_t **ext)
 {
     int ret = RET_OK;
@@ -216,6 +238,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Створює розширення BasicConstraints. Для ЦС (ca=true) задає обмеження
+ * довжини ланцюжка: або явним path_len_constraint, або на одиницю більшим
+ * за значення сертифіката видавця.
+ */
 int ext_create_basic_constraints(bool critical,
         const BasicConstraints_t *issuer,
         bool ca,
@@ -259,6 +286,7 @@ cleanup:
     return ret;
 }
 
+/* Створює розширення CertificatePolicies зі списку ідентифікаторів політик (OID). */
 int ext_create_cert_policies(bool critical, OidNumbers **oids, int cnt, Extension_t **ext)
 {
     int ret = RET_OK;
@@ -303,6 +331,7 @@ cleanup:
     return ret;
 }
 
+/* Створює розширення CRLDistributionPoints зі списку URI точок розподілу CRL. */
 int ext_create_crl_distr_points(bool critical, const char **point_uris, int cnt, Extension_t **ext)
 {
     int ret = RET_OK;
@@ -357,6 +386,7 @@ cleanup:
     return ret;
 }
 
+/* Створює розширення CrlID (URL, номер та час CRL — усі поля необов'язкові). */
 int ext_create_crl_id(bool critical, char *distr_url, ByteArray *crl_number, time_t *crl_time, Extension_t **ext)
 {
     int ret = RET_OK;
@@ -396,6 +426,7 @@ cleanup:
     return ret;
 }
 
+/* Створює розширення CRLNumber (порядковий номер CRL). */
 int ext_create_crl_number(bool critical, const ByteArray *crl_sn, Extension_t **ext)
 {
     int ret = RET_OK;
@@ -423,6 +454,7 @@ cleanup:
     return ret;
 }
 
+/* Створює розширення CRLReason (причина відкликання сертифіката). */
 int ext_create_crl_reason(bool critical, const CRLReason_t *reason, Extension_t **ext)
 {
     int ret = RET_OK;
@@ -446,6 +478,7 @@ cleanup:
     return ret;
 }
 
+/* Створює розширення DeltaCRLIndicator (номер базового CRL для дельта-CRL). */
 int ext_create_delta_crl_indicator(bool critical, const ByteArray *crl_number, Extension_t **ext)
 {
     int ret = RET_OK;
@@ -472,6 +505,7 @@ cleanup:
     return ret;
 }
 
+/* Створює розширення ExtendedKeyUsage зі списку OID призначень ключа. */
 int ext_create_ext_key_usage(bool critical, OBJECT_IDENTIFIER_t **oids, int cnt, Extension_t **ext)
 {
     int ret = RET_OK;
@@ -514,6 +548,7 @@ cleanup:
     return ret;
 }
 
+/* Створює розширення FreshestCRL зі списку URI точок розподілу дельта-CRL. */
 int ext_create_freshest_crl(bool critical, const char **point_uris, int cnt, Extension_t **ext)
 {
     int ret = RET_OK;
@@ -568,6 +603,7 @@ cleanup:
     return ret;
 }
 
+/* Створює розширення InvalidityDate (дата втрати чинності ключа). */
 int ext_create_invalidity_date(bool critical, const time_t *date, Extension_t **ext)
 {
     int ret = RET_OK;
@@ -593,6 +629,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає кількість молодших нульових бітів у байті (позицію першої одиниці). */
 static int byte_bitpadding(uint8_t a)
 {
     int i = 0;
@@ -621,6 +658,11 @@ static uint8_t swap_bits(uint8_t byte)
     return res;
 }
 
+/*
+ * Створює розширення KeyUsage з бітової маски usage_bits. Біти кожного байта
+ * перевертаються (порядок бітів у ASN.1 BIT STRING), відкидаються порожні
+ * старші байти та обчислюється кількість невикористаних бітів.
+ */
 int ext_create_key_usage(bool critical, KeyUsageBits usage_bits, Extension_t **ext)
 {
     int ret = RET_OK;
@@ -663,6 +705,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Створює розширення PrivateKeyUsagePeriod. Період береться або зі структури
+ * validity (з приведенням UTCTime до GeneralizedTime), або з явних міток
+ * часу not_before/not_after.
+ */
 int ext_create_private_key_usage(bool critical,
         const Validity_t *validity,
         const time_t *not_before,
@@ -749,6 +796,7 @@ cleanup:
     return ret;
 }
 
+/* Створює QCStatement про відповідність (кваліфікований сертифікат за політикою УкрЕДС). */
 int ext_create_qc_statement_compliance(QCStatement_t **out)
 {
     QCStatement_t *qc_statement = NULL;
@@ -771,6 +819,7 @@ cleanup:
     return ret;
 }
 
+/* Створює QCStatement з обмеженням суми транзакції (валюта, значення, порядок). */
 int ext_create_qc_statement_limit_value(const char *currency_code, long amount, long exponent, QCStatement_t **out)
 {
     QCStatement_t *qc_statement = NULL;
@@ -805,6 +854,7 @@ cleanup:
     return ret;
 }
 
+/* Створює розширення QCStatements зі списку окремих QCStatement. */
 int ext_create_qc_statements(bool critical, QCStatement_t **qc_statements, size_t qc_statements_len, Extension_t **out)
 {
     int ret = RET_OK;
@@ -844,6 +894,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Створює розширення SubjectAltName зі списку імен. Підтримуються типи
+ * rfc822Name (email) та dNSName; тип кожного імені задається у types[i].
+ */
 int ext_create_subj_alt_name_directly(bool critical,
         enum GeneralName_PR types[],
         const char **names,
@@ -901,6 +955,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Створює розширення SubjectDirectoryAttributes з рядка виду {oid=значення}...:
+ * рядок розбирається на пари ключ-значення, ключ трактується як OID атрибута,
+ * значення — як PrintableString.
+ */
 int ext_create_subj_dir_attr_directly(bool critical, const char *subject_attr, Extension_t **ext)
 {
     int ret = RET_OK;
@@ -973,6 +1032,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Створює розширення SubjectInfoAccess: для кожного i формує запис
+ * "метод доступу (OID) -> URI" (oids[i] та name_uris[i]).
+ */
 int ext_create_subj_info_access(bool critical, OidNumbers **oids, const char **name_uris, int cnt, Extension_t **ext)
 {
     int ret = RET_OK;
@@ -1022,6 +1085,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Створює розширення SubjectKeyIdentifier, обчислюючи ідентифікатор ключа
+ * (геш) з переданого SubjectPublicKeyInfo.
+ */
 int ext_create_subj_key_id(bool critical,
         const SubjectPublicKeyInfo_t *spki,
         Extension_t **ext)
@@ -1057,6 +1124,7 @@ cleanup:
     return ret;
 }
 
+/* Створює розширення Nonce із заданих випадкових байтів. */
 int ext_create_nonce(bool critical, const ByteArray *rnd_bts, Extension_t **ext)
 {
     int ret = RET_OK;
@@ -1079,6 +1147,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає значення розширення (вміст extnValue) як ByteArray. */
 int ext_get_value(const Extension_t *ext, ByteArray **value)
 {
     int ret = RET_OK;
@@ -1095,6 +1164,7 @@ cleanup:
     return ret;
 }
 
+/* Звільняє об'єкт розширення. */
 void ext_free(Extension_t *ext)
 {
     LOG_ENTRY();

@@ -13,6 +13,19 @@
 #undef FILE_MARKER
 #define FILE_MARKER "cryptonite/dstu4145_params_internal.c"
 
+/*
+ * Таблиці стандартних наборів параметрів еліптичних кривих ДСТУ 4145
+ * над полями GF(2^m) та допоміжні дані для роботи з оптимальним
+ * нормальним базисом (ОНБ):
+ *  - DSTU4145_PARAMS_M<m>_PB / _ONB — стандартні криві: многочлен f(t)
+ *    основного поля, коефіцієнти a та b рівняння кривої, порядок n
+ *    базової точки, її координати (px, py); багатобайтові числа
+ *    зберігаються у порядку little-endian;
+ *  - F_M<m>_ONB, COMPRESS_MATRIX_M<m>_ONB, ROOT1/ROOT2_M<m>_ONB — дані
+ *    для множення в ОНБ та перетворення елементів поля між ОНБ і
+ *    поліноміальним базисом (ПБ).
+ */
+
 /**
  * Параметры получены из указа Министерства юстиции Украины, Администрации Государственной службы специальной
  * связи и защиты информации Украины 20.08.2012 №1236/5/453 "О требованиях к структуре объектных
@@ -20,7 +33,7 @@
  * зарегистрированного в Министерстве юстиции Украины 20 августа 2012 № 1399/21711.
  */
 
-/* m163(PB) */
+/* Стандартна крива ДСТУ 4145 над GF(2^163), поліноміальний базис. */
 static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M163_PB = {
     {163, 7, 6, 3, 0},
     1,
@@ -51,7 +64,7 @@ static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M163_PB = {
     false
 };
 
-/* m167(PB) */
+/* Стандартна крива ДСТУ 4145 над GF(2^167), поліноміальний базис. */
 static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M167_PB = {
     {167, 6, 0},
     1,
@@ -82,7 +95,7 @@ static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M167_PB = {
     false
 };
 
-/* m173(PB) */
+/* Стандартна крива ДСТУ 4145 над GF(2^173), поліноміальний базис. */
 static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M173_PB = {
     {173, 10, 2, 1, 0},
     0,
@@ -113,7 +126,7 @@ static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M173_PB = {
     false
 };
 
-/* m179(PB) */
+/* Стандартна крива ДСТУ 4145 над GF(2^179), поліноміальний базис. */
 static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M179_PB = {
     {179, 4, 2, 1, 0},
     1,
@@ -144,7 +157,7 @@ static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M179_PB = {
     false
 };
 
-/* m191(PB) */
+/* Стандартна крива ДСТУ 4145 над GF(2^191), поліноміальний базис. */
 static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M191_PB = {
     {191, 9, 0},
     1,
@@ -175,7 +188,7 @@ static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M191_PB = {
     false
 };
 
-/* m233(PB) */
+/* Стандартна крива ДСТУ 4145 над GF(2^233), поліноміальний базис. */
 static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M233_PB = {
     {233, 9, 4, 1, 0},
     1,
@@ -206,7 +219,7 @@ static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M233_PB = {
     false
 };
 
-/* m257(PB) */
+/* Стандартна крива ДСТУ 4145 над GF(2^257), поліноміальний базис. */
 static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M257_PB = {
     {257, 12, 0},
     0,
@@ -237,7 +250,7 @@ static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M257_PB = {
     false
 };
 
-/* m307(PB) */
+/* Стандартна крива ДСТУ 4145 над GF(2^307), поліноміальний базис. */
 static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M307_PB = {
     {307, 8, 4, 2, 0},
     1,
@@ -268,7 +281,7 @@ static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M307_PB = {
     false
 };
 
-/* m367(PB) */
+/* Стандартна крива ДСТУ 4145 над GF(2^367), поліноміальний базис. */
 static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M367_PB = {
     {367, 21, 0},
     1,
@@ -299,7 +312,7 @@ static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M367_PB = {
     false
 };
 
-/* m431(PB) */
+/* Стандартна крива ДСТУ 4145 над GF(2^431), поліноміальний базис. */
 static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M431_PB = {
     {431, 5, 3, 1, 0},
     1,
@@ -330,7 +343,7 @@ static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M431_PB = {
     false
 };
 
-/* m173(ONB) */
+/* Стандартна крива ДСТУ 4145 над GF(2^173), оптимальний нормальний базис. */
 static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M173_ONB = {
     {173, 10, 2, 1, 0},
     0,
@@ -361,7 +374,7 @@ static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M173_ONB = {
     true
 };
 
-/* m179(ONB) */
+/* Стандартна крива ДСТУ 4145 над GF(2^179), оптимальний нормальний базис. */
 static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M179_ONB = {
     {179, 4, 2, 1, 0},
     1,
@@ -392,7 +405,7 @@ static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M179_ONB = {
     true
 };
 
-/* m191(ONB) */
+/* Стандартна крива ДСТУ 4145 над GF(2^191), оптимальний нормальний базис. */
 static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M191_ONB = {
     {191, 9, 0},
     1,
@@ -423,7 +436,7 @@ static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M191_ONB = {
     true
 };
 
-/* m233(ONB) */
+/* Стандартна крива ДСТУ 4145 над GF(2^233), оптимальний нормальний базис. */
 static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M233_ONB = {
     {233, 9, 4, 1, 0},
     1,
@@ -454,7 +467,7 @@ static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M233_ONB = {
     true
 };
 
-/* m431(ONB) */
+/* Стандартна крива ДСТУ 4145 над GF(2^431), оптимальний нормальний базис. */
 static const Dstu4145DefaultParamsCtx DSTU4145_PARAMS_M431_ONB = {
     {431, 5, 3, 1, 0},
     1,
@@ -1433,6 +1446,7 @@ static void multiply_onb(const WordArray *x, const WordArray *y, const uint16_t 
     }
 }
 
+/* Повертає стандартний набір параметрів кривої за ідентифікатором або NULL. */
 const Dstu4145DefaultParamsCtx *dstu4145_get_defaut_params(Dstu4145ParamsId params_id)
 {
     switch (params_id) {
@@ -1471,6 +1485,11 @@ const Dstu4145DefaultParamsCtx *dstu4145_get_defaut_params(Dstu4145ParamsId para
     }
 }
 
+/*
+ * Повертає індекс даних ОНБ для степеня поля m у таблицях
+ * all_compress_mulp / ALL_F_ONB / ROOT1_ALL_ONB / ROOT2_ALL_ONB
+ * або -1, якщо m не підтримується.
+ */
 static int dstu4145_get_defaut_ind_onb(int m)
 {
     switch (m) {
@@ -1507,6 +1526,11 @@ static int dstu4145_get_defaut_ind_onb(int m)
     }
 }
 
+/*
+ * Повертає многочлен, який утворює ПБ для поля GF(2^m) з ОНБ
+ * (степені ненульових членів, за спаданням), або NULL для
+ * непідтримуваного m.
+ */
 const int *dstu4145_get_defaut_f_onb(int m)
 {
     int params_ind_onb = dstu4145_get_defaut_ind_onb(m);
@@ -1664,6 +1688,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Відновлює координати (Qx, Qy) точки відкритого ключа з її стисненого
+ * подання q (X-координата з ознакою у молодшому біті). Повертає
+ * RET_INVALID_PUBLIC_KEY, якщо q не задає точку на кривій.
+ */
 int dstu4145_decompress_pubkey_core(const Dstu4145ParamsCtx *params, const ByteArray *q, ByteArray **qx_out, ByteArray **qy_out)
 {
     int k;

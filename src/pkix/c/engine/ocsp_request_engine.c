@@ -3,6 +3,15 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Двигун побудови запиту статусу сертифікатів OCSP (OCSPRequest).
+ * Обчислює гЕші імені та відкритого ключа видавця (кореневого сертифіката) через
+ * DigestAdapter, накопичує ідентифікатори сертифікатів (CertID), статуси яких
+ * запитуються, і будує TBSRequest. За наявності адаптера підпису запитувача формує
+ * підписаний запит із ланцюжком сертифікатів; інакше - непідписаний. Додатково містить
+ * перевірку структури відповіді OCSP (eocspreq_validate_resp).
+ */
+
 #include "ocsp_request_engine.h"
 
 #include "log_internal.h"
@@ -478,6 +487,9 @@ cleanup:
     return (ret == RET_OK) ? _warning_code_ : ret;
 }
 
+/* Зручна обгортка: будує непідписаний OCSP-запит статусу user_cert за кореневим сертифікатом.
+ * Самостійно ініціалізує адаптери гешування й перевірки, ГПВЧ та мітку (nonce), після чого
+ * послідовно викликає eocspreq_alloc, eocspreq_add_cert і eocspreq_generate. */
 int eocspreq_generate_from_cert(const Certificate_t *root_cert, const Certificate_t *user_cert,
         OCSPRequest_t **ocsp_req)
 {

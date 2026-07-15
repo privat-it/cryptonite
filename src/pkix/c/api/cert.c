@@ -3,6 +3,13 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Модуль роботи з сертифікатом X.509 (структура Certificate за RFC 5280).
+ * Містить функції створення/звільнення, DER-кодування та декодування,
+ * перевірки підпису сертифіката, перевірки строку дії, а також доступу
+ * до полів TBS-частини та розширень (extensions).
+ */
+
 #include "cert.h"
 
 #include <time.h>
@@ -21,6 +28,7 @@
 
 #define SERIAL_LEN 20
 
+/* Виділяє та обнуляє нову структуру Certificate. Повертає NULL у разі помилки. */
 Certificate_t *cert_alloc(void)
 {
     Certificate_t *cert = NULL;
@@ -35,6 +43,7 @@ cleanup:
     return cert;
 }
 
+/* Звільняє пам'ять, зайняту структурою Certificate. */
 void cert_free(Certificate_t *cert)
 {
     LOG_ENTRY();
@@ -44,6 +53,10 @@ void cert_free(Certificate_t *cert)
     }
 }
 
+/*
+ * Ініціалізує сертифікат готовими складовими: копіює TBS-частину, ідентифікатор
+ * алгоритму підпису та значення підпису у структуру. Не обчислює підпис самостійно.
+ */
 int cert_init_by_sign(Certificate_t *cert,
         const TBSCertificate_t *tbs_cert,
         const AlgorithmIdentifier_t *aid,
@@ -71,6 +84,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Формує підписаний сертифікат за допомогою SignAdapter: копіює TBS-частину,
+ * отримує від адаптера ідентифікатор алгоритму підпису, DER-кодує TBS та
+ * обчислює над ним підпис, записуючи результат у поле signature.
+ */
 int cert_init_by_adapter(Certificate_t *cert, const TBSCertificate_t *tbs_cert, const SignAdapter *adapter)
 {
     int ret = RET_OK;
@@ -109,6 +127,7 @@ cleanup:
     return ret;
 }
 
+/* DER-кодує сертифікат у байтовий масив. */
 int cert_encode(const Certificate_t *cert, ByteArray **encode)
 {
     int ret = RET_OK;
@@ -123,6 +142,7 @@ cleanup:
     return ret;
 }
 
+/* Декодує сертифікат із DER-подання (попередньо звільняє поточний вміст структури). */
 int cert_decode(Certificate_t *cert, const ByteArray *in)
 {
     int ret = RET_OK;
@@ -141,6 +161,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Перевіряє, чи містить сертифікат критичне розширення, відсутнє у списку
+ * підтримуваних. Для кожного критичного розширення шукає його OID серед
+ * підтримуваних; якщо збігу немає — встановлює flag=true.
+ */
 int cert_has_unsupported_critical_ext(const Certificate_t *cert, bool *flag)
 {
     int i, j;
@@ -206,6 +231,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Повертає масив OID усіх критичних розширень сертифіката. Спершу підраховує
+ * їх кількість, виділяє масив, потім копіює у нього OID кожного критичного розширення.
+ */
 int cert_get_critical_ext_oids(const Certificate_t *cert, OBJECT_IDENTIFIER_t ***oids, size_t *cnt)
 {
     Extensions_t *cert_exts;
@@ -274,6 +303,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Повертає масив OID усіх некритичних розширень сертифіката (аналогічно до
+ * cert_get_critical_ext_oids, але відбирає розширення без ознаки critical).
+ */
 int cert_get_non_critical_ext_oids(const Certificate_t *cert, OBJECT_IDENTIFIER_t ***oids, size_t *cnt)
 {
     Extensions_t *cert_extensions;
@@ -345,6 +378,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Шукає розширення за заданим OID і повертає його значення (extnValue) як
+ * байтовий масив. Якщо розширення немає — RET_PKIX_EXT_NOT_FOUND.
+ */
 int cert_get_ext_value(const Certificate_t *cert, const OidNumbers *oid_numbers, ByteArray **out)
 {
     int ret = RET_OK;
@@ -388,6 +425,7 @@ cleanup:
     return ret;
 }
 
+/* Перевіряє чинність сертифіката на поточний системний час. */
 int cert_check_validity(const Certificate_t *cert)
 {
     int ret = RET_OK;
@@ -406,6 +444,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Перевіряє, що задана дата належить строку дії сертифіката. Зчитує notBefore
+ * та notAfter (UTCTime або GeneralizedTime) і повертає помилку, якщо date поза
+ * інтервалом [notBefore, notAfter].
+ */
 int cert_check_validity_with_date(const Certificate_t *cert, time_t date)
 {
     int ret = RET_OK;
@@ -452,6 +495,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає номер версії сертифіката (0, якщо поле version відсутнє). */
 int cert_get_version(const Certificate_t *cert, long *version)
 {
     int ret = RET_OK;
@@ -471,6 +515,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає серійний номер сертифіката як байтовий масив. */
 int cert_get_sn(const Certificate_t *cert, ByteArray **sn)
 {
     int ret = RET_OK;
@@ -492,6 +537,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає початок строку дії (notBefore) як time_t. */
 int cert_get_not_before(const Certificate_t *cert, time_t *date)
 {
     int ret = RET_OK;
@@ -518,6 +564,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає кінець строку дії (notAfter) як time_t. */
 int cert_get_not_after(const Certificate_t *cert, time_t *date)
 {
     int ret = RET_OK;
@@ -545,6 +592,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію TBS-частини сертифіката. */
 int cert_get_tbs_cert(const Certificate_t *cert, TBSCertificate_t **tbs_cert)
 {
     int ret = RET_OK;
@@ -562,6 +610,7 @@ cleanup:
     return ret;
 }
 
+/* DER-кодує TBS-частину сертифіката у байтовий масив (дані, над якими обчислюється підпис). */
 int cert_get_tbs_info(const Certificate_t *cert, ByteArray **out)
 {
     int ret = RET_OK;
@@ -574,6 +623,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію ідентифікатора алгоритму підпису сертифіката. */
 int cert_get_aid(const Certificate_t *cert, AlgorithmIdentifier_t **aid)
 {
     int ret = RET_OK;
@@ -590,6 +640,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію значення підпису сертифіката (BIT STRING). */
 int cert_get_sign(const Certificate_t *cert, BIT_STRING_t **sign)
 {
     int ret = RET_OK;
@@ -604,6 +655,7 @@ cleanup:
     return ret;
 }
 
+/* Зчитує значення розширення keyUsage і декодує його у структуру KeyUsage. */
 int cert_get_key_usage(const Certificate_t *cert, KeyUsage_t **attr)
 {
     int ret = RET_OK;
@@ -625,6 +677,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Зчитує розширення basicConstraints і повертає значення pathLenConstraint
+ * (максимальну довжину ланцюжка). Якщо розширення чи поле відсутнє — cnt = -1.
+ */
 int cert_get_basic_constrains(const Certificate_t *cert, int *cnt)
 {
     int ret = RET_OK;
@@ -679,6 +735,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Визначає, чи є сертифікат сертифікатом OCSP-відповідача: декодує розширення
+ * extKeyUsage і перевіряє, що єдиний його елемент має OID id-kp-OCSPSigning.
+ */
 int cert_is_ocsp_cert(const Certificate_t *cert, bool *flag)
 {
     int ret = RET_OK;
@@ -735,6 +795,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Перевіряє підпис сертифіката: DER-кодує TBS-частину, перетворює BIT STRING
+ * підпису на байтовий масив і викликає verify_data адаптера перевірки.
+ */
 int cert_verify(const Certificate_t *cert, const VerifyAdapter *adapter)
 {
     ByteArray *buffer = NULL;
@@ -758,6 +822,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію SubjectPublicKeyInfo (відомості про відкритий ключ суб'єкта). */
 int cert_get_spki(const Certificate_t *cert, SubjectPublicKeyInfo_t **spki)
 {
     int ret = RET_OK;
@@ -774,6 +839,12 @@ cleanup:
     return ret;
 }
 
+/*
+ * Перевіряє відповідність сертифіката ідентифікатору підписувача (SignerIdentifier).
+ * Для issuerAndSerialNumber порівнює серійний номер та ім'я видавця; для
+ * subjectKeyIdentifier порівнює значення розширення subjectKeyIdentifier сертифіката
+ * із заданим. Повертає true при збігу.
+ */
 bool cert_check_sid(const Certificate_t *certificate, const SignerIdentifier_t *sid)
 {
     SignerIdentifierIm_t *sid_im = NULL;
@@ -816,6 +887,10 @@ cleanup:
     return ans;
 }
 
+/*
+ * Повертає ідентифікатор ключа суб'єкта: зчитує розширення subjectKeyIdentifier,
+ * декодує його та витягує значення OCTET STRING.
+ */
 int cert_get_subj_key_id(const Certificate_t *cert, ByteArray **subj_key_id)
 {
     ByteArray *cert_subj_key_id = NULL;
@@ -839,6 +914,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Повертає ідентифікатор ключа видавця: зчитує розширення authorityKeyIdentifier,
+ * декодує його та витягує поле keyIdentifier.
+ */
 int cert_get_auth_key_id(const Certificate_t *cert, ByteArray **auth_key_id)
 {
     int ret = RET_OK;
@@ -859,6 +938,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Зчитує з розширення qcStatements грошове обмеження транзакції (твердження
+ * id-etsi-qcs-QcLimitValue): повертає код валюти (рядок), суму (amount) та
+ * десятковий порядок (exponent). Підтримується лише алфавітний код валюти.
+ */
 int cert_get_qc_statement_limit(const Certificate_t *cert, char **currency_code, long *amount, long *exponent)
 {
     int ret;
@@ -911,6 +995,7 @@ cleanup:
     return ret;
 }
 
+/* Перевіряє коректність DER-подання сертифіката спробою декодування; true при успіху. */
 bool cert_check_validity_encode(const ByteArray *cert)
 {
     Certificate_t *certificate = NULL;
@@ -927,6 +1012,11 @@ cleanup:
     return out;
 }
 
+/*
+ * Перевіряє, що відкритий ключ сертифіката збігається із заданим pub_key і, за
+ * потреби (key_usage != 0), що встановлені всі відповідні біти розширення keyUsage.
+ * Результат перевірки повертається у flag.
+ */
 int cert_check_pubkey_and_usage(const Certificate_t *cert, const ByteArray *pub_key, int key_usage, bool *flag)
 {
     int ret = RET_OK;
@@ -974,6 +1064,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Зчитує з розширення subjectInfoAccess адресу (URI) служби позначок часу TSP:
+ * шукає запис із методом доступу id-ad-timeStamping та повертає його URI.
+ */
 int cert_get_tsp_url(const Certificate_t *cert, ByteArray **data)
 {
     int ret = RET_OK;

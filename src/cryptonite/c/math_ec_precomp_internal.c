@@ -3,6 +3,13 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Службові операції над таблицями попередніх обчислень (EcPrecomp),
+ * що прискорюють скалярне множення точки еліптичної кривої: глибоке
+ * копіювання та звільнення таблиць для віконного методу і методу гребеня.
+ * Заповнення таблиць виконують модулі math_ecp_internal / math_ec2m_internal.
+ */
+
 #include "math_ec_precomp_internal.h"
 #include "math_int_internal.h"
 #include "macros_internal.h"
@@ -10,6 +17,12 @@
 #undef FILE_MARKER
 #define FILE_MARKER "cryptonite/math_ec_precomp_internal.c"
 
+/**
+ * Створює глибоку копію контексту попередніх обчислень:
+ * копіюються параметри методу та всі точки таблиці.
+ * Для гребеня розмір таблиці визначається як 2^comb_width - 1,
+ * для віконного методу — зберігається у precomp_len.
+ */
 EcPrecomp *ec_copy_precomp_with_alloc(EcPrecomp *precomp)
 {
     int i, ret = RET_OK;
@@ -63,6 +76,9 @@ cleanup:
     return NULL;
 }
 
+/**
+ * Звільняє контекст попередніх обчислень разом з усіма точками таблиці.
+ */
 void ec_precomp_free(EcPrecomp *precomp)
 {
     int i;

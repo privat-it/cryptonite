@@ -3,6 +3,13 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Реалізація базових операцій над точкою еліптичної кривої (ECPoint):
+ * виділення, ініціалізація, копіювання, обнулення та звільнення пам'яті.
+ * Точка зберігає три проєктивні координати X, Y, Z (WordArray); їх
+ * інтерпретацію визначають модулі арифметики кривих над GF(p) та GF(2^m).
+ */
+
 #include "math_ec_point_internal.h"
 #include "macros_internal.h"
 
@@ -29,6 +36,10 @@ cleanup:
     return NULL;
 }
 
+/**
+ * Ініціалізує точку копіями переданих координат.
+ * Якщо pz == NULL, координата Z встановлюється в 1 (афінна точка).
+ */
 static void ec_point_init(ECPoint *p, const WordArray *px, const WordArray *py, const WordArray *pz)
 {
     int ret = RET_OK;

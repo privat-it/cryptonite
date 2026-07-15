@@ -3,6 +3,12 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Реалізація блокового шифру AES (Rijndael, FIPS-197) з ключами 128/192/256
+ * біт у режимах ECB, CBC, CFB, OFB, CTR. Шифрування блока виконується через
+ * попередньо обчислені T-таблиці (об'єднані SubBytes, ShiftRows, MixColumns).
+ */
+
 #include <memory.h>
 
 #include "macros_internal.h"
@@ -26,6 +32,7 @@ typedef enum {
     AES_MODE_CBC
 } CipherMode;
 
+/* Контекст AES: розклади ключа для шифрування/розшифрування, IV та поточний стан гами режимів. */
 struct AesCtx_st {
     size_t offset;
     uint8_t gamma[AES_BLOCK_LEN];
@@ -107,6 +114,7 @@ static const uint32_t Te0[256] = {
     0x7bb0b0cbU, 0xa85454fcU, 0x6dbbbbd6U, 0x2c16163aU,
 };
 
+/* Te1: Te0 з циклічним зсувом байтів на 8 біт (для другої позиції байта у слові). */
 static const uint32_t Te1[256] = {
     0xa5c66363U, 0x84f87c7cU, 0x99ee7777U, 0x8df67b7bU,
     0x0dfff2f2U, 0xbdd66b6bU, 0xb1de6f6fU, 0x5491c5c5U,
@@ -174,6 +182,7 @@ static const uint32_t Te1[256] = {
     0xcb7bb0b0U, 0xfca85454U, 0xd66dbbbbU, 0x3a2c1616U,
 };
 
+/* Te2: Te0 з циклічним зсувом байтів на 16 біт. */
 static const uint32_t Te2[256] = {
     0x63a5c663U, 0x7c84f87cU, 0x7799ee77U, 0x7b8df67bU,
     0xf20dfff2U, 0x6bbdd66bU, 0x6fb1de6fU, 0xc55491c5U,
@@ -241,6 +250,7 @@ static const uint32_t Te2[256] = {
     0xb0cb7bb0U, 0x54fca854U, 0xbbd66dbbU, 0x163a2c16U,
 };
 
+/* Te3: Te0 з циклічним зсувом байтів на 24 біти. */
 static const uint32_t Te3[256] = {
     0x6363a5c6U, 0x7c7c84f8U, 0x777799eeU, 0x7b7b8df6U,
     0xf2f20dffU, 0x6b6bbdd6U, 0x6f6fb1deU, 0xc5c55491U,
@@ -308,6 +318,7 @@ static const uint32_t Te3[256] = {
     0xb0b0cb7bU, 0x5454fca8U, 0xbbbbd66dU, 0x16163a2cU,
 };
 
+/* Te4: S-box AES, продубльований у всі чотири байти слова (останній раунд і розклад ключа). */
 static const uint32_t Te4[256] = {
     0x63636363U, 0x7c7c7c7cU, 0x77777777U, 0x7b7b7b7bU,
     0xf2f2f2f2U, 0x6b6b6b6bU, 0x6f6f6f6fU, 0xc5c5c5c5U,
@@ -375,6 +386,7 @@ static const uint32_t Te4[256] = {
     0xb0b0b0b0U, 0x54545454U, 0xbbbbbbbbU, 0x16161616U,
 };
 
+/* Td0–Td3: обернені T-таблиці (InvSubBytes + InvMixColumns) для розшифрування. */
 static const uint32_t Td0[256] = {
     0x51f4a750U, 0x7e416553U, 0x1a17a4c3U, 0x3a275e96U,
     0x3bab6bcbU, 0x1f9d45f1U, 0xacfa58abU, 0x4be30393U,
@@ -442,6 +454,7 @@ static const uint32_t Td0[256] = {
     0x7bcb8461U, 0xd532b670U, 0x486c5c74U, 0xd0b85742U,
 };
 
+/* Td1: Td0 з циклічним зсувом байтів на 8 біт. */
 static const uint32_t Td1[256] = {
     0x5051f4a7U, 0x537e4165U, 0xc31a17a4U, 0x963a275eU,
     0xcb3bab6bU, 0xf11f9d45U, 0xabacfa58U, 0x934be303U,
@@ -509,6 +522,7 @@ static const uint32_t Td1[256] = {
     0x617bcb84U, 0x70d532b6U, 0x74486c5cU, 0x42d0b857U,
 };
 
+/* Td2: Td0 з циклічним зсувом байтів на 16 біт. */
 static const uint32_t Td2[256] = {
     0xa75051f4U, 0x65537e41U, 0xa4c31a17U, 0x5e963a27U,
     0x6bcb3babU, 0x45f11f9dU, 0x58abacfaU, 0x03934be3U,
@@ -576,6 +590,7 @@ static const uint32_t Td2[256] = {
     0x84617bcbU, 0xb670d532U, 0x5c74486cU, 0x5742d0b8U,
 };
 
+/* Td3: Td0 з циклічним зсувом байтів на 24 біти. */
 static const uint32_t Td3[256] = {
     0xf4a75051U, 0x4165537eU, 0x17a4c31aU, 0x275e963aU,
     0xab6bcb3bU, 0x9d45f11fU, 0xfa58abacU, 0xe303934bU,
@@ -643,6 +658,7 @@ static const uint32_t Td3[256] = {
     0xcb84617bU, 0x32b670d5U, 0x6c5c7448U, 0xb85742d0U,
 };
 
+/* Td4: обернений S-box AES, продубльований у всі чотири байти слова (останній раунд розшифрування). */
 static const uint32_t Td4[256] = {
     0x52525252U, 0x09090909U, 0x6a6a6a6aU, 0xd5d5d5d5U,
     0x30303030U, 0x36363636U, 0xa5a5a5a5U, 0x38383838U,
@@ -717,6 +733,7 @@ static const uint32_t rcon[] = {
     0x1B000000, 0x36000000
 };
 
+/* GETU_32/PUT_U32: читання та запис 32-бітного слова у big-endian поданні. */
 #define GETU_32(plaintext)                         \
    (((uint32_t)(plaintext)[0] << 24) ^             \
     ((uint32_t)(plaintext)[1] << 16) ^             \
@@ -729,6 +746,7 @@ static const uint32_t rcon[] = {
     (ciphertext)[2] = (uint8_t) ((st) >> 8);        \
     (ciphertext)[3] = (uint8_t)  (st)
 
+/* Один крок розкладу ключа AES-128: RotWord + SubWord (через Te4) + Rcon, далі XOR-ланцюжок. */
 #define expanded_key_128(round)                                 \
     temp    = rk[3];                                            \
     rk[4] = rk[0] ^                                             \
@@ -742,6 +760,7 @@ static const uint32_t rcon[] = {
     rk[7] = rk[3] ^ rk[6];                                      \
     rk += 4
 
+/* Крок розкладу ключа AES-192: голова — SubWord/RotWord/Rcon, хвіст — продовження XOR-ланцюжка. */
 #define expanded_key_head_192(round)                        \
     temp    = rk[5];                                        \
     rk[6] = rk[0] ^                                         \
@@ -759,6 +778,7 @@ static const uint32_t rcon[] = {
     rk[11] = rk[5] ^ rk[10];           \
     rk += 6
 
+/* Крок розкладу ключа AES-256: у хвості додатковий SubWord без RotWord/Rcon. */
 #define expanded_key_head_256(round)                            \
     temp = rk[7];                                               \
     rk[8 ] = rk[0]^                                             \
@@ -783,6 +803,7 @@ static const uint32_t rcon[] = {
     rk[15] = rk[7] ^ rk[14];                                    \
     rk += 8
 
+/* Один раунд шифрування через T-таблиці (SubBytes + ShiftRows + MixColumns + AddRoundKey): s -> t. */
 #define t_round_encrypt(round)                                          \
     t0 = *(Te0 + (s0 >> 24        )) ^ *(Te1 + ((s1 >> 16) & 0xff)) ^   \
          *(Te2 + ((s2 >> 8) & 0xff)) ^ *(Te3 + (s3 & 0xff)        ) ^   \
@@ -797,6 +818,7 @@ static const uint32_t rcon[] = {
          *(Te2 + ((s1 >> 8) & 0xff)) ^ *(Te3 + (s2 & 0xff)        ) ^   \
          *(rk + 3 + (round << 2))
 
+/* Той самий раунд шифрування у протилежному напрямку змінних: t -> s. */
 #define s_round_encrypt(round)                                        \
     s0 = *(Te0 + (t0 >> 24        )) ^ *(Te1 + ((t1 >> 16) & 0xff)) ^ \
          *(Te2 + ((t2 >> 8) & 0xff)) ^ *(Te3 + (t3 & 0xff        )) ^ \
@@ -811,6 +833,7 @@ static const uint32_t rcon[] = {
          *(Te2 + ((t1 >> 8) & 0xff)) ^ *(Te3 + (t2 & 0xff        )) ^ \
          *(rk + 3 + (round << 2))
 
+/* Один раунд розшифрування через обернені T-таблиці: s -> t. */
 #define t_round_decrypt(round)                                          \
     t0 = *(Td0 + (s0 >> 24        )) ^ *(Td1 + ((s3 >> 16) & 0xff)) ^   \
          *(Td2 + ((s2 >> 8) & 0xff)) ^ *(Td3 + (s1 & 0xff)        ) ^   \
@@ -825,6 +848,7 @@ static const uint32_t rcon[] = {
          *(Td2 + ((s1 >> 8) & 0xff)) ^ *(Td3 + (s0 & 0xff)        ) ^   \
          *(rk + 3 + (round << 2))
 
+/* Раунд розшифрування у протилежному напрямку змінних: t -> s. */
 #define s_round_decrypt(round)                                        \
     s0 = *(Td0 + (t0 >> 24        )) ^ *(Td1 + ((t3 >> 16) & 0xff)) ^ \
          *(Td2 + ((t2 >> 8) & 0xff)) ^ *(Td3 + (t1 & 0xff        )) ^ \
@@ -847,6 +871,8 @@ static const uint32_t rcon[] = {
     expanded_key_head_256(round);   \
     expanded_key_tail_256
 
+/* Розклад ключа шифрування (Key Expansion, FIPS-197): заповнює ctx->rkey
+ * і повертає кількість раундів (10/12/14 залежно від довжини ключа). */
 static int expanded_key(AesCtx *ctx)
 {
     int ret = RET_OK;
@@ -908,6 +934,7 @@ cleanup:
     return ret;
 }
 
+/* Перевіряє довжину ключа (16/24/32 байти), копіює його в контекст і виконує розклад ключа. */
 static int aes_base_init(AesCtx *ctx, const ByteArray *key)
 {
     int ret = RET_OK;
@@ -928,6 +955,7 @@ cleanup:
     return ret;
 }
 
+/* Перевіряє та копіює вектор ініціалізації (16 байт) у контекст. */
 static int aes_iv_init(AesCtx *ctx, const ByteArray *iv)
 {
     int ret = RET_OK;
@@ -946,6 +974,9 @@ cleanup:
     return ret;
 }
 
+/* Будує розклад ключа для розшифрування (еквівалентний обернений шифр):
+ * раундові ключі переставляються у зворотному порядку, а до проміжних
+ * застосовується InvMixColumns через композицію Td*[Te4[...]]. */
 static void init_revert_rkey(AesCtx *ctx)
 {
     size_t i, j;
@@ -988,6 +1019,7 @@ static void init_revert_rkey(AesCtx *ctx)
     }
 }
 
+/* Розшифровує один 16-байтний блок через обернені T-таблиці (Td*) та фінальний раунд з Td4. */
 __inline static void block_decrypt(AesCtx *ctx, uint8_t *in, uint8_t *out)
 {
     uint32_t *rk;
@@ -1046,6 +1078,7 @@ __inline static void block_decrypt(AesCtx *ctx, uint8_t *in, uint8_t *out)
     PUT_U32(in + 12, s3);
 }
 
+/* Шифрує один 16-байтний блок через T-таблиці (Te*) та фінальний раунд з Te4. */
 __inline static void block_encrypt(AesCtx *ctx, uint8_t *in, uint8_t *out)
 {
     uint32_t *rk;
@@ -1105,6 +1138,7 @@ __inline static void block_encrypt(AesCtx *ctx, uint8_t *in, uint8_t *out)
     PUT_U32(out + 12, s3);
 }
 
+/* Побайтовий XOR двох 16-байтних блоків (як пара 64-бітних слів). */
 __inline static void aes_xor(void *arg1, void *arg2, void *out)
 {
     uint64_t *a1 = (uint64_t *) arg1;
@@ -1115,6 +1149,7 @@ __inline static void aes_xor(void *arg1, void *arg2, void *out)
     o[1] = a1[1] ^ a2[1];
 }
 
+/* Шифрування в режимі ECB: кожен блок шифрується незалежно; довжина має бути кратна блоку. */
 static int encrypt_ecb(AesCtx *ctx, const ByteArray *pdata, ByteArray **cdata)
 {
     uint8_t *pdata_buf = NULL;
@@ -1144,6 +1179,7 @@ cleanup:
     return ret;
 }
 
+/* Розшифрування в режимі ECB: кожен блок розшифровується незалежно. */
 static int decrypt_ecb(AesCtx *ctx, const ByteArray *pdata, ByteArray **cdata)
 {
     uint8_t *pdata_buf = NULL;
@@ -1173,6 +1209,8 @@ cleanup:
     return ret;
 }
 
+/* Режим OFB: гама формується повторним шифруванням попереднього блоку гами та XOR з даними
+ * (шифрування й розшифрування збігаються). Підтримує потокову обробку через ctx->offset. */
 static int encrypt_ofb(AesCtx *ctx, const ByteArray *src, ByteArray **dst)
 {
     uint8_t *gamma = ctx->gamma;
@@ -1222,6 +1260,8 @@ cleanup:
     return ret;
 }
 
+/* Шифрування в режимі CFB: гама формується шифруванням попереднього шифротексту (feed),
+ * далі XOR з відкритим текстом. Підтримує потокову обробку через ctx->offset. */
 static int encrypt_cfb(AesCtx *ctx, const ByteArray *src, ByteArray **dst)
 {
     uint8_t *gamma = ctx->gamma;
@@ -1275,6 +1315,7 @@ cleanup:
     return ret;
 }
 
+/* Розшифрування в режимі CFB: у feed зберігається вхідний шифротекст, гама — його шифрування. */
 static int decrypt_cfb(AesCtx *ctx, const ByteArray *src, ByteArray **dst)
 {
     int ret = RET_OK;
@@ -1330,6 +1371,7 @@ cleanup:
     return ret;
 }
 
+/* Шифрування в режимі CBC: кожен блок XOR-иться з попереднім шифротекстом (gamma) перед шифруванням. */
 static int encrypt_cbc(AesCtx *ctx, const ByteArray *src, ByteArray **dst)
 {
     ByteArray *out = NULL;
@@ -1362,6 +1404,7 @@ cleanup:
     return ret;
 }
 
+/* Розшифрування в режимі CBC: блок розшифровується та XOR-иться з попереднім шифротекстом. */
 static int decrypt_cbc(AesCtx *ctx, const ByteArray *src, ByteArray **dst)
 {
     int ret = RET_OK;
@@ -1391,6 +1434,7 @@ cleanup:
     return ret;
 }
 
+/* Інкремент лічильника (гами) як великого big-endian числа для режиму CTR. */
 static void gamma_gen(uint8_t *gamma, size_t size)
 {
     do {
@@ -1399,6 +1443,8 @@ static void gamma_gen(uint8_t *gamma, size_t size)
     } while (gamma[size] == 0);
 }
 
+/* Режим CTR: гама — це шифрування лічильника feed, який інкрементується після кожного блоку;
+ * XOR з даними (шифрування й розшифрування збігаються). Підтримує потокову обробку. */
 static int encrypt_ctr(AesCtx *ctx, const ByteArray *src, ByteArray **dst)
 {
     uint8_t *gamma = ctx->gamma;
@@ -1453,6 +1499,7 @@ cleanup:
     return ret;
 }
 
+/* Виділяє та обнуляє контекст AES. */
 AesCtx *aes_alloc(void)
 {
     AesCtx *ctx = NULL;
@@ -1465,6 +1512,7 @@ cleanup:
     return ctx;
 }
 
+/* Генерує випадковий ключ AES заданої довжини (16/24/32 байти) за допомогою ГВЧ. */
 int aes_generate_key(PrngCtx *prng, size_t key_len, ByteArray **key)
 {
     int ret = RET_OK;
@@ -1479,6 +1527,7 @@ cleanup:
     return ret;
 }
 
+/* Затирає секретні дані контексту та звільняє пам'ять. */
 void aes_free(AesCtx *ctx)
 {
     if (ctx) {
@@ -1487,6 +1536,7 @@ void aes_free(AesCtx *ctx)
     }
 }
 
+/* Ініціалізує контекст для режиму ECB: розклад ключа шифрування та розшифрування. */
 int aes_init_ecb(AesCtx *ctx, const ByteArray *key)
 {
     int ret = RET_OK;
@@ -1501,6 +1551,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для режиму CBC: розклад ключів та початкова гама з IV. */
 int aes_init_cbc(AesCtx *ctx, const ByteArray *key, const ByteArray *iv)
 {
     int ret = RET_OK;
@@ -1520,6 +1571,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для режиму OFB: розклад ключа та початкова гама/feed з IV. */
 int aes_init_ofb(AesCtx *ctx, const ByteArray *key, const ByteArray *iv)
 {
     int ret = RET_OK;
@@ -1539,6 +1591,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для режиму CFB: розклад ключа та початкова гама/feed з IV. */
 int aes_init_cfb(AesCtx *ctx, const ByteArray *key, const ByteArray *iv)
 {
     int ret = RET_OK;
@@ -1557,6 +1610,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для режиму CTR: розклад ключа та початковий лічильник feed з IV. */
 int aes_init_ctr(AesCtx *ctx, const ByteArray *key, const ByteArray *iv)
 {
     int ret = RET_OK;
@@ -1576,6 +1630,7 @@ cleanup:
     return ret;
 }
 
+/* Шифрує дані згідно з режимом, заданим при ініціалізації контексту. */
 int aes_encrypt(AesCtx *ctx, const ByteArray *in, ByteArray **out)
 {
     int ret = RET_OK;
@@ -1609,6 +1664,7 @@ cleanup:
     return ret;
 }
 
+/* Розшифровує дані згідно з режимом, заданим при ініціалізації контексту. */
 int aes_decrypt(AesCtx *ctx, const ByteArray *in, ByteArray **out)
 {
     int ret = RET_OK;

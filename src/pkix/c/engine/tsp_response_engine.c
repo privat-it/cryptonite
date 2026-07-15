@@ -3,6 +3,15 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Двигун побудови відповіді на запит мітки часу TSP (TimeStampResp, RFC 3161).
+ * За політикою запиту добирає з мапи адаптерів потрібну пару адаптерів (гешування/підпис),
+ * перевіряє алгоритм гешування запиту, будує TSTInfo (політика, messageImprint, серійний
+ * номер, час, nonce, за наявності - ім'я TSA) і загортає його у підписаний CMS SignedData
+ * (через signer_info/signed_data-двигуни). Формує PKIStatusInfo зі статусом granted або
+ * grantedWithMods (коли політику довелося підставити за замовчуванням).
+ */
+
 #include "tsp_response_engine.h"
 #include "log_internal.h"
 #include "oids.h"
@@ -16,8 +25,12 @@
 #undef FILE_MARKER
 #define FILE_MARKER "pki/engine/tsp_response_engine.c"
 
+/* Ознака формування відповіді з модифікаціями (grantedWithMods): встановлюється, коли
+ * запит не містить політики й вона підставляється за замовчуванням. */
 static bool with_mods;
 
+/* Шукає в мапі адаптерів пару (гешування/підпис), алгоритм підпису якої відповідає заданому
+ * OID, і повертає новий одноелементний AdaptersMap з нею. NULL - якщо не знайдено. */
 static AdaptersMap *get_signer(const OidNumbers *oid_arr, const AdaptersMap *tsp_map_gl)
 {
     AdaptersMap *single_adapter = NULL;
@@ -56,6 +69,9 @@ cleanup:
     return NULL;
 }
 
+/* Обирає адаптер підпису за політикою запиту: за відсутності політики бере DSTU4145 PB
+ * і виставляє прапорець with_mods; для відомих політик (PB/ONB) - відповідний адаптер.
+ * NULL - для непідтримуваної політики. */
 static AdaptersMap *prepare_signer(const TimeStampReq_t *req, const AdaptersMap *tsp_map_gl)
 {
     LOG_ENTRY();
@@ -81,6 +97,7 @@ static AdaptersMap *prepare_signer(const TimeStampReq_t *req, const AdaptersMap 
     }
 }
 
+/* Перевіряє, що алгоритм гешування з messageImprint запиту входить до переліку підтримуваних. */
 static int validate_aid(const MessageImprint_t *mess_impr, const DigestAlgorithmIdentifiers_t *tsp_digest_aids)
 {
     int ret = RET_OK;
@@ -104,6 +121,10 @@ cleanup:
     return ret;
 }
 
+/* Основний крок формування мітки часу: декодує запит, перевіряє алгоритм гешування, добирає
+ * адаптер за політикою, будує TSTInfo (політика, messageImprint, серійний номер, версія, час,
+ * nonce та, за наявності сертифіката, ім'я TSA) і підписує його CMS-контейнером SignedData,
+ * загорнутим у ContentInfo. За req->certReq до контейнера додається сертифікат підписувача. */
 static int try_generate(ContentInfo_t **content_info,
         const time_t *current_time_gl,
         const DigestAlgorithmIdentifiers_t *tsp_digest_aids,
@@ -215,6 +236,8 @@ cleanup:
     return ret;
 }
 
+/* Будує TimeStampResp: викликає try_generate для формування timeStampToken, встановлює
+ * PKIStatusInfo (granted або grantedWithMods залежно від with_mods) і повертає готову відповідь. */
 int etspresp_generate(const AdaptersMap *tsp_map,
         const ByteArray *tsp_req,
         const INTEGER_t *sn,

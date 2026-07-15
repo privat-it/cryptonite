@@ -2,6 +2,13 @@
 // Created by paradaimu on 9/6/18.
 //
 
+/*
+ * Реалізація цифрового підпису ГОСТ 34.310-95 на еліптичній кривій над полем GF(p).
+ * Підтримує генерацію відкритого ключа, вироблення та перевірку підпису (пара r, s),
+ * стиснення й відновлення точки відкритого ключа, а також попереднє обчислення
+ * таблиць (comb/віконних) для прискорення скалярного множення точки.
+ */
+
 #include "gost3410.h"
 #include "gost3410_params_internal.h"
 #include "math_gfp_internal.h"
@@ -19,6 +26,8 @@
 #define GOST3410_DEFAULT_WIN_WIDTH 5
 #define GOST3410_MODULE_SIZE 32
 
+/* Готує таблицю попереднього обчислення для точки-генератора P (прискорює вироблення підпису).
+ * Рівень оптимізації визначає метод: comb або віконний (window); за замовчуванням — віконний. */
 static int gost3410_set_sign_precomp(Gost3410Ctx *ctx, int sign_comb_opt_level, int sign_win_opt_level)
 {
     int ret = RET_OK;
@@ -53,6 +62,8 @@ cleanup:
     return ret;
 }
 
+/* Готує таблицю попереднього обчислення для відкритого ключа Q (прискорює перевірку підпису).
+ * Рівень оптимізації визначає метод: comb або віконний (window); за замовчуванням — віконний. */
 static int gost3410_set_verify_precomp(Gost3410Ctx *ctx, int verify_comb_opt_level, int verify_win_opt_level)
 {
     int ret = RET_OK;
@@ -88,6 +99,7 @@ cleanup:
 }
 
 
+/* Звільняє структуру параметрів кривої (точку P та числа p, a, b, q). */
 static void gost3410_params_free(Gost3410ParamsCtx *params)
 {
     if (params == NULL) {
@@ -103,6 +115,8 @@ static void gost3410_params_free(Gost3410ParamsCtx *params)
     free(params);
 }
 
+/* Створює контекст ГОСТ 34.310 із заданими параметрами кривої: модуль p, коефіцієнти a, b,
+ * порядок підгрупи q та координати (px, py) точки-генератора P. */
 Gost3410Ctx *gost3410_alloc_with_params(const ByteArray *p, const ByteArray *a, const ByteArray *b,
                                         const ByteArray *q, const ByteArray *px, const ByteArray *py)
 {
@@ -146,6 +160,7 @@ cleanup:
     return ctx;
 }
 
+/* Створює контекст ГОСТ 34.310 з одним зі стандартних наборів параметрів, обраним за ідентифікатором. */
 Gost3410Ctx *gost3410_alloc(Gost3410ParamsId params_id)
 {
     const Gost3410DefaultParamsCtx *def_params;
@@ -190,6 +205,7 @@ cleanup:
     return ctx;
 }
 
+/* Звільняє контекст і всі пов'язані ресурси (параметри, ключі, таблиці попереднього обчислення, ГПВЧ). */
 void gost3410_free(Gost3410Ctx *ctx)
 {
     if (ctx == NULL) {
@@ -209,6 +225,8 @@ void gost3410_free(Gost3410Ctx *ctx)
     free(ctx);
 }
 
+/* Ініціалізує контекст для вироблення підпису: перевіряє особистий ключ d (0 < d < q),
+ * ініціалізує ГПВЧ і готує таблицю попереднього обчислення для точки P. */
 int gost3410_init_sign(Gost3410Ctx *ctx, const ByteArray *d, PrngCtx *prng)
 {
     int ret = RET_OK;
@@ -266,6 +284,9 @@ cleanup:
     return ret;
 }
 
+/* Виробляє підпис (r, s) для геш-значення повідомлення.
+ * Кроки: e = hash mod q (за нуля e = 1); випадкове k; точка C = kP; r = C.x mod q;
+ * s = (r*d + k*e) mod q. Значення k, r, s перевибираються, доки не стануть ненульовими. */
 int gost3410_sign(Gost3410Ctx *ctx, const ByteArray *hash, ByteArray **rOut, ByteArray **sOut)
 {
     int ret = RET_OK;
@@ -343,6 +364,7 @@ cleanup:
     return ret;
 }
 
+/* Обчислює відкритий ключ Q = d*P за особистим ключем d і повертає його координати (Qx, Qy). */
 int gost3410_get_pubkey(Gost3410Ctx *ctx, const ByteArray *d, ByteArray **Qx, ByteArray **Qy)
 {
     int ret = RET_OK;
@@ -397,6 +419,8 @@ cleanup:
     return ret;
 }
 
+/* Перетворює координати відкритого ключа (qx, qy) на точку кривої з перевіркою коректності:
+ * координати мають бути в межах [0, p) і точка має належати кривій. */
 static int public_key_to_ec_point(const Gost3410Ctx *ctx, const ByteArray *qx, const ByteArray *qy, ECPoint **q)
 {
     WordArray *wqx = NULL;
@@ -442,6 +466,7 @@ cleanup:
     return ret;
 }
 
+/* Стискає відкритий ключ: повертає координату qx і молодший біт координати qy. */
 int gost3410_compress_pubkey(Gost3410Ctx *ctx, const ByteArray *qx, const ByteArray *qy, ByteArray **q, int *last_qy_bit)
 {
     ECPoint *ec_point = NULL;
@@ -464,6 +489,8 @@ cleanup:
     return ret;
 }
 
+/* Відновлює повний відкритий ключ (qx, qy) зі стисненого подання (qx і молодший біт qy),
+ * розв'язуючи рівняння кривої відносно y. */
 int gost3410_decompress_pubkey(Gost3410Ctx *ctx, const ByteArray *q, int last_qy_bit, ByteArray **qx,
                                ByteArray **qy)
 {
@@ -526,6 +553,8 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для перевірки підпису заданим відкритим ключем (qx, qy):
+ * перевіряє його коректність і належність кривій, готує таблиці попереднього обчислення. */
 int gost3410_init_verify(Gost3410Ctx *ctx, const ByteArray *qx, const ByteArray *qy)
 {
     int ret = RET_OK;
@@ -608,6 +637,9 @@ cleanup:
 
 //#define PR printf("%s:%d\n", __FILE__, __LINE__); fflush(stdout);
 
+/* Перевіряє підпис (r, s) для геш-значення повідомлення.
+ * Кроки: перевірка 0 < r, s < p; e = hash mod q; v = e^-1 mod q;
+ * z1 = s*v mod q, z2 = -r*v mod q; точка C = z1*P + z2*Q; підпис дійсний, якщо C.x mod q == r. */
 int gost3410_verify(Gost3410Ctx *ctx, const ByteArray *hash, const ByteArray *r, const ByteArray *s)
 {
     WordArray *e = NULL;
@@ -690,6 +722,8 @@ cleanup:
     return ret;
 }
 
+/* Встановлює рівень оптимізації скалярного множення для підпису та перевірки:
+ * розпаковує з opt_level параметри методів (comb/віконного) і перебудовує таблиці попереднього обчислення. */
 int gost3410_set_opt_level(Gost3410Ctx *ctx, OptLevelId opt_level)
 {
     int ret = RET_OK;

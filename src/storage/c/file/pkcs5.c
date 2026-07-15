@@ -3,6 +3,13 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Файловий огляд: реалізація PKCS#5 — деривація ключа з пароля (PBKDF2) та
+ * шифрування/розшифрування вмісту за схемою PBES2. Підтримуються HMAC на базі
+ * ГОСТ 34.311 та SHA-1/224/256/384/512, а також шифри ГОСТ 28147 (ДСТУ) і
+ * AES-256-CBC. Використовується для захисту закритих ключів у PKCS#8/PKCS#12.
+ */
+
 #include "pkcs5.h"
 
 #include "pkix_macros_internal.h"
@@ -18,6 +25,11 @@
 #undef FILE_MARKER
 #define FILE_MARKER "storage/pkcs5.c"
 
+/*
+ * Реалізація PBKDF2 (PKCS#5): виводить ключ довжини key_len з пароля та солі за
+ * задану кількість ітерацій, використовуючи HMAC обраного алгоритму (id).
+ * Кожен блок обчислюється як T_i = F(P, S, c, i) = U_1 xor U_2 xor ... xor U_c.
+ */
 static int pbkdf2_f(const char *pass,
         const ByteArray *salt,
         unsigned long iterations,
@@ -159,6 +171,7 @@ cleanup:
     return ret;
 }
 
+/* Розшифровує дані виведеним ключем dk згідно з алгоритмом шифрування aid (PBES2). */
 static int pbes2_decrypt(const AlgorithmIdentifier_t *aid,
         const ByteArray *dk,
         const ByteArray *data,
@@ -183,6 +196,7 @@ cleanup:
     return ret;
 }
 
+/* Шифрує дані виведеним ключем dk згідно з алгоритмом шифрування aid (PBES2). */
 static int pbes2_encrypt(const AlgorithmIdentifier_t *aid,
         const ByteArray *dk,
         const ByteArray *data,
@@ -207,6 +221,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Розшифровує EncryptedPrivateKeyInfo за схемою PBES2: зчитує параметри KDF
+ * (сіль, ітерації, PRF), виводить ключ через PBKDF2 і розшифровує дані
+ * відповідним шифром (ГОСТ 28147/ДСТУ або AES-256-CBC).
+ */
 int pkcs5_decrypt_dstu(const EncryptedPrivateKeyInfo_t *container,
         const char *pass,
         ByteArray **key)
@@ -274,6 +293,12 @@ cleanup:
     return ret;
 }
 
+/*
+ * Шифрує ключ за схемою PBES2: формує параметри KDF (PBKDF2 із заданою сіллю та
+ * кількістю ітерацій), виводить ключ і шифрує дані заданим алгоритмом
+ * (ГОСТ 28147/ДСТУ з HMAC ГОСТ 34.311 або AES-256-CBC з HMAC SHA-1), формуючи
+ * EncryptedPrivateKeyInfo.
+ */
 int pkcs5_encrypt_dstu(const ByteArray *key,
         const char *pass,
         const ByteArray *salt,
@@ -356,6 +381,7 @@ cleanup:
     return ret;
 }
 
+/* Визначає тип PKCS#5 контейнера за OID алгоритму шифрування (PBES2 -> PKCS5_DSTU). */
 int pkcs5_get_type(const EncryptedPrivateKeyInfo_t *key, Pkcs5Type *type)
 {
     int ret = RET_OK;

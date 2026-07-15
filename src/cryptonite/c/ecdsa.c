@@ -3,6 +3,17 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Реалізація ECDSA над простим полем GF(p) (крива y^2 = x^3 + ax + b):
+ *  - робота з доменними параметрами (p, a, b, q, P), у т.ч. стандартними наборами;
+ *  - генерація ключів, стиснення/відновлення відкритого ключа;
+ *  - формування та перевірка підпису (r, s).
+ * Арифметика кривої — math_ecp_internal.h (ecp_*), поля — math_gfp_internal.h;
+ * для прискорення скалярного множення використовуються передобчислення
+ * точок P (база, підпис) та Q (відкритий ключ, перевірка) у формі
+ * гребінки (comb) або віконного методу (win).
+ */
+
 #include "ecdsa.h"
 #include "ecdsa_internal.h"
 #include "ecdsa_params_internal.h"
@@ -15,6 +26,7 @@
 
 #define ECDSA_DEFAULT_WIN_WIDTH 5
 
+/* Звільняє доменні параметри ECDSA (крива, поле порядку q, базова точка, передобчислення). */
 static void ecdsa_params_free(EcdsaParamsCtx *params)
 {
     if (params != NULL) {
@@ -26,6 +38,8 @@ static void ecdsa_params_free(EcdsaParamsCtx *params)
     }
 }
 
+/* Створює доменні параметри ECDSA: криву над GF(p) з коефіцієнтами a, b,
+ * поле лишків за порядком базової точки q та саму базову точку P = (px, py). */
 static EcdsaParamsCtx *ecdsa_params_alloc(const ByteArray *p, const ByteArray *a, const ByteArray *b,
         const ByteArray *q, const ByteArray *px, const ByteArray *py)
 {
@@ -85,6 +99,8 @@ cleanup:
     return params;
 }
 
+/* Перетворює координати відкритого ключа на точку кривої з перевіркою коректності:
+ * 0 <= qx < p, 0 < qy < p та належність точки кривій. */
 static int public_key_to_ec_point(const EcdsaParamsCtx *params, const ByteArray *qx, const ByteArray *qy, ECPoint **q)
 {
     WordArray *wqx = NULL;
@@ -130,6 +146,8 @@ cleanup:
     return ret;
 }
 
+/* Створює контекст ECDSA за ідентифікатором стандартного набору параметрів
+ * (таблиці в ecdsa_params_internal.h). */
 EcdsaCtx *ecdsa_alloc(EcdsaParamsId params_id)
 {
     const EcdsaDefaultParamsCtx *def_params;
@@ -167,6 +185,7 @@ cleanup:
     return ctx;
 }
 
+/* Створює новий контекст ECDSA із заданими доменними параметрами (без кеша). */
 EcdsaCtx *ecdsa_alloc_ext_new(const ByteArray *p, const ByteArray *a, const ByteArray *b, const ByteArray *q,
         const ByteArray *px, const ByteArray *py)
 {
@@ -199,6 +218,7 @@ cleanup:
     return ctx;
 }
 
+/* Створює контекст ECDSA із заданими параметрами, спершу шукаючи готовий у кеші. */
 EcdsaCtx *ecdsa_alloc_ext(const ByteArray *p, const ByteArray *a, const ByteArray *b, const ByteArray *q,
         const ByteArray *px, const ByteArray *py)
 {
@@ -213,6 +233,7 @@ EcdsaCtx *ecdsa_alloc_ext(const ByteArray *p, const ByteArray *a, const ByteArra
 
 }
 
+/* Повертає доменні параметри контексту у вигляді байтових масивів однакової довжини. */
 int ecdsa_get_params(EcdsaCtx *ctx, ByteArray **p, ByteArray **a, ByteArray **b, ByteArray **q,
         ByteArray **px, ByteArray **py)
 {
@@ -252,6 +273,7 @@ cleanup:
     return ret;
 }
 
+/* Порівнює доменні параметри двох контекстів (крива, поля, базова точка). */
 int ecdsa_equals_params(const EcdsaCtx *param_a, const EcdsaCtx *param_b, bool *equals)
 {
     int ret = RET_OK;
@@ -309,6 +331,8 @@ cleanup:
     return ret;
 }
 
+/* (Пере)обчислює таблицю передобчислень для точки відкритого ключа Q,
+ * що використовується під час перевірки підпису (метод comb або win). */
 static int ecdsa_set_verify_precomp(EcdsaCtx *ctx, int verify_comb_opt_level, int verify_win_opt_level)
 {
     EcdsaParamsCtx *params = NULL;
@@ -346,6 +370,7 @@ cleanup:
     return ret;
 }
 
+/* Створює копію контексту лише з доменними параметрами (без ключів та ГПВЧ). */
 EcdsaCtx *ecdsa_copy_params_with_alloc(const EcdsaCtx *param)
 {
     int ret = RET_OK;
@@ -380,6 +405,8 @@ cleanup:
     return NULL;
 }
 
+/* Створює повну копію контексту, включно з ключами, передобчисленнями
+ * та новим ГПВЧ, засіяним від ГПВЧ оригіналу. */
 EcdsaCtx *ecdsa_copy_with_alloc(const EcdsaCtx *param)
 {
     int ret = RET_OK;
@@ -428,6 +455,7 @@ cleanup:
     return NULL;
 }
 
+/* Генерує закритий ключ ECDSA: випадкове d у діапазоні [1, q-1] (метод відкидання). */
 int ecdsa_generate_privkey(EcdsaCtx *ctx, PrngCtx *prng, ByteArray **d)
 {
     WordArray *wd = NULL;
@@ -452,6 +480,8 @@ cleanup:
     return ret;
 }
 
+/* (Пере)обчислює таблицю передобчислень для базової точки P,
+ * що використовується під час формування підпису (метод comb або win). */
 static int ecdsa_set_sign_precomp(const EcdsaCtx *ctx, int sign_comb_opt_level, int sign_win_opt_level)
 {
     EcdsaParamsCtx *params = NULL;
@@ -489,6 +519,7 @@ cleanup:
     return ret;
 }
 
+/* Обчислює відкритий ключ Q = d*P скалярним множенням базової точки. */
 int ecdsa_get_pubkey(EcdsaCtx *ctx, const ByteArray *d, ByteArray **qx, ByteArray **qy)
 {
     size_t blen;
@@ -532,6 +563,7 @@ cleanup:
     return ret;
 }
 
+/* Стискає відкритий ключ: залишає координату x та молодший біт y. */
 int ecdsa_compress_pubkey(EcdsaCtx *ctx, const ByteArray *qx, const ByteArray *qy, ByteArray **q, int *last_qy_bit)
 {
     ECPoint *ec_point = NULL;
@@ -555,6 +587,8 @@ cleanup:
     return ret;
 }
 
+/* Відновлює відкритий ключ зі стисненого подання: обчислює
+ * y = sqrt(x^3 + ax + b) mod p і обирає корінь за молодшим бітом last_qy_bit. */
 int ecdsa_decompress_pubkey(EcdsaCtx *ctx, const ByteArray *q, int last_qy_bit, ByteArray **qx, ByteArray **qy)
 {
     WordArray *x = NULL;
@@ -616,6 +650,8 @@ cleanup:
     return ret;
 }
 
+/* Задає рівні оптимізації передобчислень: opt_level пакує по 4 біти
+ * sign_comb | sign_win | verify_comb | verify_win (comb і win взаємовиключні). */
 int ecdsa_set_opt_level(EcdsaCtx *ctx, OptLevelId opt_level)
 {
     int ret = RET_OK;
@@ -648,6 +684,8 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для формування підпису: перевіряє закритий ключ
+ * (0 < d < q), засіює внутрішній ГПВЧ та готує передобчислення для точки P. */
 int ecdsa_init_sign(EcdsaCtx *ctx, const ByteArray *d, PrngCtx *prng)
 {
     ByteArray *seed = NULL;
@@ -712,6 +750,11 @@ cleanup:
 }
 
 
+/* Формує підпис ECDSA для гешу повідомлення:
+ *  e — старші біти гешу, обрізані до бітової довжини q;
+ *  k — одноразове випадкове число (0 < k < q);
+ *  r = (kP).x mod q, s = k^(-1) * (r*d + e) mod q;
+ * при r = 0 або s = 0 генерація k повторюється. */
 int ecdsa_sign(EcdsaCtx *ctx, const ByteArray *hash, ByteArray **r, ByteArray **s)
 {
     WordArray *e = NULL;
@@ -805,6 +848,8 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для перевірки підпису: валідує та встановлює відкритий
+ * ключ Q і за потреби оновлює передобчислення для точок Q та P. */
 int ecdsa_init_verify(EcdsaCtx *ctx, const ByteArray *qx, const ByteArray *qy)
 {
     int verify_comb_opt_level;
@@ -880,6 +925,11 @@ cleanup:
     return ret;
 }
 
+/* Перевіряє підпис ECDSA:
+ *  контроль 0 < r < q, 0 < s < q;
+ *  z1 = e * s^(-1) mod q, z2 = r * s^(-1) mod q;
+ *  C = z1*P + z2*Q (одночасне подвійне скалярне множення);
+ * підпис дійсний, якщо C.x mod q == r. */
 int ecdsa_verify(EcdsaCtx *ctx, const ByteArray *hash, const ByteArray *r, const ByteArray *s)
 {
     WordArray *e = NULL;
@@ -969,6 +1019,7 @@ cleanup:
     return ret;
 }
 
+/* Звільняє контекст ECDSA; закритий ключ затирається перед звільненням. */
 void ecdsa_free(EcdsaCtx *ctx)
 {
     if (ctx) {

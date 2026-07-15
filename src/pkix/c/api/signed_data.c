@@ -23,6 +23,16 @@
 #undef FILE_MARKER
 #define FILE_MARKER "pki/api/signed_data.c"
 
+/*
+ * Модуль роботи з підписаними даними CMS (структура SignedData за RFC 5652).
+ * Містить функції створення/звільнення, DER-кодування та декодування, доступу
+ * до полів (версія, алгоритми геш-функцій, вкладений вміст, набори сертифікатів,
+ * CRL та відомостей про підписувачів), а також перевірки підпису підписувача
+ * над вкладеними чи зовнішніми даними та роботи з атрибутами (час підпису,
+ * позначка часу вмісту).
+ */
+
+/* Виділяє та обнуляє нову структуру SignedData. Повертає NULL у разі помилки. */
 SignedData_t *sdata_alloc(void)
 {
     SignedData_t *sdata = NULL;
@@ -37,6 +47,7 @@ cleanup:
     return sdata;
 }
 
+/* Звільняє пам'ять, зайняту структурою SignedData. */
 void sdata_free(SignedData_t *sdata)
 {
     LOG_ENTRY();
@@ -46,6 +57,10 @@ void sdata_free(SignedData_t *sdata)
     }
 }
 
+/*
+ * Ініціалізує SignedData: встановлює версію, копіює набір алгоритмів геш-функцій,
+ * вкладений вміст (encapContentInfo) та відомості про підписувачів (signerInfos).
+ */
 int sdata_init(SignedData_t *sdata,
         int version,
         const DigestAlgorithmIdentifiers_t *digest_aid,
@@ -79,6 +94,7 @@ cleanup:
     return ret;
 }
 
+/* DER-кодує SignedData у байтовий масив. */
 int sdata_encode(const SignedData_t *sdata, ByteArray **out)
 {
     int ret = RET_OK;
@@ -93,6 +109,7 @@ cleanup:
     return ret;
 }
 
+/* Декодує SignedData із DER-подання (попередньо звільняє поточний вміст структури). */
 int sdata_decode(SignedData_t *sdata, const ByteArray *in)
 {
     int ret = RET_OK;
@@ -111,6 +128,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає номер версії CMS (поле version). */
 int sdata_get_version(const SignedData_t *sdata, int *version)
 {
     long val;
@@ -128,6 +146,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює номер версії CMS (поле version). */
 int sdata_set_version(SignedData_t *sdata, int version)
 {
     int ret = RET_OK;
@@ -143,6 +162,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію набору ідентифікаторів алгоритмів геш-функцій (digestAlgorithms). */
 int sdata_get_digest_aids(const SignedData_t *sdata, DigestAlgorithmIdentifiers_t **digest_aids)
 {
     int ret = RET_OK;
@@ -165,6 +185,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює набір ідентифікаторів алгоритмів геш-функцій (замінює наявний). */
 int sdata_set_digest_aids(SignedData_t *sdata, const DigestAlgorithmIdentifiers_t *digest_aids)
 {
     int ret = RET_OK;
@@ -183,6 +204,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію ідентифікатора алгоритму геш-функції за індексом у наборі. */
 int sdata_get_digest_aid_by_idx(const SignedData_t *sdata, int index, AlgorithmIdentifier_t **digest_aid)
 {
     int ret = RET_OK;
@@ -212,6 +234,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію вкладеного вмісту (encapContentInfo). */
 int sdata_get_content(const SignedData_t *sdata, EncapsulatedContentInfo_t **content)
 {
     int ret = RET_OK;
@@ -233,6 +256,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Повертає корисне навантаження, коли тип вмісту — id-data: перевіряє eContentType
+ * і, за наявності eContent, повертає його як байтовий масив.
+ */
 int sdata_get_data(const SignedData_t *sdata, ByteArray **data)
 {
     int ret = RET_OK;
@@ -256,6 +283,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Повертає TSTInfo, коли тип вмісту — id-ct-TSTInfo: перевіряє eContentType і
+ * декодує eContent у структуру TSTInfo (дані позначки часу).
+ */
 int sdata_get_tst_info(const SignedData_t *sdata, TSTInfo_t **info)
 {
     int ret = RET_OK;
@@ -280,6 +311,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює вкладений вміст (encapContentInfo) копією content. */
 int sdata_set_content(SignedData_t *sdata, const EncapsulatedContentInfo_t *content)
 {
     int ret = RET_OK;
@@ -298,6 +330,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію набору сертифікатів; якщо поле certificates відсутнє — *certs без змін. */
 int sdata_get_certs(const SignedData_t *sdata, CertificateSet_t **certs)
 {
     int ret = RET_OK;
@@ -325,6 +358,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює набір сертифікатів (certs == NULL прибирає поле certificates). */
 int sdata_set_certs(SignedData_t *sdata, const CertificateSet_t *certs)
 {
     int ret = RET_OK;
@@ -346,6 +380,7 @@ cleanup:
     return ret;
 }
 
+/* Визначає, чи містить SignedData набір сертифікатів (flag=true за наявності). */
 int sdata_has_certs(const SignedData_t *sdata, bool *flag)
 {
     int ret = RET_OK;
@@ -359,6 +394,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію відомостей про відкликання (crls); якщо поле відсутнє — *crls без змін. */
 int sdata_get_crls(const SignedData_t *sdata, RevocationInfoChoices_t **crls)
 {
     int ret = RET_OK;
@@ -380,6 +416,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює відомості про відкликання (crls) копією переданого значення. */
 int sdata_set_crls(SignedData_t *sdata, const RevocationInfoChoices_t *crls)
 {
     int ret = RET_OK;
@@ -397,6 +434,7 @@ cleanup:
     return ret;
 }
 
+/* Визначає, чи містить SignedData відомості про відкликання (flag=true за наявності). */
 int sdata_has_crls(const SignedData_t *sdata, bool *flag)
 {
     int ret = RET_OK;
@@ -410,6 +448,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію відомостей про підписувачів (signerInfos). */
 int sdata_get_signer_infos(const SignedData_t *sdata, SignerInfos_t **sinfos)
 {
     int ret = RET_OK;
@@ -427,6 +466,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює відомості про підписувачів (signerInfos) копією переданого значення. */
 int sdata_set_signer_infos(SignedData_t *sdata, const SignerInfos_t *sinfos)
 {
     int ret = RET_OK;
@@ -445,6 +485,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію сертифіката (CertificateChoices) за індексом у наборі certificates. */
 int sdata_get_cert_by_idx(const SignedData_t *sdata, int index, CertificateChoices_t **cert)
 {
     int ret = RET_OK;
@@ -474,6 +515,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію запису про відкликання (RevocationInfoChoice) за індексом у наборі crls. */
 int sdata_get_crl_by_idx(const SignedData_t *sdata, int index, RevocationInfoChoice_t **crl)
 {
     int ret = RET_OK;
@@ -498,6 +540,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію відомостей про підписувача (SignerInfo) за індексом у наборі signerInfos. */
 int sdata_get_signer_info_by_idx(const SignedData_t *sdata, int index, SignerInfo_t **sinfo)
 {
     int ret = RET_OK;
@@ -522,6 +565,12 @@ cleanup:
     return ret;
 }
 
+/*
+ * Перевіряє підпис підписувача за індексом index без передавання даних ззовні.
+ * Спершу перевіряє, що підписаний атрибут content-type збігається з eContentType
+ * вкладеного вмісту, потім викликає sinfo_verify_without_data (перевірку підпису
+ * над підписаними атрибутами).
+ */
 int sdata_verify_without_data_by_adapter(const SignedData_t *sdata,
         const DigestAdapter *da,
         const VerifyAdapter *va,
@@ -578,6 +627,14 @@ cleanup:
     return ret;
 }
 
+/*
+ * Обробляє атрибут "content time stamp" (позначку часу вмісту) підписувача index.
+ * Витягує з підписаного атрибута вкладений ContentInfo з TSP-підписом, дістає з
+ * нього SignedData та TSTInfo, знаходить сертифікат TSP-служби, повертає час
+ * позначки та ідентифікатор її підписувача. Звіряє геш вмісту позначки з
+ * message-digest підписувача та перевіряє підпис TSP, виставляючи status
+ * (TSP_VALID / TSP_INVALID / TSP_INVALID_DATA / TSP_NO_CERT_FOR_VERIFY).
+ */
 int sdata_get_content_time_stamp(const SignedData_t *sdata, int index, TspStatus *status, time_t *content_time_stamp,
         SignerIdentifier_t **signer_identifier)
 {
@@ -695,6 +752,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Повертає час підпису підписувача index: зчитує підписаний атрибут signing-time,
+ * декодує його як UTCTime і перетворює на time_t.
+ */
 int sdata_get_signing_time(const SignedData_t *sdata, int index, time_t *signing_time)
 {
     int ret = RET_OK;
@@ -737,6 +798,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Перевіряє підпис підписувача index над зовнішніми даними (data). Спершу звіряє
+ * підписаний атрибут content-type з eContentType вкладеного вмісту, потім викликає
+ * sinfo_verify, передаючи дані для обчислення та звіряння геша.
+ */
 int sdata_verify_external_data_by_adapter(const SignedData_t *sdata, const DigestAdapter *da, const VerifyAdapter *va,
         const ByteArray *data, int index)
 {
@@ -790,6 +856,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Перевіряє підпис підписувача index над вкладеним вмістом: витягує eContent як
+ * байтовий масив і делегує перевірку sdata_verify_external_data_by_adapter.
+ */
 int sdata_verify_internal_data_by_adapter(const SignedData_t *sdata, const DigestAdapter *da, const VerifyAdapter *va,
         int index)
 {
@@ -823,6 +893,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Перевіряє відповідність сертифіката підписувача index атрибуту signingCertificateV2
+ * (звіряння геша сертифіката) через sinfo_verify_signing_cert_v2.
+ */
 int sdata_verify_signing_cert_by_adapter(const SignedData_t *sdata, const DigestAdapter *da, const Certificate_t *cert,
         int index)
 {

@@ -3,6 +3,13 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Модуль реалізує роботу з відповіддю мітки часу (TimeStampResp, RFC 3161).
+ * Надає створення/звільнення, ASN.1 кодування/декодування, доступ до полів
+ * (статус PKIStatusInfo та токен мітки часу timeStampToken) і перевірку
+ * підпису токена через вкладену структуру SignedData.
+ */
+
 #include <stdlib.h>
 #include <stdbool.h>
 
@@ -17,6 +24,7 @@
 #undef FILE_MARKER
 #define FILE_MARKER "pki/api/tsp_response.c"
 
+/* Виділяє пам'ять під порожній об'єкт відповіді мітки часу. */
 TimeStampResp_t *tsresp_alloc(void)
 {
     TimeStampResp_t *tsresp = NULL;
@@ -31,6 +39,7 @@ cleanup:
     return tsresp;
 }
 
+/* Звільняє об'єкт відповіді мітки часу. */
 void tsresp_free(TimeStampResp_t *tsresp)
 {
     LOG_ENTRY();
@@ -40,6 +49,7 @@ void tsresp_free(TimeStampResp_t *tsresp)
     }
 }
 
+/* Кодує відповідь мітки часу у DER-подання. */
 int tsresp_encode(const TimeStampResp_t *tsresp, ByteArray **out)
 {
     int ret = RET_OK;
@@ -53,6 +63,7 @@ cleanup:
     return ret;
 }
 
+/* Декодує відповідь мітки часу з DER-подання; попередній вміст очищується. */
 int tsresp_decode(TimeStampResp_t *tsresp, const ByteArray *in)
 {
     int ret = RET_OK;
@@ -70,6 +81,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію статусу відповіді (PKIStatusInfo). */
 int tsresp_get_status(const TimeStampResp_t *tsresp, PKIStatusInfo_t **status)
 {
     int ret = RET_OK;
@@ -87,6 +99,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює статус відповіді (PKIStatusInfo). */
 int tsresp_set_status(TimeStampResp_t *tsresp, const PKIStatusInfo_t *status)
 {
     int ret = RET_OK;
@@ -105,6 +118,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію токена мітки часу; помилка, якщо токена немає. */
 int tsresp_get_ts_token(const TimeStampResp_t *tsresp, ContentInfo_t **ts_token)
 {
     int ret = RET_OK;
@@ -127,6 +141,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює токен мітки часу (timeStampToken). */
 int tsresp_set_ts_token(TimeStampResp_t *tsresp, const ContentInfo_t *ts_token)
 {
     int ret = RET_OK;
@@ -144,6 +159,7 @@ cleanup:
     return ret;
 }
 
+/* Перевіряє підпис токена мітки часу через вкладену структуру SignedData. */
 int tsresp_verify(const TimeStampResp_t *tsresp, const DigestAdapter *da, const VerifyAdapter *va)
 {
     int ret = RET_OK;

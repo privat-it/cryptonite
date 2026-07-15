@@ -3,6 +3,30 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Кеш криптографічних контекстів ДСТУ 4145 та ECDSA.
+ *
+ * Створення контексту з увімкненими передобчисленнями (opt_level) —
+ * коштовна операція, тому готові контексти зберігаються у чотирьох
+ * однозв'язних списках:
+ *  - ДСТУ 4145 за ідентифікатором стандартних параметрів;
+ *  - ДСТУ 4145 за довільними параметрами у поліноміальному базисі (ПБ);
+ *  - ДСТУ 4145 за довільними параметрами в оптимальному нормальному
+ *    базисі (ОНБ);
+ *  - ECDSA за довільними параметрами кривої над простим полем.
+ *
+ * Пошук — лінійний перебір списку з порівнянням усіх параметрів кривої.
+ * Функції crypto_cache_get_* повертають не сам кешований контекст, а його
+ * копію (dstu4145_copy_params_with_alloc / ecdsa_copy_params_with_alloc),
+ * тож викликач володіє результатом і звільняє його самостійно.
+ * Якщо контексту немає в кеші, а default_opt_level != 0, контекст
+ * створюється і додається в кеш «ліниво» під час першого запиту.
+ *
+ * Потокобезпека: додавання елементів захищено окремим pthread-м'ютексом
+ * для кожного списку; пошук виконується без блокування (списки лише
+ * доповнюються в кінець аж до виклику crypto_cache_free).
+ */
+
 #include <string.h>
 
 #include "crypto_cache.h"
@@ -15,6 +39,7 @@
 #undef FILE_MARKER
 #define FILE_MARKER "cryptonite/crypto_cache.c"
 
+/* Елемент кешу контекстів ДСТУ 4145 зі стандартними параметрами (ключ — params_id). */
 typedef struct Dstu4145CacheById_st {
     Dstu4145ParamsId params_id;
     Dstu4145Ctx *ctx;
@@ -24,6 +49,7 @@ typedef struct Dstu4145CacheById_st {
 static Dstu4145CacheById *dstu4145_cache_by_id = NULL;
 static pthread_mutex_t dstu4145_cache_by_id_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+/* Елемент кешу контекстів ДСТУ 4145 з довільними параметрами у ПБ (ключ — копії параметрів кривої). */
 typedef struct Dstu4145CacheByPb_st {
     int *f;
     size_t f_len;
@@ -39,6 +65,7 @@ typedef struct Dstu4145CacheByPb_st {
 static Dstu4145CacheByPb *dstu4145_cache_by_pb = NULL;
 static pthread_mutex_t dstu4145_cache_by_pb_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+/* Елемент кешу контекстів ДСТУ 4145 з довільними параметрами в ОНБ. */
 typedef struct Dstu4145CacheByOnb_st {
     int m;
     int a;
@@ -53,6 +80,7 @@ typedef struct Dstu4145CacheByOnb_st {
 static Dstu4145CacheByOnb *dstu4145_cache_by_onb = NULL;
 static pthread_mutex_t dstu4145_cache_by_onb_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+/* Елемент кешу контекстів ECDSA (ключ — параметри кривої над простим полем). */
 typedef struct EcdsaCache_st {
     ByteArray *p;
     ByteArray *a;
@@ -67,8 +95,10 @@ typedef struct EcdsaCache_st {
 static EcdsaCache *ecdsa_cache = NULL;
 static pthread_mutex_t ecdsa_cache_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+/* Рівень оптимізації за замовчуванням: 0 — ліниве кешування вимкнено. */
 OptLevelId default_opt_level = 0;
 
+/* Додає елемент у кінець списку кешу за params_id (викликається під відповідним м'ютексом). */
 static void dstu4145_cache_id_append(Dstu4145CacheById *dstu4145_cache_by_id_new)
 {
     if (dstu4145_cache_by_id) {
@@ -82,6 +112,7 @@ static void dstu4145_cache_id_append(Dstu4145CacheById *dstu4145_cache_by_id_new
     }
 }
 
+/* Додає елемент у кінець списку кешу параметрів у ПБ (викликається під відповідним м'ютексом). */
 static void dstu4145_cache_pb_append(Dstu4145CacheByPb *dstu4145_cache_by_pb_new)
 {
     if (dstu4145_cache_by_pb) {
@@ -95,6 +126,7 @@ static void dstu4145_cache_pb_append(Dstu4145CacheByPb *dstu4145_cache_by_pb_new
     }
 }
 
+/* Додає елемент у кінець списку кешу параметрів в ОНБ (викликається під відповідним м'ютексом). */
 static void dstu4145_cache_onb_append(Dstu4145CacheByOnb *dstu4145_cache_by_onb_new)
 {
     if (dstu4145_cache_by_onb) {
@@ -108,6 +140,7 @@ static void dstu4145_cache_onb_append(Dstu4145CacheByOnb *dstu4145_cache_by_onb_
     }
 }
 
+/* Додає елемент у кінець списку кешу ECDSA (викликається під відповідним м'ютексом). */
 static void ecdsa_cache_append(EcdsaCache *ecdsa_cache_new)
 {
     if (ecdsa_cache) {
@@ -121,6 +154,7 @@ static void ecdsa_cache_append(EcdsaCache *ecdsa_cache_new)
     }
 }
 
+/* Шукає елемент кешу за ідентифікатором стандартних параметрів; NULL, якщо не знайдено. */
 static Dstu4145CacheById *dstu4145_cache_get_element_by_id(Dstu4145ParamsId params_id)
 {
     if (dstu4145_cache_by_id) {
@@ -137,6 +171,7 @@ static Dstu4145CacheById *dstu4145_cache_get_element_by_id(Dstu4145ParamsId para
     return NULL;
 }
 
+/* Шукає елемент кешу порівнянням усіх параметрів кривої у ПБ; NULL, якщо не знайдено. */
 static Dstu4145CacheByPb *dstu4145_cache_get_element_by_pb(const int *f, size_t f_len, int a, const ByteArray *b,
         const ByteArray *n,
         const ByteArray *px, const ByteArray *py)
@@ -161,6 +196,7 @@ static Dstu4145CacheByPb *dstu4145_cache_get_element_by_pb(const int *f, size_t 
     return NULL;
 }
 
+/* Шукає елемент кешу порівнянням усіх параметрів кривої в ОНБ; NULL, якщо не знайдено. */
 static Dstu4145CacheByOnb *dstu4145_cache_get_element_by_onb(const int m, int a, const ByteArray *b, const ByteArray *n,
         const ByteArray *px, const ByteArray *py)
 {
@@ -183,6 +219,7 @@ static Dstu4145CacheByOnb *dstu4145_cache_get_element_by_onb(const int m, int a,
     return NULL;
 }
 
+/* Шукає елемент кешу ECDSA порівнянням усіх параметрів кривої; NULL, якщо не знайдено. */
 static EcdsaCache *ecdsa_cache_get_element( const ByteArray *p, const ByteArray *a, const ByteArray *b,
         const ByteArray *q, const ByteArray *px, const ByteArray *py)
 {
@@ -205,6 +242,7 @@ static EcdsaCache *ecdsa_cache_get_element( const ByteArray *p, const ByteArray 
     return NULL;
 }
 
+/* Звільняє один елемент кешу за params_id разом із контекстом. */
 static void dstu4145_cache_id_free(Dstu4145CacheById *dstu4145_cache_by_id_curr)
 {
     if (dstu4145_cache_by_id_curr) {
@@ -213,6 +251,11 @@ static void dstu4145_cache_id_free(Dstu4145CacheById *dstu4145_cache_by_id_curr)
     }
 }
 
+/*
+ * Створює контекст ДСТУ 4145 зі стандартними параметрами, застосовує
+ * рівень оптимізації (передобчислення) і додає його в кеш.
+ * Повертає RET_CTX_ALREADY_IN_CACHE, якщо такі параметри вже закешовано.
+ */
 int crypto_cache_add_dstu4145(Dstu4145ParamsId params_id, OptLevelId opt_level)
 {
     int ret = RET_OK;
@@ -248,6 +291,12 @@ cleanup:
     return ret;
 }
 
+/*
+ * Повертає копію кешованого контексту ДСТУ 4145 за params_id.
+ * Якщо контексту немає в кеші, а default_opt_level != 0 — спершу створює
+ * та кешує його. Повертає NULL, якщо контекст не знайдено й ліниве
+ * кешування вимкнено, або в разі помилки.
+ */
 Dstu4145Ctx *crypto_cache_get_dstu4145(Dstu4145ParamsId params_id)
 {
     int ret = RET_OK;
@@ -275,6 +324,7 @@ cleanup:
     return ctx;
 }
 
+/* Звільняє один елемент кешу параметрів у ПБ разом із контекстом та копіями параметрів. */
 static void dstu4145_cache_pb_free(Dstu4145CacheByPb *dstu4145_cache_by_pb_curr)
 {
     if (dstu4145_cache_by_pb_curr) {
@@ -288,6 +338,12 @@ static void dstu4145_cache_pb_free(Dstu4145CacheByPb *dstu4145_cache_by_pb_curr)
     }
 }
 
+/*
+ * Створює контекст ДСТУ 4145 з довільними параметрами у ПБ, застосовує
+ * рівень оптимізації і додає його в кеш разом із копіями параметрів
+ * (вони слугують ключем пошуку).
+ * Повертає RET_CTX_ALREADY_IN_CACHE, якщо такі параметри вже закешовано.
+ */
 int crypto_cache_add_dstu4145_pb(const int *f, size_t f_len, int a, const ByteArray *b, const ByteArray *n,
         const ByteArray *px, const ByteArray *py, OptLevelId opt_level)
 {
@@ -331,6 +387,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Повертає копію кешованого контексту ДСТУ 4145 за параметрами у ПБ;
+ * за потреби (default_opt_level != 0) створює та кешує контекст.
+ */
 Dstu4145Ctx *crypto_cache_get_dstu4145_pb(const int *f, size_t f_len, int a, const ByteArray *b, const ByteArray *n,
         const ByteArray *px, const ByteArray *py)
 {
@@ -356,6 +416,7 @@ cleanup:
     return ctx;
 }
 
+/* Звільняє один елемент кешу параметрів в ОНБ разом із контекстом та копіями параметрів. */
 static void dstu4145_cache_onb_free(Dstu4145CacheByOnb *dstu4145_cache_by_onb_curr)
 {
     if (dstu4145_cache_by_onb_curr) {
@@ -368,6 +429,11 @@ static void dstu4145_cache_onb_free(Dstu4145CacheByOnb *dstu4145_cache_by_onb_cu
     }
 }
 
+/*
+ * Створює контекст ДСТУ 4145 з довільними параметрами в ОНБ, застосовує
+ * рівень оптимізації і додає його в кеш разом із копіями параметрів.
+ * Повертає RET_CTX_ALREADY_IN_CACHE, якщо такі параметри вже закешовано.
+ */
 int crypto_cache_add_dstu4145_onb(const int m, int a, const ByteArray *b, const ByteArray *n, const ByteArray *px,
         const ByteArray *py, OptLevelId opt_level)
 {
@@ -409,6 +475,7 @@ cleanup:
     return ret;
 }
 
+/* Звільняє один елемент кешу ECDSA разом із контекстом та копіями параметрів. */
 static void ecdsa_cache_free(EcdsaCache *ecdsa_cache_curr)
 {
     if (ecdsa_cache_curr) {
@@ -423,6 +490,11 @@ static void ecdsa_cache_free(EcdsaCache *ecdsa_cache_curr)
     }
 }
 
+/*
+ * Створює контекст ECDSA із заданими параметрами кривої над простим полем,
+ * застосовує рівень оптимізації і додає його в кеш разом із копіями параметрів.
+ * Повертає RET_CTX_ALREADY_IN_CACHE, якщо такі параметри вже закешовано.
+ */
 int crypto_cache_add_ecdsa(const ByteArray *p, const ByteArray *a, const ByteArray *b, const ByteArray *q,
         const ByteArray *px, const ByteArray *py, OptLevelId opt_level)
 {
@@ -464,6 +536,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Повертає копію кешованого контексту ДСТУ 4145 за параметрами в ОНБ;
+ * за потреби (default_opt_level != 0) створює та кешує контекст.
+ */
 Dstu4145Ctx *crypto_cache_get_dstu4145_onb(const int m, int a, const ByteArray *b, const ByteArray *n,
         const ByteArray *px, const ByteArray *py)
 {
@@ -488,6 +564,10 @@ cleanup:
     return ctx;
 }
 
+/*
+ * Повертає копію кешованого контексту ECDSA за параметрами кривої;
+ * за потреби (default_opt_level != 0) створює та кешує контекст.
+ */
 EcdsaCtx *crypto_cache_get_ecdsa(const ByteArray *p, const ByteArray *a, const ByteArray *b, const ByteArray *q,
         const ByteArray *px, const ByteArray *py)
 {
@@ -513,6 +593,14 @@ cleanup:
     return ctx;
 }
 
+/*
+ * Встановлює рівень оптимізації за замовчуванням, вмикаючи ліниве
+ * кешування контекстів при першому запиті.
+ * opt_level пакує чотири 4-бітові поля (від старших до молодших бітів):
+ * comb- та window-рівень для формування підпису, comb- та window-рівень
+ * для перевірки. Для кожної пари можна задати лише один метод
+ * передобчислень, а window-рівень має бути непарним.
+ */
 int crypto_cache_add_any_new(OptLevelId opt_level)
 {
     int ret = RET_OK;
@@ -534,6 +622,7 @@ cleanup:
     return ret;
 }
 
+/* Звільняє весь список кешу за params_id. */
 static void dstu4145_cache_id_list_free(void)
 {
     if (dstu4145_cache_by_id) {
@@ -549,6 +638,7 @@ static void dstu4145_cache_id_list_free(void)
     }
 }
 
+/* Звільняє весь список кешу параметрів у ПБ. */
 static void dstu4145_cache_pb_list_free(void)
 {
     if (dstu4145_cache_by_pb) {
@@ -564,6 +654,7 @@ static void dstu4145_cache_pb_list_free(void)
     }
 }
 
+/* Звільняє весь список кешу параметрів в ОНБ. */
 static void dstu4145_cache_onb_list_free(void)
 {
     if (dstu4145_cache_by_onb) {
@@ -579,6 +670,7 @@ static void dstu4145_cache_onb_list_free(void)
     }
 }
 
+/* Звільняє весь список кешу ECDSA. */
 static void ecdsa_cache_list_free(void)
 {
     if (ecdsa_cache) {
@@ -594,6 +686,11 @@ static void ecdsa_cache_list_free(void)
     }
 }
 
+/*
+ * Звільняє всі списки кешу. Захоплює всі м'ютекси та витримує секундну
+ * паузу — грубий захист від потоків, які саме виконують пошук у кеші
+ * без блокування.
+ */
 void crypto_cache_free(void)
 {
     pthread_mutex_lock(&dstu4145_cache_by_id_mutex);

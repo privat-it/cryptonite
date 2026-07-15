@@ -3,6 +3,12 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Модуль реалізує роботу з набором розширень сертифіката/CRL (Extensions —
+ * послідовність Extension). Надає створення набору, додавання розширення
+ * (з копіюванням) та пошук розширення чи його значення за OID.
+ */
+
 #include "exts.h"
 
 #include "pkix_macros_internal.h"
@@ -15,6 +21,7 @@
 
 #define RND_BYTES 20
 
+/* Виділяє пам'ять під порожній набір розширень. */
 Extensions_t *exts_alloc(void)
 {
     int ret = RET_OK;
@@ -29,6 +36,7 @@ cleanup:
     return exts;
 }
 
+/* Додає копію розширення до набору. */
 int exts_add_extension(Extensions_t *exts, const Extension_t *ext)
 {
     int ret = RET_OK;
@@ -50,6 +58,7 @@ cleanup:
     return ret;
 }
 
+/* Шукає розширення за OID і повертає його копію; інакше RET_PKIX_EXT_NOT_FOUND. */
 int exts_get_ext_by_oid(const Extensions_t *exts, const OidNumbers *oid, Extension_t **ext)
 {
     int ret = RET_OK;
@@ -85,6 +94,7 @@ cleanup:
     return ret;
 }
 
+/* Шукає розширення за OID і повертає його значення (extnValue) як ByteArray. */
 int exts_get_ext_value_by_oid(const Extensions_t *exts, const OidNumbers *oid, ByteArray **value)
 {
     int i;
@@ -116,6 +126,7 @@ cleanup:
     return ret;
 }
 
+/* Звільняє набір розширень. */
 void exts_free(Extensions_t *exts)
 {
     if (exts) {

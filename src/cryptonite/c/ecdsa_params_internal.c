@@ -9,7 +9,15 @@
 
 #undef FILE_MARKER
 #define FILE_MARKER "cryptonite/ecdsa_params_internal.c"
-/* secp192r1 */
+
+/*
+ * Таблиці стандартних наборів параметрів еліптичних кривих для ECDSA
+ * (криві над простим полем із сімейства SEC). Кожен набір містить
+ * розмір подання чисел у байтах (len) та a, b, p, q, px, py у порядку
+ * little-endian (див. EcdsaDefaultParamsCtx).
+ */
+
+/* secp192r1 (NIST P-192) */
 static const EcdsaDefaultParamsCtx ECDSA_PARAMS_SEC_P192_R1 = {
     24,
     {
@@ -38,7 +46,7 @@ static const EcdsaDefaultParamsCtx ECDSA_PARAMS_SEC_P192_R1 = {
     }
 };
 
-/* secp224r1 */
+/* secp224r1 (NIST P-224) */
 static const EcdsaDefaultParamsCtx ECDSA_PARAMS_SEC_P224_R1 = {
     32,
     {
@@ -67,7 +75,7 @@ static const EcdsaDefaultParamsCtx ECDSA_PARAMS_SEC_P224_R1 = {
     }
 };
 
-/* secp256r1 */
+/* secp256r1 (NIST P-256) */
 static const EcdsaDefaultParamsCtx ECDSA_PARAMS_SEC_P256_R1 = {
     32,
     {
@@ -96,7 +104,7 @@ static const EcdsaDefaultParamsCtx ECDSA_PARAMS_SEC_P256_R1 = {
     }
 };
 
-/* secp384r1 */
+/* secp384r1 (NIST P-384) */
 static const EcdsaDefaultParamsCtx ECDSA_PARAMS_SEC_P384_R1 = {
     48,
     {
@@ -131,7 +139,7 @@ static const EcdsaDefaultParamsCtx ECDSA_PARAMS_SEC_P384_R1 = {
     }
 };
 
-/* secp521r1 */
+/* secp521r1 (NIST P-521) */
 static const EcdsaDefaultParamsCtx ECDSA_PARAMS_SEC_P521_R1 = {
     72,
     {
@@ -178,7 +186,7 @@ static const EcdsaDefaultParamsCtx ECDSA_PARAMS_SEC_P521_R1 = {
     }
 };
 
-/* secp256k1 */
+/* secp256k1 (крива Коблиця) */
 static const EcdsaDefaultParamsCtx ECDSA_PARAMS_SEC_P256_K1 = {
         32,
         {
@@ -208,6 +216,7 @@ static const EcdsaDefaultParamsCtx ECDSA_PARAMS_SEC_P256_K1 = {
 };
 
 
+/* Повертає стандартний набір параметрів кривої за ідентифікатором або NULL. */
 const EcdsaDefaultParamsCtx *ecdsa_get_defaut_params(EcdsaParamsId params_id)
 {
     switch (params_id) {

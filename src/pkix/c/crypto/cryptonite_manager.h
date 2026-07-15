@@ -21,6 +21,11 @@ extern "C" {
 #endif
 
 /**
+ * @addtogroup pkix_crypto
+ * @{
+ */
+
+/**
  * Ініціалізує алгоритм гешування параметрами за замовчуванням.
  *
  * @param da адаптер гешування
@@ -49,6 +54,13 @@ CRYPTONITE_EXPORT int digest_adapter_init_by_aid(const AlgorithmIdentifier_t *ai
  */
 CRYPTONITE_EXPORT int digest_adapter_init_by_cert(const Certificate_t *cert, DigestAdapter **da);
 
+/**
+ * Створює глибоку копію геш адаптера.
+ *
+ * @param da геш адаптер, що копіюється
+ *
+ * @return новий геш адаптер або NULL у разі помилки
+ */
 CRYPTONITE_EXPORT DigestAdapter *digest_adapter_copy_with_alloc(const DigestAdapter *da);
 
 /**
@@ -68,6 +80,13 @@ CRYPTONITE_EXPORT void digest_adapter_free(DigestAdapter *da);
  */
 CRYPTONITE_EXPORT int cipher_adapter_init(const AlgorithmIdentifier_t *alg_id, CipherAdapter **ca);
 
+/**
+ * Створює глибоку копію адаптера шифрування.
+ *
+ * @param ca адаптер шифрування, що копіюється
+ *
+ * @return новий адаптер шифрування або NULL у разі помилки
+ */
 CRYPTONITE_EXPORT CipherAdapter *cipher_adapter_copy_with_alloc(const CipherAdapter *ca);
 
 /**
@@ -102,8 +121,23 @@ CRYPTONITE_EXPORT int sign_adapter_init_by_aid(const ByteArray *priv_key, const 
 CRYPTONITE_EXPORT int sign_adapter_init_by_cert(const ByteArray *private_key, const Certificate_t *cert,
         SignAdapter **sa);
 
+/**
+ * Створює глибоку копію адаптера формування підпису.
+ *
+ * @param sa адаптер формування підпису, що копіюється
+ *
+ * @return новий адаптер формування підпису або NULL у разі помилки
+ */
 CRYPTONITE_EXPORT SignAdapter *sign_adapter_copy_with_alloc(const SignAdapter *sa);
 
+/**
+ * Встановлює рівень оптимізації обчислень для адаптера формування підпису.
+ *
+ * @param sa        адаптер формування підпису
+ * @param opt_level рівень оптимізації
+ *
+ * @return код помилки
+ */
 CRYPTONITE_EXPORT int sign_adapter_set_opt_level(SignAdapter *sa, OptLevelId opt_level);
 
 /**
@@ -136,8 +170,23 @@ CRYPTONITE_EXPORT int verify_adapter_init_by_spki(const AlgorithmIdentifier_t *s
  */
 CRYPTONITE_EXPORT int verify_adapter_init_by_cert(const Certificate_t *cert, VerifyAdapter **va);
 
+/**
+ * Створює глибоку копію адаптера перевірки підпису.
+ *
+ * @param va адаптер перевірки підпису, що копіюється
+ *
+ * @return новий адаптер перевірки підпису або NULL у разі помилки
+ */
 CRYPTONITE_EXPORT VerifyAdapter *verify_adapter_copy_with_alloc(const VerifyAdapter *va);
 
+/**
+ * Встановлює рівень оптимізації обчислень для адаптера перевірки підпису.
+ *
+ * @param va        адаптер перевірки підпису
+ * @param opt_level рівень оптимізації
+ *
+ * @return код помилки
+ */
 CRYPTONITE_EXPORT int verify_adapter_set_opt_level(VerifyAdapter *va, OptLevelId opt_level);
 
 /**
@@ -158,6 +207,13 @@ CRYPTONITE_EXPORT void verify_adapter_free(VerifyAdapter *va);
  */
 CRYPTONITE_EXPORT int dh_adapter_init(const ByteArray *priv_key, const AlgorithmIdentifier_t *aid, DhAdapter **dha);
 
+/**
+ * Створює глибоку копію dh адаптера.
+ *
+ * @param dha dh адаптер, що копіюється
+ *
+ * @return новий dh адаптер або NULL у разі помилки
+ */
 CRYPTONITE_EXPORT DhAdapter *dh_adapter_copy_with_alloc(const DhAdapter *dha);
 
 /**
@@ -167,9 +223,31 @@ CRYPTONITE_EXPORT DhAdapter *dh_adapter_copy_with_alloc(const DhAdapter *dha);
  */
 CRYPTONITE_EXPORT void dh_adapter_free(DhAdapter *dha);
 
+/**
+ * Формує SubjectPublicKeyInfo для алгоритму ДСТУ 4145.
+ *
+ * @param signature_alg_oid OID алгоритму підпису
+ * @param ec_params         параметри еліптичної кривої ДСТУ 4145
+ * @param cipher_params     параметри ГОСТ 28147 (таблиця замін) або NULL
+ * @param pub_key           відкритий ключ у байтах
+ * @param dstu_spki         буфер для сформованого SubjectPublicKeyInfo
+ *
+ * @return код помилки
+ */
 CRYPTONITE_EXPORT int create_dstu4145_spki(const OBJECT_IDENTIFIER_t *signature_alg_oid, const Dstu4145Ctx *ec_params,
         const Gost28147Ctx *cipher_params, const ByteArray *pub_key, SubjectPublicKeyInfo_t **dstu_spki);
 
+/**
+ * Формує SubjectPublicKeyInfo для алгоритму ECDSA.
+ *
+ * @param signature_alg_oid OID алгоритму підпису
+ * @param pub_key_params    ASN1 ANY з OID параметрів кривої
+ * @param ec_params         контекст ECDSA
+ * @param pub_key           відкритий ключ у байтах
+ * @param ecdsa_spki        буфер для сформованого SubjectPublicKeyInfo
+ *
+ * @return код помилки
+ */
 CRYPTONITE_EXPORT int create_ecdsa_spki(const OBJECT_IDENTIFIER_t *signature_alg_oid, const ANY_t *pub_key_params,
         const EcdsaCtx *ec_params, const ByteArray *pub_key, SubjectPublicKeyInfo_t **ecdsa_spki);
 
@@ -197,6 +275,14 @@ CRYPTONITE_EXPORT int get_gost28147_aid(PrngCtx *prng, const OBJECT_IDENTIFIER_t
  */
 CRYPTONITE_EXPORT int get_gost28147_cipher_params(const AlgorithmIdentifier_t *aid, OCTET_STRING_t **dke);
 
+/**
+ * Створює контекст ГОСТ 28147 з таблиці замін (ДКЕ), заданої як OCTET STRING.
+ *
+ * @param sbox_os упакована таблиця замін
+ * @param params  буфер для створеного контексту ГОСТ 28147
+ *
+ * @return код помилки
+ */
 CRYPTONITE_EXPORT int get_gost28147_params_by_os(const OCTET_STRING_t *sbox_os, Gost28147Ctx **params);
 
 /**
@@ -228,6 +314,8 @@ CRYPTONITE_EXPORT int wrap_session_key(const DhAdapter *dha, const ByteArray *pu
  */
 CRYPTONITE_EXPORT int unwrap_session_key(const DhAdapter *dha, const ByteArray *wrapped_key,
         const ByteArray *rnd_bytes, const ByteArray *issuer_pub_key, ByteArray **session_key);
+
+/** @} */
 
 #ifdef __cplusplus
 }

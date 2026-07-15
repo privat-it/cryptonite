@@ -3,6 +3,13 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Модуль реалізує роботу із запитом мітки часу (TimeStampReq, RFC 3161).
+ * Надає створення/звільнення, ASN.1 кодування/декодування та доступ до полів
+ * запиту: відбиток повідомлення (messageImprint), політика TSA, nonce (у т.ч.
+ * його генерація), ознака запиту сертифіката (certReq) та версія.
+ */
+
 #include <time.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -17,6 +24,7 @@
 #undef FILE_MARKER
 #define FILE_MARKER "pki/api/tsp_request.c"
 
+/* Виділяє пам'ять під порожній об'єкт запиту мітки часу. */
 TimeStampReq_t *tsreq_alloc(void)
 {
     TimeStampReq_t *tsreq = NULL;
@@ -31,6 +39,7 @@ cleanup:
     return tsreq;
 }
 
+/* Звільняє об'єкт запиту мітки часу. */
 void tsreq_free(TimeStampReq_t *tsreq)
 {
     LOG_ENTRY();
@@ -40,6 +49,7 @@ void tsreq_free(TimeStampReq_t *tsreq)
     }
 }
 
+/* Кодує запит мітки часу у DER-подання. */
 int tsreq_encode(const TimeStampReq_t *tsreq, ByteArray **out)
 {
     int ret = RET_OK;
@@ -54,6 +64,7 @@ cleanup:
     return ret;
 }
 
+/* Декодує запит мітки часу з DER-подання; попередній вміст очищується. */
 int tsreq_decode(TimeStampReq_t *tsreq, const ByteArray *in)
 {
     int ret = RET_OK;
@@ -71,6 +82,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію відбитка повідомлення (messageImprint). */
 int tsreq_get_message(const TimeStampReq_t *tsreq, MessageImprint_t **mess_impr)
 {
     int ret = RET_OK;
@@ -93,6 +105,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює відбиток повідомлення (messageImprint) запиту. */
 int tsreq_set_message(TimeStampReq_t *tsreq, const MessageImprint_t *mess_impr)
 {
     int ret = RET_OK;
@@ -110,6 +123,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію запитаної політики TSA; помилка, якщо політику не задано. */
 int tsreq_get_policy(const TimeStampReq_t *tsreq, OBJECT_IDENTIFIER_t **req_policy)
 {
     int ret = RET_OK;
@@ -132,6 +146,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює запитану політику TSA. */
 int tsreq_set_policy(TimeStampReq_t *tsreq, const OBJECT_IDENTIFIER_t *req_policy)
 {
     int ret = RET_OK;
@@ -153,6 +168,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію nonce запиту; помилка, якщо nonce не задано. */
 int tsreq_get_nonce(const TimeStampReq_t *tsreq, INTEGER_t **nonce)
 {
     int ret = RET_OK;
@@ -175,6 +191,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює nonce запиту. */
 int tsreq_set_nonce(TimeStampReq_t *tsreq, const INTEGER_t *nonce)
 {
     int ret = RET_OK;
@@ -192,6 +209,7 @@ cleanup:
     return ret;
 }
 
+/* Генерує nonce запиту на основі поточного часу та лічильника тактів. */
 int tsreq_generate_nonce(TimeStampReq_t *tsreq)
 {
     int ret = RET_OK;
@@ -217,6 +235,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає ознаку certReq (чи потрібно включати сертифікат TSA у відповідь). */
 int tsreq_get_cert_req(const TimeStampReq_t *tsreq, bool *cert_req)
 {
     int ret = RET_OK;
@@ -237,6 +256,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює ознаку certReq (поле додається лише для true). */
 int tsreq_set_cert_req(TimeStampReq_t *tsreq, bool cert_req)
 {
     int ret = RET_OK;
@@ -257,6 +277,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію версії запиту мітки часу. */
 int tsreq_get_version(const TimeStampReq_t *tsreq, INTEGER_t **version)
 {
     int ret = RET_OK;

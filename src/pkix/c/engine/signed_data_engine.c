@@ -3,6 +3,14 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Двигун побудови контейнера підписаних даних CMS SignedData.
+ * Агрегує один або кілька генераторів SignerInfo, дані (або їх геш) для підписування,
+ * а також опційні набори сертифікатів і CRL. Під час генерації передає вміст кожному
+ * SignerInfo-двигуну, збирає SignerInfos та відповідні алгоритми гешування й формує
+ * SignedData (версія, digestAlgorithms, encapContentInfo, signerInfos, certificates, crls).
+ */
+
 #include "signed_data_engine.h"
 
 #include "pkix_utils.h"
@@ -28,6 +36,8 @@ struct SignedDataEngine_st {
     OCTET_STRING_t *encap_hash_data;
 };
 
+/* Виділяє контекст SignedData з одним початковим генератором SignerInfo.
+ * Переданий signer переходить під управління двигуна (звільняється у esigned_data_free). */
 int esigned_data_alloc(SignerInfoEngine *signer, SignedDataEngine **ctx)
 {
     int ret = RET_OK;
@@ -55,6 +65,8 @@ cleanup:
     return ret;
 }
 
+/* Звільняє контекст SignedData разом із усіма підпорядкованими генераторами SignerInfo,
+ * сертифікатами, CRL та даними. */
 void esigned_data_free(SignedDataEngine *ctx)
 {
     int i;
@@ -80,6 +92,8 @@ void esigned_data_free(SignedDataEngine *ctx)
     LOG_FREE(ctx);
 }
 
+/* Задає підписувані дані та їх тип (eContentType). Прапорець is_internal_data визначає,
+ * чи вкладати самі дані у eContent контейнера (приєднаний підпис) чи ні (від'єднаний). */
 int esigned_data_set_data(SignedDataEngine *ctx,
         const OidNumbers *oid,
         const ByteArray *data,
@@ -115,6 +129,7 @@ cleanup:
     return ret;
 }
 
+/* Задає геш підписуваних даних та їх тип, коли самі дані недоступні (підписується лише геш). */
 int esigned_data_set_hash_data(SignedDataEngine *ctx,
         const OidNumbers *oid,
         const ByteArray *hash)
@@ -143,6 +158,7 @@ cleanup:
     return ret;
 }
 
+/* Задає готовий EncapsulatedContentInfo напряму (тип і, за наявності, вкладений вміст). */
 int esigned_data_set_content_info(SignedDataEngine *ctx, const EncapsulatedContentInfo_t *info)
 {
     int ret = RET_OK;
@@ -161,6 +177,7 @@ cleanup:
     return ret;
 }
 
+/* Додає сертифікат до набору certificates контейнера SignedData. */
 int esigned_data_add_cert(SignedDataEngine *ctx, const Certificate_t *cert)
 {
     int ret = RET_OK;
@@ -190,6 +207,7 @@ cleanup:
     return ret;
 }
 
+/* Додає CRL до набору crls (RevocationInfoChoices) контейнера SignedData. */
 int esigned_data_add_crl(SignedDataEngine *ctx, const CertificateList_t *crl)
 {
     int ret = RET_OK;
@@ -219,6 +237,8 @@ cleanup:
     return ret;
 }
 
+/* Додає ще один генератор SignerInfo (множинні підписи). Переданий signer переходить
+ * під управління двигуна. */
 int esigned_data_add_signer(SignedDataEngine *ctx, SignerInfoEngine *signer)
 {
     int ret = RET_OK;
@@ -235,6 +255,10 @@ cleanup:
     return ret;
 }
 
+/* Будує контейнер SignedData. Для кожного генератора SignerInfo передає йому підписувані
+ * дані (або їх геш), викликає esigner_info_generate й акумулює отримані SignerInfo та
+ * алгоритми гешування. Версія (1 або 3) визначається за типом вмісту. До результату
+ * додаються сертифікати й CRL, якщо вони задані. Передумова: задано вміст для підписування. */
 int esigned_data_generate(const SignedDataEngine *ctx, SignedData_t **sdata)
 {
     int ret = RET_OK;

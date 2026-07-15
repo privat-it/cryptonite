@@ -3,6 +3,12 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Реалізація блокового шифру DES (FIPS 46, ANSI X3.92) та потрійного DES (3DES/TDEA)
+ * з розміром блоку 8 байтів у режимах ECB, CBC, CFB, OFB, CTR. Перестановки IP/FP та
+ * S-box реалізовано через попередньо обчислені таблиці для швидкого виконання раундів.
+ */
+
 #include <memory.h>
 
 #include "des.h"
@@ -23,6 +29,8 @@ typedef enum {
     CBC,
 } CipherMode;
 
+/* Контекст DES/3DES: IV, ключ (розширений до 24 байтів), стан гами режимів,
+ * розклади ключа для шифрування/розшифрування та поточний режим. */
 struct DesCtx_st {
     uint8_t iv[24];
     uint8_t key[24];
@@ -35,15 +43,18 @@ struct DesCtx_st {
     CipherMode mode;
 };
 
+/* EN0/DE1 — напрямок розкладу ключа (шифрування/розшифрування); byte — виділення n-го байта. */
 #define EN0 0
 #define DE1 1
 #define CONST64(n) n ## ULL
 #define byte(x, n) (((x) >> (8 * (n))) & 255)
 
+/* Бітові маски для вибірки окремих бітів байта ключа. */
 static const uint32_t bytebit[8] = {
     0200, 0100, 040, 020, 010, 04, 02, 01
 };
 
+/* Бітові маски для 24-бітних половин раундового підключа. */
 static const uint32_t bigbyte[24] = {
     0x800000UL, 0x400000UL, 0x200000UL, 0x100000UL,
     0x80000UL, 0x40000UL, 0x20000UL, 0x10000UL,
@@ -62,6 +73,7 @@ static const unsigned char pc1[56] = {
     13, 5, 60, 52, 44, 36, 28, 20, 12, 4, 27, 19, 11, 3
 };
 
+/* Накопичені циклічні зсуви половин ключа для кожного з 16 раундів. */
 static const unsigned char totrot[16] = {
     1, 2, 4, 6,
     8, 10, 12, 14,
@@ -69,6 +81,7 @@ static const unsigned char totrot[16] = {
     23, 25, 27, 28
 };
 
+/* Таблиця перестановки-вибірки PC-2: 56 бітів -> 48-бітний раундовий підключ. */
 static const unsigned char pc2[48] = {
     13, 16, 10, 23, 0, 4, 2, 27, 14, 5, 20, 9,
     22, 18, 11, 3, 25, 7, 15, 6, 26, 19, 12, 1,
@@ -77,6 +90,7 @@ static const unsigned char pc2[48] = {
 };
 
 
+/* SP1..SP8 — попередньо обчислені таблиці, що поєднують S-box та перестановку P. */
 static const uint32_t SP1[64] = {
     0x01010400UL, 0x00000000UL, 0x00010000UL, 0x01010404UL,
     0x01010004UL, 0x00010404UL, 0x00000004UL, 0x00010000UL,
@@ -229,6 +243,7 @@ static const uint32_t SP8[64] = {
     0x00001040UL, 0x00040040UL, 0x10000000UL, 0x10041000UL
 };
 
+/* Таблиця початкової перестановки IP, розкладена по байтах вхідних слів. */
 static const uint64_t des_ip[8][256] = {
 
     {
@@ -761,6 +776,7 @@ static const uint64_t des_ip[8][256] = {
     }
 };
 
+/* Таблиця фінальної перестановки FP (обернена до IP), розкладена по байтах. */
 static const uint64_t des_fp[8][256] = {
 
     {
@@ -1293,9 +1309,11 @@ static const uint64_t des_fp[8][256] = {
     }
 };
 
+/* RORc — циклічний зсув 32-бітного слова праворуч; SWAP_BYTE_U32 — розворот порядку байтів. */
 #define RORc(x, y) ( ((((uint32_t)(x)&0xFFFFFFFFUL)>>(uint32_t)((y)&31)) | ((uint32_t)(x)<<(uint32_t)(32-((y)&31)))) & 0xFFFFFFFFUL)
 #define SWAP_BYTE_U32(in, out) out = ((in) >> (uint32_t)24 & 255) ^ (((in) >> (uint32_t)16 & 255) << 8) ^ (((in) >> (uint32_t)8 & 255) << 16) ^ (((in) >> (uint32_t)0 & 255) << 24);
 
+/* Побайтовий XOR одного 8-байтного блоку (як 64-бітне слово). */
 static void des_xor(void *arg1, void *arg2, void *out)
 {
     uint64_t *a1 = (uint64_t *) arg1;
@@ -1305,6 +1323,7 @@ static void des_xor(void *arg1, void *arg2, void *out)
     o[0] = a1[0] ^ a2[0];
 }
 
+/* Перевіряє довжину ключа (8/16/24) і розгортає його до трьох 8-байтних ключів для 3DES. */
 static int des_init_base(DesCtx *ctx, const ByteArray *key)
 {
     const uint8_t *ba_buf;
@@ -1337,6 +1356,7 @@ cleanup:
     return ret;
 }
 
+/* Перепаковує 16 пар «сирих» підключів у формат, придатний для desfunc. */
 static void cookey(const uint32_t *raw1, uint32_t *keyout)
 {
     uint32_t *cook;
@@ -1360,6 +1380,8 @@ static void cookey(const uint32_t *raw1, uint32_t *keyout)
     memcpy(keyout, dough, sizeof (dough));
 }
 
+/* Розклад ключа DES: за PC-1, циклічними зсувами та PC-2 будує 16 раундових підключів
+ * (у прямому порядку для шифрування EN0 або зворотному для розшифрування DE1). */
 static void deskey(const unsigned char *key, short edf, uint32_t *keyout)
 {
     uint32_t i, j, l, m, n, kn[32];
@@ -1408,6 +1430,8 @@ static void deskey(const unsigned char *key, short edf, uint32_t *keyout)
     cookey(kn, keyout);
 }
 
+/* Обробка одного 64-бітного блоку DES: початкова перестановка IP, 16 раундів Фейстеля
+ * через SP-таблиці та фінальна перестановка FP. */
 static void desfunc(uint32_t *block, const uint32_t *keys)
 {
     uint32_t work, right, leftt;
@@ -1470,6 +1494,7 @@ static void desfunc(uint32_t *block, const uint32_t *keys)
     SWAP_BYTE_U32(leftt, block[1]);
 }
 
+/* Будує розклади ключів шифрування та розшифрування для трьох ключів 3DES (схема EDE). */
 static void des_setup(DesCtx *ctx, const uint8_t *key)
 {
     deskey(key, EN0, &ctx->enc_key[0]);
@@ -1482,6 +1507,7 @@ static void des_setup(DesCtx *ctx, const uint8_t *key)
     deskey(key + 16, DE1, &ctx->dec_key[0]);
 }
 
+/* Одинарний DES над одним 8-байтним блоком. */
 static void des_crypt(uint8_t *block, uint8_t *out, const uint32_t *key)
 {
     uint32_t block32[2];
@@ -1491,6 +1517,7 @@ static void des_crypt(uint8_t *block, uint8_t *out, const uint32_t *key)
     uint32_to_uint8(block32, 2, out, 8);
 }
 
+/* Потрійний DES (EDE) над одним 8-байтним блоком: три послідовні перетворення desfunc. */
 static void des3_crypt(uint8_t *block, uint8_t *out, const uint32_t *keys)
 {
     uint32_t block32[2];
@@ -1504,6 +1531,7 @@ static void des3_crypt(uint8_t *block, uint8_t *out, const uint32_t *keys)
     uint32_to_uint8(block32, 2, out, 8);
 }
 
+/* Режим OFB для DES: гама формується повторним шифруванням, XOR з даними; потокова обробка. */
 static int des_encrypt_ofb(DesCtx *ctx, uint32_t *key_shedule, const ByteArray *in, ByteArray **dst)
 {
     uint8_t *gamma = ctx->gamma_des;
@@ -1549,6 +1577,7 @@ cleanup:
     return ret;
 }
 
+/* Режим OFB для 3DES: аналогічно OFB для DES, але з потрійним перетворенням блоку. */
 static int des3_encrypt_ofb(DesCtx *ctx, uint32_t *key_shedule, const ByteArray *in, ByteArray **dst)
 {
     uint8_t *gamma = ctx->gamma_des3;
@@ -1595,6 +1624,7 @@ cleanup:
     return ret;
 }
 
+/* Режим ECB для DES: кожен 8-байтний блок обробляється незалежно. */
 static int des_encrypt_ecb(uint32_t *key_shedule, const ByteArray *in, ByteArray **out)
 {
     size_t i;
@@ -1618,6 +1648,7 @@ cleanup:
     return ret;
 }
 
+/* Режим ECB для 3DES: кожен блок обробляється незалежно потрійним перетворенням. */
 static __inline int des3_encrypt_ecb(uint32_t *key_shedule, const ByteArray *in, ByteArray **out)
 {
     size_t i;
@@ -1641,6 +1672,7 @@ cleanup:
     return ret;
 }
 
+/* Режим CBC для DES: блок XOR-иться з попереднім шифротекстом перед шифруванням. */
 static int des_encrypt_cbc(DesCtx *ctx, const ByteArray *in, ByteArray **dst)
 {
     ByteArray *out = NULL;
@@ -1669,6 +1701,7 @@ cleanup:
     return ret;
 }
 
+/* Режим CBC для 3DES: аналогічно CBC для DES, з потрійним перетворенням блоку. */
 static int des3_encrypt_cbc(DesCtx *ctx, const ByteArray *in, ByteArray **dst)
 {
     ByteArray *out = NULL;
@@ -1697,6 +1730,7 @@ cleanup:
     return ret;
 }
 
+/* Режим CFB для DES: гама — шифрування попереднього шифротексту (feed), XOR з даними. */
 static int des_encrypt_cfb(DesCtx *ctx, const ByteArray *in, ByteArray **dst)
 {
     uint8_t *gamma = ctx->gamma_des;
@@ -1745,6 +1779,7 @@ cleanup:
     return ret;
 }
 
+/* Режим CFB для 3DES: аналогічно CFB для DES, з потрійним перетворенням блоку. */
 static int des3_encrypt_cfb(DesCtx *ctx, const ByteArray *in, ByteArray **dst)
 {
     uint8_t *gamma = ctx->gamma_des;
@@ -1792,6 +1827,7 @@ cleanup:
     return ret;
 }
 
+/* Розшифрування CFB для DES: у feed зберігається вхідний шифротекст, гама — його шифрування. */
 static int des_decrypt_cfb(DesCtx *ctx, const ByteArray *in, ByteArray **dst)
 {
     int ret = RET_OK;
@@ -1842,6 +1878,7 @@ cleanup:
     return ret;
 }
 
+/* Розшифрування CFB для 3DES: аналогічно CFB для DES, з потрійним перетворенням блоку. */
 static int des3_decrypt_cfb(DesCtx *ctx, const ByteArray *in, ByteArray **dst)
 {
     int ret = RET_OK;
@@ -1891,6 +1928,7 @@ cleanup:
     return ret;
 }
 
+/* Розшифрування CBC для DES: блок розшифровується та XOR-иться з попереднім шифротекстом/IV. */
 static int des_decrypt_cbc(DesCtx *ctx, const ByteArray *in, ByteArray **out)
 {
     size_t i = 0;
@@ -1920,6 +1958,7 @@ cleanup:
     return ret;
 }
 
+/* Розшифрування CBC для 3DES: аналогічно CBC для DES, з потрійним перетворенням блоку. */
 static int des3_decrypt_cbc(DesCtx *ctx, const ByteArray *in, ByteArray **out)
 {
     size_t i = 0;
@@ -1949,6 +1988,7 @@ cleanup:
     return ret;
 }
 
+/* Інкремент лічильника (гами) як великого big-endian числа для режиму CTR. */
 static void gamma_gen(uint8_t *gamma, size_t size)
 {
     size--;
@@ -1957,6 +1997,7 @@ static void gamma_gen(uint8_t *gamma, size_t size)
     } while (gamma[size--] == 0);
 }
 
+/* Режим CTR: гама — шифрування лічильника feed, який інкрементується щоблоку; XOR з даними. */
 static int des_encrypt_ctr(DesCtx *ctx, uint32_t *key_shedule, const ByteArray *in, ByteArray **dst)
 {
     uint8_t *gamma = ctx->gamma_des3;
@@ -2005,6 +2046,7 @@ cleanup:
     return ret;
 }
 
+/* Режим CTR для 3DES: аналогічно CTR для DES, з потрійним перетворенням лічильника. */
 static int des3_encrypt_ctr(DesCtx *ctx, uint32_t *key_shedule, const ByteArray *in, ByteArray **dst)
 {
     uint8_t *gamma = ctx->gamma_des3;
@@ -2054,6 +2096,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для режиму ECB: розклад ключів DES/3DES. */
 int des_init_ecb(DesCtx *ctx, const ByteArray *key)
 {
     int ret = RET_OK;
@@ -2067,6 +2110,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для режиму CBC: розклад ключів та початкова гама з IV. */
 int des_init_cbc(DesCtx *ctx, const ByteArray *key, const ByteArray *iv)
 {
     int ret = RET_OK;
@@ -2089,6 +2133,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для режиму OFB: розклад ключів та початкова гама/feed з IV. */
 int des_init_ofb(DesCtx *ctx, const ByteArray *key, const ByteArray *iv)
 {
     int ret = RET_OK;
@@ -2112,6 +2157,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для режиму CTR: розклад ключів та початковий лічильник feed з IV. */
 int des_init_ctr(DesCtx *ctx, const ByteArray *key, const ByteArray *iv)
 {
     int ret = RET_OK;
@@ -2136,6 +2182,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для режиму CFB: розклад ключів та початкова гама/feed з IV. */
 int des_init_cfb(DesCtx *ctx, const ByteArray *key, const ByteArray *iv)
 {
     int ret = RET_OK;
@@ -2162,6 +2209,7 @@ cleanup:
     return ret;
 }
 
+/* Шифрує дані алгоритмом 3DES згідно з режимом, заданим при ініціалізації. */
 int des3_encrypt(DesCtx *ctx, const ByteArray *in, ByteArray **out)
 {
     int ret = RET_OK;
@@ -2195,6 +2243,7 @@ cleanup:
     return ret;
 }
 
+/* Шифрує дані алгоритмом DES згідно з режимом, заданим при ініціалізації. */
 int des_encrypt(DesCtx *ctx, const ByteArray *in, ByteArray **out)
 {
     int ret = RET_OK;
@@ -2228,6 +2277,7 @@ cleanup:
     return ret;
 }
 
+/* Розшифровує дані алгоритмом DES згідно з режимом, заданим при ініціалізації. */
 int des_decrypt(DesCtx *ctx, const ByteArray *in, ByteArray **out)
 {
     int ret = RET_OK;
@@ -2262,6 +2312,7 @@ cleanup:
     return ret;
 }
 
+/* Розшифровує дані алгоритмом 3DES згідно з режимом, заданим при ініціалізації. */
 int des3_decrypt(DesCtx *ctx, const ByteArray *in, ByteArray **out)
 {
     int ret = RET_OK;
@@ -2296,6 +2347,7 @@ cleanup:
     return ret;
 }
 
+/* Виділяє та обнуляє контекст DES/3DES. */
 DesCtx *des_alloc(void)
 {
     DesCtx *ctx = NULL;
@@ -2308,6 +2360,7 @@ cleanup:
     return ctx;
 }
 
+/* Генерує випадковий ключ DES/3DES заданої довжини (8/16/24 байти) за допомогою ГВЧ. */
 int des_generate_key(PrngCtx *prng, size_t key_len, ByteArray **key)
 {
     int ret = RET_OK;
@@ -2322,6 +2375,7 @@ cleanup:
     return ret;
 }
 
+/* Затирає секретні дані контексту та звільняє пам'ять. */
 void des_free(DesCtx *ctx)
 {
     if (ctx) {

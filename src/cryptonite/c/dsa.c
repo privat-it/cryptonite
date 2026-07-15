@@ -3,6 +3,16 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Реалізація алгоритму цифрового підпису DSA (FIPS 186) над GF(p):
+ *  - генерація доменних параметрів (p, q, g) за схемою з SHA-1/SHA-2;
+ *  - генерація ключів (закритий x, відкритий y = g^x mod p);
+ *  - формування та перевірка підпису (r, s).
+ * Велика арифметика — WordArray (word_internal.h); модульні операції за
+ * модулями p та q виконуються через окремі контексти простого поля GfpCtx
+ * (math_gfp_internal.h): gfp — над GF(p), gfq — над GF(q).
+ */
+
 #include <string.h>
 
 #include "dsa.h"
@@ -15,6 +25,7 @@
 #undef FILE_MARKER
 #define FILE_MARKER "cryptonite/dsa.c"
 
+/* Доменні параметри DSA: поля GF(p) і GF(q) та генератор g підгрупи порядку q. */
 typedef struct DsaParamsCtx_st {
     GfpCtx *gfp;
     GfpCtx *gfq;
@@ -31,6 +42,7 @@ struct DsaCtx_st {
     bool verify_status; /* Готов ли контекст для проверки подписи. */
 };
 
+/* Обгортка над контекстом геш-функції: SHA-1 (N = 160) або SHA-2 (N = 224/256). */
 typedef struct DsaShaCtx_st {
     bool is_sha2;
 
@@ -40,6 +52,7 @@ typedef struct DsaShaCtx_st {
     } ctx;
 } DsaShaCtx;
 
+/* Обчислює геш блоку src довжини seed_len обраною функцією та записує його в hash. */
 static int hash(DsaShaCtx *ctx, const void *src, size_t seed_len, uint8_t *hash)
 {
     int ret = RET_OK;
@@ -69,6 +82,7 @@ cleanup:
     return ret;
 }
 
+/* Інкрементує на одиницю велике число у форматі big-endian (з переносом). */
 static void inc_be(void *src, int len)
 {
     int i;
@@ -82,6 +96,9 @@ static void inc_be(void *src, int len)
     }
 }
 
+/* Генерує пару простих (p, q) за схемою FIPS 186 з випадковим seed:
+ * спершу N-бітове просте q, далі L-бітове просте p таке, що q | (p - 1).
+ * Кандидати перевіряються тестом простоти (int_is_prime); L кратне 8, L >= 512. */
 static int generate_p_q(int L, int N, PrngCtx *prng, ByteArray **p, ByteArray **q)
 {
     PrngCtx *random = NULL;
@@ -261,6 +278,8 @@ cleanup:
     return ret;
 }
 
+/* Генерує генератор g підгрупи порядку q: g = h^((p-1)/q) mod p для випадкового
+ * h з [2, p-2], доки g != 1 (тобто g має мультиплікативний порядок q). */
 static int generate_g(const ByteArray *p, const ByteArray *q, PrngCtx *prng, ByteArray **g)
 {
     int ret = RET_OK;
@@ -343,6 +362,7 @@ cleanup:
     return ctx;
 }
 
+/* Створює контекст DSA із заданими доменними параметрами (p, q, g). */
 DsaCtx *dsa_alloc(const ByteArray *p, const ByteArray *q, const ByteArray *g)
 {
     DsaCtx *ctx = NULL;
@@ -386,6 +406,7 @@ cleanup:
     return ctx;
 }
 
+/* Повертає доменні параметри контексту (p, q, g) у вигляді байтових масивів. */
 int dsa_get_params(const DsaCtx *ctx, ByteArray **p, ByteArray **q, ByteArray **g)
 {
     size_t plen;
@@ -414,6 +435,7 @@ cleanup:
     return ret;
 }
 
+/* Генерує закритий ключ DSA: випадкове число x у діапазоні [1, q-1]. */
 int dsa_generate_privkey(const DsaCtx *ctx, PrngCtx *prng, ByteArray **priv_key)
 {
     WordArray *wd = NULL;
@@ -439,6 +461,7 @@ cleanup:
     return ret;
 }
 
+/* Обчислює відкритий ключ y = g^x mod p за закритим ключем x (0 < x < q). */
 int dsa_get_pubkey(const DsaCtx *ctx, const ByteArray *priv_key, ByteArray **pub_key)
 {
     size_t blen;
@@ -471,6 +494,8 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для формування підпису: перевіряє закритий ключ
+ * (0 < x < q) та засіює внутрішній ГПВЧ від переданого prng. */
 int dsa_init_sign(DsaCtx *ctx, const ByteArray *priv_key, PrngCtx *prng)
 {
     ByteArray *seed = NULL;
@@ -514,6 +539,11 @@ cleanup:
     return ret;
 }
 
+/* Формує підпис DSA для гешу повідомлення:
+ *  z — старші min(bit_len(q), bit_len(hash)) біт гешу;
+ *  k — одноразове випадкове число (0 < k < q);
+ *  r = (g^k mod p) mod q, s = k^(-1) * (z + x*r) mod q;
+ * при r = 0 або s = 0 генерація k повторюється. */
 int dsa_sign(const DsaCtx *ctx, const ByteArray *hash, ByteArray **r, ByteArray **s)
 {
     WordArray *z = NULL;
@@ -602,6 +632,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для перевірки підпису: встановлює відкритий ключ y. */
 int dsa_init_verify(DsaCtx *ctx, const ByteArray *pub_key)
 {
     int ret = RET_OK;
@@ -627,6 +658,11 @@ cleanup:
     return ret;
 }
 
+/* Перевіряє підпис DSA:
+ *  контроль 0 < r < q, 0 < s < q;
+ *  w = s^(-1) mod q, u1 = z*w mod q, u2 = r*w mod q;
+ *  v = (g^u1 * y^u2 mod p) mod q;
+ * підпис дійсний, якщо v == r. */
 int dsa_verify(const DsaCtx *ctx, const ByteArray *hash, const ByteArray *r, const ByteArray *s)
 {
     WordArray *z = NULL;
@@ -720,6 +756,7 @@ cleanup:
     return ret;
 }
 
+/* Звільняє доменні параметри DSA (поля GF(p), GF(q) та генератор g). */
 static void dsa_params_free(DsaParamsCtx *params)
 {
     if (params != NULL) {
@@ -730,6 +767,7 @@ static void dsa_params_free(DsaParamsCtx *params)
     }
 }
 
+/* Звільняє контекст DSA; закритий ключ затирається перед звільненням. */
 void dsa_free(DsaCtx *ctx)
 {
     if (ctx != NULL) {

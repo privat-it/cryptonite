@@ -3,6 +3,12 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Реалізація HMAC (RFC 2104) — коду автентичності повідомлення на основі хеш-функції.
+ * Обгортає базову хеш-функцію (ГОСТ 34.311, SHA-1, SHA-2 або MD5): обчислює
+ * H((K^opad) || H((K^ipad) || msg)), де ipad=0x36, opad=0x5c.
+ */
+
 #include <string.h>
 
 #include "hmac.h"
@@ -39,6 +45,7 @@ struct HmacCtx_st {
     } mode;
 };
 
+/* Створює контекст HMAC на основі ГОСТ 34.311 із заданим стандартним S-box та синхропосилкою. */
 HmacCtx *hmac_alloc_gost34_311(Gost28147SboxId sbox_id, const ByteArray *sync)
 {
     int ret = RET_OK;
@@ -58,6 +65,7 @@ cleanup:
     return ctx;
 }
 
+/* Передає дані базовій хеш-функції відповідно до режиму контексту. */
 static int hmac_hash_update(HmacCtx *ctx, const ByteArray *data)
 {
     int ret = RET_OK;
@@ -84,6 +92,7 @@ cleanup:
     return ret;
 }
 
+/* Завершує обчислення базової хеш-функції та повертає її результат. */
 static int hmac_hash_final(HmacCtx *ctx, ByteArray **hash)
 {
     int ret = RET_OK;
@@ -110,6 +119,7 @@ cleanup:
     return ret;
 }
 
+/* Створює контекст HMAC на основі ГОСТ 34.311 із користувацьким S-box та синхропосилкою. */
 HmacCtx *hmac_alloc_gost34_311_user_sbox(const ByteArray *sbox, const ByteArray *sync)
 {
     int ret = RET_OK;
@@ -129,6 +139,7 @@ cleanup:
     return ctx;
 }
 
+/* Створює контекст HMAC на основі SHA-1 (розмір блоку 64 байти). */
 HmacCtx *hmac_alloc_sha1(void)
 {
     int ret = RET_OK;
@@ -148,6 +159,7 @@ cleanup:
     return ctx;
 }
 
+/* Створює контекст HMAC на основі SHA-2; розмір блоку 64 (224/256) або 128 (384/512) байтів. */
 HmacCtx *hmac_alloc_sha2(Sha2Variant variant)
 {
     int ret = RET_OK;
@@ -179,6 +191,7 @@ cleanup:
     return ctx;
 }
 
+/* Створює контекст HMAC на основі MD5 (розмір блоку 64 байти). */
 HmacCtx *hmac_alloc_md5(void)
 {
     int ret = RET_OK;
@@ -198,6 +211,8 @@ cleanup:
     return ctx;
 }
 
+/* Ініціалізує HMAC ключем: довгий ключ хешується, формуються K^ipad/K^opad,
+ * і в хеш-функцію подається внутрішній пад (K^ipad). */
 int hmac_init(HmacCtx *ctx, const ByteArray *key)
 {
     ByteArray *ba_tmp = NULL;
@@ -240,6 +255,7 @@ cleanup:
     return ret;
 }
 
+/* Додає чергову порцію даних до внутрішнього хешу HMAC. */
 int hmac_update(HmacCtx *ctx, const ByteArray *data)
 {
     int ret = RET_OK;
@@ -254,6 +270,8 @@ cleanup:
     return ret;
 }
 
+/* Завершує обчислення: хешує зовнішній пад (K^opad) з внутрішнім хешем і повертає HMAC;
+ * наприкінці повторно подає K^ipad для повторного використання контексту. */
 int hmac_final(HmacCtx *ctx, ByteArray **hmac)
 {
     ByteArray *upd_hmac = NULL;
