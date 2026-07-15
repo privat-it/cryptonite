@@ -3,6 +3,14 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Модуль реалізує роботу із запитом на сертифікат (CertificationRequest,
+ * CSR, PKCS #10). Надає створення/звільнення, ініціалізацію готовим підписом
+ * або через адаптер підпису, ASN.1 кодування/декодування, доступ до полів
+ * (інформація запиту, алгоритм і значення підпису, атрибути), перевірку
+ * підпису та пошук розширення серед атрибутів запиту.
+ */
+
 #include <stdlib.h>
 #include <stdbool.h>
 
@@ -16,6 +24,7 @@
 #undef FILE_MARKER
 #define FILE_MARKER "pki/api/certification_request.c"
 
+/* Виділяє пам'ять під порожній об'єкт запиту на сертифікат. */
 CertificationRequest_t *creq_alloc(void)
 {
     CertificationRequest_t *creq = NULL;
@@ -30,6 +39,7 @@ cleanup:
     return creq;
 }
 
+/* Звільняє об'єкт запиту на сертифікат. */
 void creq_free(CertificationRequest_t *creq)
 {
     LOG_ENTRY();
@@ -39,6 +49,7 @@ void creq_free(CertificationRequest_t *creq)
     }
 }
 
+/* Ініціалізує запит уже готовими інформацією, алгоритмом та значенням підпису. */
 int creq_init_by_sign(CertificationRequest_t *creq,
         const CertificationRequestInfo_t *info,
         const AlgorithmIdentifier_t *aid,
@@ -68,6 +79,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Ініціалізує запит, підписуючи закодовану інформацію запиту через адаптер
+ * підпису. Параметри алгоритму очищуються, підпис перетворюється на BIT STRING.
+ */
 int creq_init_by_adapter(CertificationRequest_t *creq,
         const CertificationRequestInfo_t *info,
         const SignAdapter *adapter)
@@ -113,6 +128,7 @@ cleanup:
     return ret;
 }
 
+/* Кодує запит на сертифікат у DER-подання. */
 int creq_encode(const CertificationRequest_t *creq, ByteArray **out)
 {
     int ret = RET_OK;
@@ -127,6 +143,7 @@ cleanup:
     return ret;
 }
 
+/* Декодує запит на сертифікат з DER-подання; попередній вміст очищується. */
 int creq_decode(CertificationRequest_t *creq, const ByteArray *in)
 {
     int ret = RET_OK;
@@ -145,6 +162,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію інформаційної частини запиту (CertificationRequestInfo). */
 int creq_get_info(const CertificationRequest_t *creq, CertificationRequestInfo_t **info)
 {
     int ret = RET_OK;
@@ -162,6 +180,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію ідентифікатора алгоритму підпису запиту. */
 int creq_get_aid(const CertificationRequest_t *creq, AlgorithmIdentifier_t **aid)
 {
     int ret = RET_OK;
@@ -179,6 +198,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію значення підпису запиту (BIT STRING). */
 int creq_get_sign(const CertificationRequest_t *creq, BIT_STRING_t **sign)
 {
     int ret = RET_OK;
@@ -196,6 +216,7 @@ cleanup:
     return ret;
 }
 
+/* Перевіряє підпис запиту над закодованою інформаційною частиною через адаптер. */
 int creq_verify(const CertificationRequest_t *creq, VerifyAdapter *adapter)
 {
     int ret = RET_OK;
@@ -220,6 +241,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію набору атрибутів з інформаційної частини запиту. */
 int creq_get_attributes(const CertificationRequest_t *req, Attributes_t **ext)
 {
     int ret = RET_OK;
@@ -275,6 +297,7 @@ cleanup:
     return ret;
 }
 
+/* Шукає розширення за OID серед атрибутів запиту (у extensionRequest). */
 int creq_get_ext_by_oid(const CertificationRequest_t *req, const OidNumbers *oid_numbers, Extension_t **ext)
 {
     int ret = RET_OK;

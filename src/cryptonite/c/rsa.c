@@ -3,6 +3,15 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Реалізація криптосистеми RSA (PKCS#1):
+ *  - генерація ключових пар (у т.ч. з CRT-параметрами) та валідація ключа;
+ *  - шифрування/розшифрування за схемами RSAES-PKCS1-v1_5 та RSAES-OAEP;
+ *  - підпис/перевірка підпису за схемою RSASSA-PKCS1-v1_5 (EMSA-PKCS1-v1_5).
+ * Велика арифметика — WordArray (word_internal.h), модульні операції —
+ * через контекст простого поля GfpCtx (math_gfp_internal.h), де p = n.
+ */
+
 #include <memory.h>
 
 #include "rsa.h"
@@ -37,11 +46,14 @@ struct RsaCtx_st {
     bool is_inited;
 };
 
-/* SHA-1, SHA-256, SHA-384, SHA-512 */
+/* Довжини гешів у байтах: SHA-1, SHA-256, SHA-384, SHA-512 */
 const uint8_t HASH_LEN[] = {20, 32, 48, 64};
 
+/* Довжини DER-префіксів DigestInfo (AID_*) для відповідних геш-функцій. */
 const uint8_t HASH_AID_LEN[] = {15, 19, 19, 19};
 
+/* DER-префікси структури DigestInfo (AlgorithmIdentifier + заголовок OCTET STRING)
+ * для EMSA-PKCS1-v1_5; після префікса дописується значення гешу. */
 const uint8_t AID_SHA1[] = {
         0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e, 0x03, 0x02, 0x1a, 0x05,
         0x00, 0x04, 0x14
@@ -59,6 +71,7 @@ const uint8_t AID_SHA512[] = {
         0x04, 0x02, 0x03, 0x05, 0x00, 0x04, 0x40
 };
 
+/* Передобчислені геші порожнього рядка — lHash для OAEP з міткою за умовчанням (L = ""). */
 const uint8_t LHASH_SHA1[20] = {
         0xda, 0x39, 0xa3, 0xee, 0x5e, 0x6b, 0x4b, 0x0d, 0x32, 0x55, 0xbf, 0xef,
         0x95, 0x60, 0x18, 0x90, 0xaf, 0xd8, 0x07, 0x09
@@ -87,6 +100,7 @@ const uint8_t md5_empty_string[] = {0xd4, 0x1d, 0x8c, 0xd9, 0x8f, 0x00, 0xb2, 0x
 const uint8_t ripemd160_empty_string[] = {0x9c, 0x11, 0x85, 0xa5, 0xc5, 0xe9, 0xfc, 0x54, 0x61, 0x28, 0x08, 0x97, 0x7e, 0xe8, 0xf5, 0x48, 0xb2, 0x25, 0x8d, 0x31};
 const uint8_t ripemd128_empty_string[] = {0xcd, 0xf2, 0x62, 0x13, 0xa1, 0x50, 0xdc, 0x3e, 0xcb, 0x61, 0x0f, 0x18, 0xf6, 0xb3, 0x8b, 0x46};
 
+/* Створює контекст геш-функції за ідентифікатором (SHA-1 або варіант SHA-2). */
 static int rsa_hash_alloc(void **ctx, RsaHashType id)
 {
     int ret = RET_OK;
@@ -113,6 +127,7 @@ cleanup:
     return ret;
 }
 
+/* Догешовує порцію даних у контексті обраної геш-функції. */
 static int rsa_hash_update(void *ctx, const ByteArray *data, RsaHashType id)
 {
     int ret = RET_OK;
@@ -133,6 +148,7 @@ cleanup:
     return ret;
 }
 
+/* Завершує гешування та повертає значення гешу. */
 static int rsa_hash_final(void *ctx, ByteArray **hash, RsaHashType id)
 {
     int ret = RET_OK;
@@ -155,6 +171,7 @@ cleanup:
     return ret;
 }
 
+/* Звільняє контекст геш-функції відповідного типу. */
 static void rsa_hash_free(void *ctx, RsaHashType id)
 {
     int ret = RET_OK;
@@ -177,6 +194,8 @@ cleanup:
     return;
 }
 
+/* Функція генерації маски MGF1 (PKCS#1 v2.1): mask = Hash(seed || counter),
+ * counter = 0..iter-1 (32-бітний big-endian), результат обрізається до mask_len байт. */
 static int mgf(RsaHashType htype, const void *seed, uint8_t seed_len, uint8_t *mask, uint8_t mask_len)
 {
     ByteArray *bseed = NULL;
@@ -216,6 +235,8 @@ cleanup:
     return ret;
 }
 
+/* Повертає lHash = Hash(L) для OAEP: для label == NULL береться
+ * передобчислений геш порожнього рядка, інакше мітка гешується. */
 static uint8_t *oaep_get_lhash(RsaHashType htype, const ByteArray *label)
 {
     uint8_t *hash = NULL;
@@ -256,6 +277,8 @@ cleanup:
     return hash;
 }
 
+/* Базова операція RSA (RSAEP/RSADP/RSASP1/RSAVP1):
+ * dst = src^x mod n, де x — відкрита (e) або секретна (d) експонента. */
 static int rsaedp(const GfpCtx *gfp, const WordArray *x, const WordArray *src, WordArray **dst)
 {
     int ret = RET_OK;
@@ -268,6 +291,9 @@ cleanup:
     return ret;
 }
 
+/* Шифрування RSAES-PKCS1-v1_5: будує блок EM = 0x00 || 0x02 || PS || 0x00 || M
+ * з випадковим ненульовим доповненням PS (не менше 8 байт),
+ * потім обчислює шифротекст c = EM^e mod n. */
 static int rsa_encrypt_pkcs1_v1_5(RsaCtx *ctx, const ByteArray *data, ByteArray **out)
 {
     uint8_t *m = NULL;
@@ -307,6 +333,7 @@ static int rsa_encrypt_pkcs1_v1_5(RsaCtx *ctx, const ByteArray *data, ByteArray 
     m[len - data_len - 1] = 0;
     DO(ba_to_uint8(data, m + len - data_len, data_len));
 
+    /* PS не має містити нульових байтів: кожен нуль перегенеровується. */
     CHECK_NOT_NULL(seed = ba_alloc_by_len(1));
     off = len - data_len - 2;
     while (off >= 2) {
@@ -334,6 +361,8 @@ cleanup:
     return ret;
 }
 
+/* Розшифрування RSAES-PKCS1-v1_5: обчислює EM = c^d mod n,
+ * перевіряє префікс 0x00 0x02 та повертає повідомлення M після роздільника 0x00. */
 static int rsa_decrypt_pkcs1_v1_5(RsaCtx *ctx, const ByteArray *data, ByteArray **out)
 {
     uint8_t i;
@@ -380,6 +409,9 @@ cleanup:
     return ret;
 }
 
+/* Шифрування RSAES-OAEP: DB = lHash || PS || 0x01 || M маскується через MGF1
+ * випадковим seed, seed маскується через MGF1 від maskedDB (схема на діаграмі нижче),
+ * після чого c = EM^e mod n. */
 static int rsa_encrypt_oaep(RsaCtx *ctx, const ByteArray *msg, const ByteArray *L, ByteArray **out)
 {
     WordArray *wm = NULL;
@@ -474,6 +506,9 @@ cleanup:
     return ret;
 }
 
+/* Розшифрування RSAES-OAEP: EM = c^d mod n, зняття масок MGF1 у зворотному
+ * порядку, перевірка lHash і провідного нульового байта, пошук роздільника 0x01
+ * та повернення повідомлення M. */
 static int rsa_decrypt_oaep(RsaCtx *ctx, const ByteArray *msg, ByteArray **out)
 {
     WordArray *wc = NULL;
@@ -553,6 +588,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає DER-префікс DigestInfo для заданої геш-функції (EMSA-PKCS1-v1_5). */
 static const uint8_t *pkcs15_get_aid(RsaHashType htype)
 {
     if (htype == RSA_HASH_SHA1) {
@@ -568,6 +604,7 @@ static const uint8_t *pkcs15_get_aid(RsaHashType htype)
     return NULL;
 }
 
+/* Створює порожній контекст RSA; режим роботи задається функціями rsa_init_*. */
 RsaCtx *rsa_alloc(void)
 {
     RsaCtx *ctx = NULL;
@@ -586,6 +623,13 @@ cleanup:
     return ctx;
 }
 
+/* Ядро генерації ключової пари RSA:
+ *  1) генерує прості p і q приблизно половинної довжини (int_gen_prime —
+ *     ймовірнісна перевірка: тест Ферма, далі тест Рабіна-Міллера);
+ *  2) вимагає |p - q| > 2^(bitlen(p) - 100) згідно з ANSI X9.31 (p > q);
+ *  3) обчислює n = p*q, fi = (p-1)*(q-1) та d = e^(-1) mod fi
+ *     (розширений алгоритм Евкліда в gfp_mod_inv_core);
+ *  4) якщо d не існує або бітова довжина n != bits — генерація повторюється. */
 static int rsa_gen_privkey_core(RsaCtx *ctx, PrngCtx *prng, const size_t bits, const ByteArray *e,
                                 WordArray **wa_p, WordArray **wa_q, WordArray **wa_fi,
                                 WordArray **wa_n, WordArray **wa_d)
@@ -661,6 +705,7 @@ static int rsa_gen_privkey_core(RsaCtx *ctx, PrngCtx *prng, const size_t bits, c
     int_mul(wq, wp, wn);
 
     /* fi = (p - 1) * (q - 1) */
+    /* p і q непарні, тому декремент/інкремент зачіпає лише молодше слово. */
     --wq->buf[0];
     --wp->buf[0];
     CHECK_NOT_NULL(fi = wa_alloc_with_zero(2 * wplen));
@@ -721,11 +766,13 @@ cleanup:
     return ret;
 }
 
+/* Конвертує WordArray у ByteArray, обрізаючи до фактичної байтової довжини числа. */
 #define WA_TO_BA_WITH_TRUNC(wa, ba) {                   \
     CHECK_NOT_NULL(ba = wa_to_ba(wa));                  \
     DO(ba_change_len(ba, (int_bit_len(wa) + 7) >> 3));  \
 }
 
+/* Генерує ключову пару RSA заданої бітової довжини; повертає лише n та d. */
 int rsa_generate_privkey(RsaCtx *ctx, PrngCtx *prng, const size_t bits, const ByteArray *e, ByteArray **n,
                          ByteArray **d)
 {
@@ -753,6 +800,8 @@ cleanup:
     return ret;
 }
 
+/* Генерує ключову пару RSA у розширеній формі: крім n і d повертає CRT-параметри
+ * p, q, dmp1 = d mod (p-1), dmq1 = d mod (q-1), iqmp = q^(-1) mod p. */
 int rsa_generate_privkey_ext(RsaCtx *ctx, PrngCtx *prng, const size_t bits, const ByteArray *e, ByteArray **n,
                              ByteArray **d, ByteArray **p, ByteArray **q, ByteArray **dmp1, ByteArray **dmq1, ByteArray **iqmp)
 {
@@ -840,6 +889,8 @@ cleanup:
 
 }
 
+/* Перевіряє узгодженість компонентів ключа RSA: n = p*q, d = e^(-1) mod (p-1)(q-1)
+ * та відповідність CRT-параметрів dmp1, dmq1, iqmp переданим значенням. */
 bool rsa_validate_key(RsaCtx *ctx, const ByteArray *n, const ByteArray *e, const ByteArray *d, const ByteArray *p,
                       const ByteArray *q, const ByteArray *dmp1, const ByteArray *dmq1, const ByteArray *iqmp)
 {
@@ -956,6 +1007,8 @@ cleanup:
     return ret == RET_OK ? true : false;
 }
 
+/* Ініціалізує контекст для шифрування RSAES-PKCS1-v1_5: встановлює (n, e)
+ * та внутрішній ГПВЧ, засіяний від переданого prng. */
 int rsa_init_encrypt_pkcs1_v1_5(RsaCtx *ctx, PrngCtx *prng, const ByteArray *n, const ByteArray *e)
 {
     int ret = RET_OK;
@@ -993,6 +1046,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для розшифрування RSAES-PKCS1-v1_5 закритим ключем (n, d). */
 int rsa_init_decrypt_pkcs1_v1_5(RsaCtx *ctx, const ByteArray *n, const ByteArray *d)
 {
     int ret = RET_OK;
@@ -1023,6 +1077,8 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для підпису RSASSA-PKCS1-v1_5 закритим ключем (n, d)
+ * із зазначеною геш-функцією. */
 int rsa_init_sign_pkcs1_v1_5(RsaCtx *ctx, RsaHashType hash_type, const ByteArray *n, const ByteArray *d)
 {
     WordArray *wn = NULL;
@@ -1052,6 +1108,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для перевірки підпису RSASSA-PKCS1-v1_5 відкритим ключем (n, e). */
 int rsa_init_verify_pkcs1_v1_5(RsaCtx *ctx, RsaHashType hash_type, const ByteArray *n, const ByteArray *e)
 {
     WordArray *wn = NULL;
@@ -1083,6 +1140,9 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для шифрування RSAES-OAEP: (n, e), геш-функція,
+ * необов'язкова мітка L та внутрішній ГПВЧ; перевіряє, що модуль достатньо
+ * великий для обраного гешу (len >= 2*hLen + 2). */
 int rsa_init_encrypt_oaep(RsaCtx *ctx, PrngCtx *prng, RsaHashType htype, ByteArray *label, const ByteArray *n,
                           const ByteArray *e)
 {
@@ -1129,6 +1189,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для розшифрування RSAES-OAEP закритим ключем (n, d). */
 int rsa_init_decrypt_oaep(RsaCtx *ctx, RsaHashType htype, ByteArray *label, const ByteArray *n, const ByteArray *d)
 {
     int ret = RET_OK;
@@ -1161,6 +1222,7 @@ cleanup:
     return ret;
 }
 
+/* Шифрує дані за схемою, обраною під час ініціалізації (PKCS1-v1_5 або OAEP). */
 int rsa_encrypt(RsaCtx *ctx, const ByteArray *data, ByteArray **encrypted_data)
 {
     int ret = RET_OK;
@@ -1185,6 +1247,7 @@ cleanup:
     return ret;
 }
 
+/* Розшифровує дані за схемою, обраною під час ініціалізації (PKCS1-v1_5 або OAEP). */
 int rsa_decrypt(RsaCtx *ctx, const ByteArray *encrypted_data, ByteArray **data)
 {
     int ret = RET_OK;
@@ -1209,6 +1272,9 @@ cleanup:
     return ret;
 }
 
+/* Підпис RSASSA-PKCS1-v1_5: кодує геш за EMSA-PKCS1-v1_5 —
+ * EM = 0x00 || 0x01 || PS(0xFF..FF) || 0x00 || DigestInfo(AID || hash) —
+ * і обчислює підпис s = EM^d mod n. Приймає вже обчислений геш повідомлення. */
 int rsa_sign_pkcs1_v1_5(RsaCtx *ctx, const ByteArray *hash, ByteArray **sign)
 {
     WordArray *em_wa = NULL;
@@ -1257,6 +1323,8 @@ cleanup:
     return ret;
 }
 
+/* Перевірка підпису RSASSA-PKCS1-v1_5: відновлює EM = s^e mod n і звіряє
+ * структуру доповнення (0x00 0x01 0xFF..FF 0x00), префікс DigestInfo та геш. */
 int rsa_verify_pkcs1_v1_5(RsaCtx *ctx, const ByteArray *hash, const ByteArray *sign)
 {
     size_t len;
@@ -1317,6 +1385,7 @@ cleanup:
     return ret;
 }
 
+/* Звільняє контекст RSA; секретні дані (e, d) затираються перед звільненням. */
 void rsa_free(RsaCtx *ctx)
 {
     if (ctx) {

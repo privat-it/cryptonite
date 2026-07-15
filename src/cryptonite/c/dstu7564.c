@@ -3,6 +3,22 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Реалізація геш-функції «Купина» (ДСТУ 7564:2014) та коду автентифікації
+ * повідомлень KMAC на її основі.
+ *
+ * Стиснювальна функція побудована зі схеми з двома перестановками T-типу —
+ * P (з XOR-накладанням раундової константи) та Q (з додаванням за модулем 2^64).
+ * Кожен раунд перестановки складається з підстановки байтів (SubBytes), зсуву
+ * рядків стану (ShiftBytes) та лінійного перетворення стовпців над GF(2^8)
+ * (MixColumns). Для швидкодії операції S-box, зсуву рядка й множення на MDS-
+ * матрицю поєднані у попередньо обчислені таблиці p_boxrowcol (макрос table_G).
+ *
+ * Підтримуються два розміри стану: 512 біт (геш до 256 біт, 10 раундів) і
+ * 1024 біт (геш до 512 біт, 14 раундів). Реалізовано інтерфейс init/update/final
+ * для гешування та init/update/final_kmac для KMAC.
+ */
+
 #include <memory.h>
 #include <stdbool.h>
 
@@ -182,12 +198,15 @@ static uint64_t p_qconst_NB_1024[NR_1024][NB_1024] = {
     }
 };
 
+/* Стан обчислення KMAC: доповнений ключ, інвертований ключ (~K) та довжина ключа. */
 typedef struct {
     uint8_t key[STATE_BYTE_SIZE_1024];
     uint8_t invert_key[STATE_BYTE_SIZE_1024];
     size_t key_len;
 } Dstu7564Hmac;
 
+/* Контекст «Купини»: передобчислені таблиці, буфер незавершеного блоку,
+ * внутрішній стан та параметри поточного режиму (розмір стану, кількість раундів). */
 struct Dstu7564Ctx_st {
     uint64_t p_boxrowcol[ROWS][MAX_NUM_IN_BYTE];
     uint8_t last_block[STATE_BYTE_SIZE_1024 * 2];
@@ -202,6 +221,9 @@ struct Dstu7564Ctx_st {
     Dstu7564Hmac *hmac;
 };
 
+/* Доповнює останній(і) блок(и) повідомлення за схемою ДСТУ 7564: дописує біт 1
+ * (байт 0x80), потрібну кількість нульових байтів і 96-бітове подання довжини
+ * повідомлення у бітах. Повертає кількість дописаних байтів. */
 static size_t padding(uint8_t *buf, size_t buf_len_out, size_t buf_len_out_bit, size_t nbytes)
 {
     size_t zero_nbytes;
@@ -262,6 +284,9 @@ static void p_sub_row_col(const uint8_t *s_blocks, uint64_t p_boxrowcol[ROWS][MA
     }
 }
 
+/* Один раунд перестановки P: накладає раундову константу XOR-ом (AddRoundConstant),
+ * після чого через таблиці p_boxrowcol виконує поєднані SubBytes+ShiftBytes+MixColumns.
+ * i — номер раунду. Обробляє стан як для 512-, так і для 1024-бітового варіанта. */
 static __inline void kupyna_G_xor(Dstu7564Ctx *ctx, uint64_t *in, uint64_t *out, size_t i)
 {
     if (ctx->columns == NB_512) {
@@ -341,6 +366,9 @@ static __inline void kupyna_G_xor(Dstu7564Ctx *ctx, uint64_t *in, uint64_t *out,
     }
 }
 
+/* Один раунд перестановки Q: накладає раундову константу додаванням за модулем 2^64
+ * (AddRoundConstant), далі через таблиці p_boxrowcol виконує поєднані
+ * SubBytes+ShiftBytes+MixColumns. i — номер раунду. */
 static __inline void kupyna_G_add(Dstu7564Ctx *ctx, uint64_t *in, uint64_t *out, size_t i)
 {
     if (ctx->columns == NB_512) {
@@ -420,6 +448,8 @@ static __inline void kupyna_G_add(Dstu7564Ctx *ctx, uint64_t *in, uint64_t *out,
     }
 }
 
+/* Перестановка P: застосовує до стану всі раунди kupyna_G_xor
+ * (10 для 512-бітового стану, 14 для 1024-бітового) з подвійною буферизацією. */
 static __inline void P(Dstu7564Ctx *ctx, uint8_t *state_)
 {
     uint64_t s[NB_1024];
@@ -449,6 +479,8 @@ static __inline void P(Dstu7564Ctx *ctx, uint8_t *state_)
     uint64_to_uint8(state, ctx->columns, state_, block_len);
 }
 
+/* Перестановка Q: застосовує до стану всі раунди kupyna_G_add
+ * (10 для 512-бітового стану, 14 для 1024-бітового) з подвійною буферизацією. */
 static __inline void Q(Dstu7564Ctx *ctx, uint8_t *state_)
 {
     uint64_t s[NB_1024];
@@ -478,6 +510,7 @@ static __inline void Q(Dstu7564Ctx *ctx, uint8_t *state_)
     uint64_to_uint8(state, ctx->columns, state_, block_len);
 }
 
+/* Побайтовий XOR двох станів (out = arg1 ^ arg2) для поточного розміру стану. */
 static __inline void dstu7564_xor(void *arg1, void *arg2, void *out, size_t columns)
 {
     uint64_t *a1 = (uint64_t *) arg1;
@@ -504,6 +537,8 @@ static __inline void dstu7564_xor(void *arg1, void *arg2, void *out, size_t colu
     }
 }
 
+/* Стиснювальна функція для одного блоку повідомлення:
+ * state = state ^ P(state ^ data) ^ Q(data). */
 static __inline void digest(Dstu7564Ctx *ctx, uint8_t *data)
 {
     uint8_t temp1[NB_1024 * ROWS];
@@ -519,6 +554,8 @@ static __inline void digest(Dstu7564Ctx *ctx, uint8_t *data)
     dstu7564_xor(ctx->state, temp2, ctx->state, ctx->columns);
 }
 
+/* Вихідне перетворення: state = state ^ P(state), з якого беруться молодші
+ * hash_nbytes байтів як геш-код; після цього контекст переініціалізовується. */
 static __inline int output_transformation(Dstu7564Ctx *ctx, ByteArray **hash_code)
 {
     uint8_t temp[NB_1024 * ROWS];
@@ -538,6 +575,8 @@ cleanup:
     return ret;
 }
 
+/* Виділяє контекст «Купини» зі стандартним S-box за його ідентифікатором;
+ * копіює передобчислені таблиці (subrowcol із dstu7624). */
 Dstu7564Ctx *dstu7564_alloc(const Dstu7564SboxId sbox_id)
 {
     Dstu7564Ctx *ctx = NULL;
@@ -564,6 +603,8 @@ cleanup:
     return ctx;
 }
 
+/* Виділяє контекст із користувацьким S-box (1024 байти) та обчислює за ним
+ * і MDS-матрицею таблиці p_boxrowcol. */
 Dstu7564Ctx *dstu7564_alloc_user_sbox(const ByteArray *sblocks)
 {
     Dstu7564Ctx *ctx = NULL;
@@ -587,6 +628,7 @@ cleanup:
     return ctx;
 }
 
+/* Звільняє контекст, безпечно затираючи внутрішні дані та стан KMAC. */
 void dstu7564_free(Dstu7564Ctx *ctx)
 {
     if (ctx) {
@@ -600,6 +642,9 @@ void dstu7564_free(Dstu7564Ctx *ctx)
     }
 }
 
+/* Ініціалізує обчислення геша заданої довжини (hash_nbytes, 1..64 байти):
+ * обирає розмір стану й кількість раундів, обнуляє стан і записує в перший
+ * байт довжину стану в байтах, скидає лічильники. */
 int dstu7564_init(Dstu7564Ctx *ctx, size_t hash_nbytes)
 {
     int ret = RET_OK;
@@ -634,6 +679,8 @@ cleanup:
     return ret;
 }
 
+/* Додає порцію даних до гешування: накопичує залишок у буфері last_block,
+ * а повні блоки одразу обробляє стиснювальною функцією digest. */
 int dstu7564_update(Dstu7564Ctx *ctx, const ByteArray *data)
 {
     int ret = RET_OK;
@@ -682,6 +729,8 @@ cleanup:
     return ret;
 }
 
+/* Завершує гешування: доповнює останній блок, обробляє його digest-ом
+ * і виконує вихідне перетворення, повертаючи геш-код. */
 int dstu7564_final(Dstu7564Ctx *ctx, ByteArray **hash_code)
 {
     int ret = RET_OK;
@@ -705,6 +754,9 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує обчислення KMAC за схемою H(PAD(K) || PAD(M) || (~K)):
+ * ініціалізує геш на mac_len байтів, зберігає ключ і його інверсію ~K,
+ * доповнює ключ і одразу обробляє блоки PAD(K). */
 int dstu7564_init_kmac(Dstu7564Ctx *ctx, const ByteArray *key, size_t mac_len)
 {
     uint8_t key_buf[STATE_BYTE_SIZE_1024];
@@ -751,6 +803,7 @@ cleanup:
     return ret;
 }
 
+/* Додає порцію повідомлення до обчислення KMAC (делегує до dstu7564_update). */
 int dstu7564_update_kmac(Dstu7564Ctx *ctx, const ByteArray *data)
 {
     int ret = RET_OK;
@@ -765,6 +818,9 @@ cleanup:
     return ret;
 }
 
+/* Завершує обчислення KMAC: доповнює й обробляє повідомлення PAD(M),
+ * дописує інвертований ключ ~K, доповнює все повідомлення та виконує
+ * вихідне перетворення, повертаючи код автентифікації mac. */
 int dstu7564_final_kmac(Dstu7564Ctx *ctx, ByteArray **mac)
 {
     size_t msg_len;

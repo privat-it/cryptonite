@@ -3,6 +3,14 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Двигун побудови запиту мітки часу TSP (TimeStampReq, RFC 3161).
+ * Формує MessageImprint (алгоритм гешування + геш повідомлення), встановлює версію,
+ * політику, мітку (nonce - задану або згенеровану) та ознаку запиту сертифіката TSA.
+ * Надає варіанти побудови з готового гешу, з повідомлення (гешується адаптером) та з
+ * гешу GOST 34311.
+ */
+
 #include "tsp_request_engine.h"
 
 #include "log_internal.h"
@@ -15,6 +23,9 @@
 #undef FILE_MARKER
 #define FILE_MARKER "pki/engine/tsp_request_engine.c"
 
+/* Будує TimeStampReq з готового гешу: формує MessageImprint із заданого алгоритму та гешу,
+ * встановлює версію 1, політику, мітку (nonce з rnd або згенеровану, якщо rnd не задано) і
+ * ознаку cert_req. */
 int etspreq_generate_from_hash(AlgorithmIdentifier_t *digest_aid,
         const ByteArray *hash,
         const ByteArray *rnd,
@@ -66,6 +77,8 @@ cleanup:
     return ret;
 }
 
+/* Будує TimeStampReq з повідомлення: обчислює його геш через DigestAdapter і делегує
+ * etspreq_generate_from_hash. */
 int etspreq_generate(const DigestAdapter *da,
         const ByteArray *msg,
         const ByteArray *rnd,
@@ -105,6 +118,8 @@ cleanup:
     return ret;
 }
 
+/* Будує TimeStampReq з готового гешу GOST 34311: створює відповідний алгоритм гешування,
+ * перетворює текстову політику на OID і делегує etspreq_generate_from_hash (без nonce). */
 int etspreq_generate_from_gost34311(const ByteArray *hash,
         const char *policy,
         bool cert_req,

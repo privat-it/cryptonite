@@ -3,6 +3,21 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Реалізація ЕЦП ДСТУ 4145-2002 — цифровий підпис на еліптичних кривих
+ * над полем GF(2^m) у поліноміальному або оптимальному нормальному базисі (ОНБ).
+ *
+ * Структура реалізації:
+ *  - створення контексту зі стандартними (іменованими) чи довільними параметрами;
+ *  - генерація особистого ключа d та обчислення відкритого ключа Q;
+ *  - стиснення/відновлення відкритого ключа;
+ *  - обчислення та перевірка підпису (r, s);
+ *  - схема розподілу ключів Діффі-Геллмана на базі параметрів ДСТУ 4145.
+ * Операції над кривою виконуються модулями ec2m_ та gf2m_ (арифметика GF(2^m)),
+ * для прискорення скалярного множення використовуються передобчислення
+ * (віконний та comb-методи).
+ */
+
 #include <string.h>
 
 #include "dstu4145.h"
@@ -16,6 +31,9 @@
 #undef FILE_MARKER
 #define FILE_MARKER "cryptonite/dstu4145.c"
 
+/* Перетворює координати відкритого ключа (qx, qy) на точку еліптичної кривої:
+ * перевіряє належність координат полю GF(2^m) і точки — кривій;
+ * для параметрів в ОНБ попередньо конвертує координати в поліноміальний базис. */
 static int public_key_to_ec_point(Dstu4145ParamsCtx *params, const ByteArray *qx, const ByteArray *qy, ECPoint **q)
 {
     int ret = RET_OK;
@@ -61,6 +79,7 @@ cleanup:
     return ret;
 }
 
+/* Створює новий контекст ДСТУ 4145 зі стандартними параметрами за їх ідентифікатором. */
 Dstu4145Ctx *dstu4145_alloc_new(Dstu4145ParamsId params_id)
 {
     const Dstu4145DefaultParamsCtx *def_params;
@@ -97,6 +116,7 @@ cleanup:
     return ctx;
 }
 
+/* Повертає контекст зі стандартними параметрами: з кешу криптопримітивів або новостворений. */
 Dstu4145Ctx *dstu4145_alloc(Dstu4145ParamsId params_id)
 {
     Dstu4145Ctx *ctx;
@@ -109,6 +129,10 @@ Dstu4145Ctx *dstu4145_alloc(Dstu4145ParamsId params_id)
     return dstu4145_alloc_new(params_id);
 }
 
+/* Ініціалізує параметри домену: криву y^2 + xy = x^3 + ax^2 + b над GF(2^m)
+ * (f — примітивний поліном поля), порядок n і базову точку P;
+ * для ОНБ додатково будує матриці переходу між базисами.
+ * Якщо py == NULL, y-координату базової точки відновлюють зі стисненого подання. */
 static Dstu4145ParamsCtx *dstu4145_params_alloc(const int *f, size_t f_len, int a, const ByteArray *b,
         const ByteArray *n,
         const ByteArray *px, const ByteArray *py, bool is_onb)
@@ -189,6 +213,8 @@ cleanup:
     return params;
 }
 
+/* Повертає параметри домену контексту (f, a, b, n та координати базової точки);
+ * для ОНБ-параметрів значення конвертуються назад у нормальний базис. */
 int dstu4145_get_params(const Dstu4145Ctx *ctx, int **f, size_t *f_len, int *a, ByteArray **b, ByteArray **n,
         ByteArray **px, ByteArray **py)
 {
@@ -264,6 +290,7 @@ cleanup:
     return ret;
 }
 
+/* Повідомляє, чи задані параметри контексту в оптимальному нормальному базисі (ОНБ). */
 int dstu4145_is_onb_params(const Dstu4145Ctx *ctx, bool *is_onb_params)
 {
     int ret = RET_OK;
@@ -278,6 +305,7 @@ cleanup:
     return ret;
 }
 
+/* Порівнює параметри домену двох контекстів (базис, поліном поля, a, b, n, базова точка). */
 int dstu4145_equals_params(const Dstu4145Ctx *param_a, const Dstu4145Ctx *param_b, bool *equals)
 {
     int f_len_a, f_len_b;
@@ -337,6 +365,8 @@ cleanup:
     return ret;
 }
 
+/* Готує передобчислення (comb- або віконний метод) для точки відкритого ключа Q,
+ * що прискорює скалярне множення під час перевірки підпису. */
 static int dstu4145_set_verify_precomp(Dstu4145Ctx *ctx, int verify_comb_opt_level, int verify_win_opt_level)
 {
     Dstu4145ParamsCtx *params = NULL;
@@ -374,6 +404,7 @@ cleanup:
     return ret;
 }
 
+/* Створює копію контексту лише з параметрами домену (без ключів і стану ГПВЧ). */
 Dstu4145Ctx *dstu4145_copy_params_with_alloc(const Dstu4145Ctx *param)
 {
     int ret = RET_OK;
@@ -425,6 +456,7 @@ cleanup:
     return NULL;
 }
 
+/* Створює повну копію контексту: параметри, ключі, передобчислення та ГПВЧ. */
 Dstu4145Ctx *dstu4145_copy_with_alloc(const Dstu4145Ctx *param)
 {
     int ret = RET_OK;
@@ -470,6 +502,7 @@ cleanup:
     return NULL;
 }
 
+/* Звільняє пам'ять параметрів домену (крива, точка, матриці переходу між базисами). */
 void dstu4145_params_free(Dstu4145ParamsCtx *params)
 {
     size_t i;
@@ -497,6 +530,7 @@ void dstu4145_params_free(Dstu4145ParamsCtx *params)
     }
 }
 
+/* Створює новий контекст із довільними параметрами в поліноміальному базисі. */
 Dstu4145Ctx *dstu4145_alloc_pb_new(const int *f, size_t f_len, int a, const ByteArray *b, const ByteArray *n,
         const ByteArray *px, const ByteArray *py)
 {
@@ -521,6 +555,7 @@ cleanup:
     return ctx;
 }
 
+/* Повертає контекст із параметрами в поліноміальному базисі (з кешу або новий). */
 Dstu4145Ctx *dstu4145_alloc_pb(const int *f, size_t f_len, int a, const ByteArray *b, const ByteArray *n,
         const ByteArray *px, const ByteArray *py)
 {
@@ -534,6 +569,8 @@ Dstu4145Ctx *dstu4145_alloc_pb(const int *f, size_t f_len, int a, const ByteArra
     return dstu4145_alloc_pb_new(f, f_len, a, b, n, px, py);
 }
 
+/* Створює новий контекст із параметрами в ОНБ; внутрішні обчислення ведуться
+ * в поліноміальному базисі з відповідним поліномом для заданого m. */
 Dstu4145Ctx *dstu4145_alloc_onb_new(const int m, int a, const ByteArray *b, const ByteArray *n,
         const ByteArray *px, const ByteArray *py)
 {
@@ -562,6 +599,7 @@ cleanup:
     return ctx;
 }
 
+/* Повертає контекст із параметрами в ОНБ (з кешу або новий). */
 Dstu4145Ctx *dstu4145_alloc_onb(const int m, int a, const ByteArray *b, const ByteArray *n, const ByteArray *px,
         const ByteArray *py)
 {
@@ -575,6 +613,8 @@ Dstu4145Ctx *dstu4145_alloc_onb(const int m, int a, const ByteArray *b, const By
     return dstu4145_alloc_onb_new(m, a, b, n, px, py);
 }
 
+/* Генерує особистий ключ d: випадкове ненульове число,
+ * коротше за порядок n базової точки (L(d) < L(n)). */
 int dstu4145_generate_privkey(const Dstu4145Ctx *ctx, PrngCtx *prng, ByteArray **d)
 {
     int ret = RET_OK;
@@ -601,6 +641,7 @@ cleanup:
     return ret;
 }
 
+/* Готує передобчислення для базової точки P (прискорення обчислення підпису). */
 static int dstu4145_set_sign_precomp(const Dstu4145Ctx *ctx, int sign_comb_opt_level, int sign_win_opt_level)
 {
     Dstu4145ParamsCtx *params = NULL;
@@ -638,6 +679,8 @@ cleanup:
     return ret;
 }
 
+/* Обчислює відкритий ключ за особистим: Q = -dP (точка dP з інвертуванням,
+ * як вимагає ДСТУ 4145); повертає афінні координати (qx, qy). */
 int dstu4145_get_pubkey(const Dstu4145Ctx *ctx, const ByteArray *d, ByteArray **qx, ByteArray **qy)
 {
     WordArray *d_wa = NULL;
@@ -698,6 +741,8 @@ cleanup:
     return ret;
 }
 
+/* Стискає відкритий ключ до однієї координати: у молодший біт x
+ * записується слід (trace) елемента y/x, за яким y можна відновити. */
 int dstu4145_compress_pubkey(const Dstu4145Ctx *ctx, const ByteArray *qx, const ByteArray *qy, ByteArray **q)
 {
     int ret = RET_OK;
@@ -739,6 +784,7 @@ cleanup:
     return ret;
 }
 
+/* Відновлює повний відкритий ключ (qx, qy) зі стисненого подання q. */
 int dstu4145_decompress_pubkey(const Dstu4145Ctx *ctx, const ByteArray *q, ByteArray **qx, ByteArray **qy)
 {
     int ret = RET_OK;
@@ -752,6 +798,8 @@ cleanup:
     return ret;
 }
 
+/* Переводить контекст у режим підпису: встановлює особистий ключ d (0 < d < n),
+ * ініціалізує внутрішній ГПВЧ і передобчислення для базової точки P. */
 int dstu4145_init_sign(Dstu4145Ctx *ctx, const ByteArray *d, PrngCtx *prng)
 {
     ByteArray *seed = NULL;
@@ -829,6 +877,8 @@ cleanup:
     return ret;
 }
 
+/* Задає рівні оптимізації передобчислень (comb/віконний метод) окремо
+ * для операцій підпису та перевірки. */
 int dstu4145_set_opt_level(Dstu4145Ctx *ctx, OptLevelId opt_level)
 {
     int ret = RET_OK;
@@ -861,6 +911,11 @@ cleanup:
     return ret;
 }
 
+/* Обчислює цифровий підпис (r, s) за ДСТУ 4145:
+ *  1) геш подається як елемент h поля GF(2^m) (нульовий замінюється на 1);
+ *  2) e — випадкове; обчислюється точка eP;
+ *  3) r — молодші L(n)-1 бітів добутку x-координати eP на h (r != 0);
+ *  4) s = (e + d*r) mod n (s != 0). */
 int dstu4145_sign(const Dstu4145Ctx *ctx, const ByteArray *hash, ByteArray **r, ByteArray **s)
 {
     const Dstu4145ParamsCtx *params;
@@ -970,6 +1025,8 @@ cleanup:
     return ret;
 }
 
+/* Переводить контекст у режим перевірки: встановлює відкритий ключ Q
+ * (з перевіркою належності кривій) та готує передобчислення для Q і P. */
 int dstu4145_init_verify(Dstu4145Ctx *ctx, const ByteArray *qx, const ByteArray *qy)
 {
     int ret = RET_OK;
@@ -1051,6 +1108,9 @@ cleanup:
     return ret;
 }
 
+/* Перевіряє підпис (r, s) за ДСТУ 4145: контролює 0 < r < n і 0 < s < n,
+ * обчислює точку R = sP + rQ, потім y = x_R * h; підпис вірний,
+ * якщо молодші L(n)-1 бітів y збігаються з r. */
 int dstu4145_verify(const Dstu4145Ctx *ctx, const ByteArray *hash, const ByteArray *r, const ByteArray *s)
 {
     const Dstu4145ParamsCtx *params;
@@ -1174,6 +1234,9 @@ cleanup:
     wa_free(power_two);
 }
 
+/* Схема Діффі-Геллмана на параметрах ДСТУ 4145: перевіряє відкритий ключ
+ * віддаленої сторони (належність підгрупі порядку n) і обчислює спільний
+ * секрет Z = d*Q (за потреби — з домноженням на кофактор). */
 int dstu4145_dh(const Dstu4145Ctx *ctx, bool with_cofactor, const ByteArray *d, const ByteArray *qx,
         const ByteArray *qy, ByteArray **zx, ByteArray **zy)
 {
@@ -1246,6 +1309,7 @@ cleanup:
     return ret;
 }
 
+/* Звільняє контекст, затираючи чутливі дані (особистий ключ). */
 void dstu4145_free(Dstu4145Ctx *ctx)
 {
     if (ctx) {

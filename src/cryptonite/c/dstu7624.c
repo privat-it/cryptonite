@@ -3,6 +3,21 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Реалізація блокового шифру «Калина» (ДСТУ 7624:2014) та режимів його роботи.
+ *
+ * Шифр підтримує довжини блоку й ключа 128, 256 і 512 біт. Внутрішній стан
+ * подається як матриця байтів 8 x Nb (стовпці — 64-бітові слова). Раунд шифру
+ * складається з підстановки байтів (SubBytes), циклічного зсуву рядків
+ * (ShiftRows), лінійного перетворення стовпців над GF(2^8) множенням на MDS-
+ * матрицю (MixColumns) та накладання раундового ключа (XOR або додавання за
+ * модулем 2^64). Для швидкодії SubBytes+ShiftRows+MixColumns об'єднані у
+ * попередньо обчислені таблиці p_boxrowcol (макроси kalina_G* та BT_*).
+ *
+ * У файлі також реалізовано розгортання ключа й режими роботи: ECB, CBC, CFB,
+ * OFB, CTR, CMAC, GMAC, GCM, CCM, KW (обгортання ключів) та XTS.
+ */
+
 #include <stdio.h>
 #include <memory.h>
 
@@ -101,6 +116,9 @@ typedef struct Dstu7624CmacCtx_st {
     size_t lblock_len;
 } Dstu7624CmacCtx;
 
+/* Контекст «Калини»: ідентифікатор режиму, передобчислені прямі й обернені таблиці
+ * та S-box, розгорнуті раундові ключі, внутрішній стан, параметри (довжини ключа/
+ * блоку, кількість раундів), стан обраного режиму та вказівники на функції перетворення. */
 struct Dstu7624Ctx_st {
     Dstu7624Mode mode_id;
     uint64_t p_boxrowcol[ROWS][MAX_NUM_IN_BYTE];
@@ -263,6 +281,7 @@ struct Dstu7624Ctx_st {
                 (uint64_t)big_table[ 6 ] [( (in[ z7 ] >> ( 6 * 8) ) & 0xFF)]^\
                 (uint64_t)big_table[ 7 ] [( (in[ z0 ] >> ( 7 * 8) ) & 0xFF)]
 
+/*Поелементне додавання станів за модулем 2^64 (out += in) для 2, 4 або 8 слів.*/
 static void kalina_add(uint64_t *in, uint64_t *out, size_t size)
 {
     switch (size) {
@@ -359,6 +378,7 @@ static const uint8_t mds_matrix[MAX_BLOCK_LEN] = {
     0x01, 0x05, 0x01, 0x08, 0x06, 0x07, 0x04, 0x01
 };
 
+/*Обернена MDS-матриця для операції m_col під час розшифрування*/
 static const uint8_t mds_matrix_reverse[MAX_BLOCK_LEN] = {
     0xAD, 0x95, 0x76, 0xA8, 0x2F, 0x49, 0xD7, 0xCA,
     0xCA, 0xAD, 0x95, 0x76, 0xA8, 0x2F, 0x49, 0xD7,
@@ -641,6 +661,7 @@ static const uint8_t mds_matrix_reverse[MAX_BLOCK_LEN] = {
                 (uint64_t)ctx->p_boxrowcol[ 7 ] [( (i0 >>  ( 7 * 8) ) & 0xFF)]) + *(rkey + 7);\
 }\
 
+/*Передобчислені таблиці прямого перетворення (S-box, зсув рядка та m_col); спільні з dstu7564*/
 const uint64_t subrowcol[8][256] = {
     {
         0xa832a829d77f9aa8, 0x4352432297d41143, 0x5f3e5fc2df80615f, 0x061e063014121806, 0x6bda6b7f670cb16b, 0x75bc758f2356c975, 0x6cc16c477519ad6c, 0x592059f2cb927959,
@@ -916,6 +937,7 @@ const uint64_t subrowcol[8][256] = {
     }
 };
 
+/*Передобчислені таблиці оберненого перетворення (обернені S-box, зсув рядка та m_col) для розшифрування*/
 static const uint64_t subrowcol_dec[8][256] = {
     {
         0x7826942b9f5f8a9a, 0x210f43c934970c53, 0x5f028fdd9d0551b8, 0x14facd82b494c83b, 0x2b72ab886edd68c0, 0xa6a87e5bff19d9b4, 0xa29ae571db6443ea, 0x039b2c911be8e5b6,
@@ -1353,6 +1375,7 @@ static uint8_t multiply_galua(uint8_t x, uint8_t y)
     return r;
 }
 
+/*Будує обернені таблиці підстановки s_blocks_rev за прямими S-box (для розшифрування).*/
 static void generate_reverse_table(const uint8_t *s_blocks, uint8_t *s_blocks_rev)
 {
     size_t i, j;
@@ -1378,6 +1401,7 @@ static void p_sub_row_col(const uint8_t *s_blocks, uint64_t p_boxrowcol[ROWS][MA
     }
 }
 
+/*Зашифровує один блок: завантажує дані у стан, застосовує базове перетворення шифру й вивантажує результат.*/
 static void crypt_basic_transform(Dstu7624Ctx *ctx, const uint8_t *plain_data, uint8_t *cipher_data)
 {
     uint64_t state[8] = {0};
@@ -1388,6 +1412,7 @@ static void crypt_basic_transform(Dstu7624Ctx *ctx, const uint8_t *plain_data, u
     uint64_to_uint8(state, ctx->block_len >> 3, cipher_data, ctx->block_len);
 }
 
+/*Виділяє контекст «Калини» зі стандартним S-box; копіює прямі й обернені S-box та передобчислені таблиці.*/
 Dstu7624Ctx *dstu7624_alloc(Dstu7624SboxId sbox_id)
 {
     int ret = RET_OK;
@@ -1411,6 +1436,7 @@ cleanup:
     return ctx;
 }
 
+/*Виділяє контекст із користувацьким S-box (1024 байти) та обчислює за ним прямі й обернені таблиці перетворень.*/
 static Dstu7624Ctx *dstu7624_alloc_user_sbox_core(const uint8_t *s_blocks, size_t sbox_len)
 {
     Dstu7624Ctx *ctx = NULL;
@@ -1431,6 +1457,7 @@ cleanup:
     return ctx;
 }
 
+/*Виділяє контекст із користувацьким S-box, переданим у вигляді ByteArray.*/
 Dstu7624Ctx *dstu7624_alloc_user_sbox(ByteArray *sblocks)
 {
     Dstu7624Ctx *ctx = NULL;
@@ -1447,6 +1474,7 @@ cleanup:
     return ctx;
 }
 
+/*Звільняє контекст: вивільняє ресурси поточного режиму (за потреби) і безпечно затирає пам'ять.*/
 void dstu7624_free(Dstu7624Ctx *ctx)
 {
     if (ctx) {
@@ -1480,6 +1508,7 @@ void dstu7624_free(Dstu7624Ctx *ctx)
     }
 }
 
+/*Генерує випадковий ключ заданої довжини (16, 32 або 64 байти) за допомогою ГПВЧ.*/
 int dstu7624_generate_key(PrngCtx *prng, size_t key_len, ByteArray **key)
 {
     int ret = RET_OK;
@@ -1494,6 +1523,9 @@ cleanup:
     return ret;
 }
 
+/*Зашифрування блоку для блоку 128 / ключа 128 біт (10 раундів): додавання
+ * початкового ключа, раунди BT_xor128 (SubBytes+ShiftRows+MixColumns+XOR ключа),
+ * останній раунд із додаванням ключа за модулем 2^64.*/
 static __inline void basic_transform_128(Dstu7624Ctx *ctx, uint64_t *state)
 {
     uint64_t point[2] = {0, 0};
@@ -1513,6 +1545,7 @@ static __inline void basic_transform_128(Dstu7624Ctx *ctx, uint64_t *state)
     BT_add128(point, state, rkey + 20);
 }
 
+/*Зашифрування блоку для блоку 128 / ключа 256 біт (14 раундів).*/
 static __inline void basic_transform_128_256(Dstu7624Ctx *ctx, uint64_t *state)
 {
     uint64_t point[2] = {0, 0};
@@ -1536,6 +1569,7 @@ static __inline void basic_transform_128_256(Dstu7624Ctx *ctx, uint64_t *state)
     BT_add128(point, state, rkey + 28);
 }
 
+/*Зашифрування блоку для блоку 256 / ключа 256 біт (14 раундів).*/
 static __inline void basic_transform_256(Dstu7624Ctx *ctx, uint64_t *state)
 {
     uint64_t point[4] = {0, 0, 0, 0};
@@ -1561,6 +1595,7 @@ static __inline void basic_transform_256(Dstu7624Ctx *ctx, uint64_t *state)
     BT_add256(point, state, rkey + 56);
 }
 
+/*Зашифрування блоку для блоку 256 / ключа 512 біт (18 раундів).*/
 static __inline void basic_transform_256_512(Dstu7624Ctx *ctx, uint64_t *state)
 {
     uint64_t point[4] = {0, 0, 0, 0};
@@ -1590,6 +1625,7 @@ static __inline void basic_transform_256_512(Dstu7624Ctx *ctx, uint64_t *state)
     BT_add256(point, state, rkey + 72);
 }
 
+/*Зашифрування блоку для блоку 512 / ключа 512 біт (18 раундів).*/
 static __inline void basic_transform_512(Dstu7624Ctx *ctx, uint64_t *state)
 {
     uint64_t point[8] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -1624,6 +1660,7 @@ static __inline void basic_transform_512(Dstu7624Ctx *ctx, uint64_t *state)
     BT_add512(point, state, rkey + 144);
 }
 
+/*Пряме перетворення SubBytes+ShiftRows+MixColumns стану для блоку 128 біт (без ключа).*/
 static __inline void subrowcol128(uint64_t *state, Dstu7624Ctx *ctx)
 {
     uint64_t point[2] = {0, 0};
@@ -1631,6 +1668,7 @@ static __inline void subrowcol128(uint64_t *state, Dstu7624Ctx *ctx)
     memcpy(state, point, ctx->block_len);
 }
 
+/*Пряме перетворення SubBytes+ShiftRows+MixColumns стану для блоку 256 біт (без ключа).*/
 static __inline void subrowcol256(uint64_t *state, Dstu7624Ctx *ctx)
 {
     uint64_t point[4] = {0, 0, 0, 0};
@@ -1638,6 +1676,7 @@ static __inline void subrowcol256(uint64_t *state, Dstu7624Ctx *ctx)
     memcpy(state, point, ctx->block_len);
 }
 
+/*Пряме перетворення SubBytes+ShiftRows+MixColumns стану для блоку 512 біт (без ключа).*/
 static __inline void subrowcol512(uint64_t *state, Dstu7624Ctx *ctx)
 {
     uint64_t point[8] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -1645,6 +1684,8 @@ static __inline void subrowcol512(uint64_t *state, Dstu7624Ctx *ctx)
     memcpy(state, point, ctx->block_len);
 }
 
+/*Обернений раунд розшифрування для блоку 128 біт: за таблицями boxrowcol виконує
+ * обернені MixColumns+ShiftRows+SubBytes і накладає раундовий ключ XOR-ом.*/
 __inline static void inv_subrowcol_xor128(const uint64_t *state, uint64_t *out, const uint64_t *rkey,
         uint64_t boxrowcol[8][256])
 {
@@ -1670,6 +1711,7 @@ __inline static void inv_subrowcol_xor128(const uint64_t *state, uint64_t *out, 
             boxrowcol[7][(s0 >> 56) & 255];
 }
 
+/*Обернений раунд розшифрування для блоку 256 біт (з накладанням ключа XOR-ом).*/
 __inline static void inv_subrowcol_xor256(const uint64_t *state, uint64_t *out, const uint64_t *rkey,
         uint64_t boxrowcol[8][256])
 {
@@ -1711,6 +1753,7 @@ __inline static void inv_subrowcol_xor256(const uint64_t *state, uint64_t *out, 
             boxrowcol[7][((s2 >> 56) & 255)];
 }
 
+/*Обернений раунд розшифрування для блоку 512 біт (з накладанням ключа XOR-ом).*/
 __inline static void inv_subrowcol_xor512(const uint64_t *state, uint64_t *out, const uint64_t *rkey,
         uint64_t boxrowcol[8][256])
 {
@@ -1789,6 +1832,8 @@ __inline static void inv_subrowcol_xor512(const uint64_t *state, uint64_t *out, 
 }
 
 
+/*Останній обернений раунд розшифрування: обернений SubBytes із наступним
+ * відніманням раундового ключа за модулем 2^64; для всіх розмірів блоку.*/
 static __inline void inv_subrowcol_sub(const uint64_t *state, uint64_t *out, const uint64_t *rkey, Dstu7624Ctx *ctx)
 {
     size_t block_len = ctx->block_len;
@@ -1928,6 +1973,9 @@ static __inline void inv_subrowcol_sub(const uint64_t *state, uint64_t *out, con
 }
 
 
+/*Готує стан до оберненого перетворення: до кожного байта застосовує прямий S-box
+ * і множення на обернену MDS-матрицю (за таблицями p_boxrowcol_rev), узгоджуючи
+ * розгорнуті раундові ключі з процедурою розшифрування. Для всіх розмірів блоку.*/
 static __inline void invert_state(uint64_t *state, Dstu7624Ctx *ctx)
 {
     size_t block_len = ctx->block_len;
@@ -2053,6 +2101,9 @@ static __inline void invert_state(uint64_t *state, Dstu7624Ctx *ctx)
     }
 }
 
+/*Перетворює проміжні раундові ключі для розшифрування: до кожного (крім першого
+ * та останнього) застосовує invert_state, узгоджуючи їх з оберненими раундами.
+ * Набір ключів залежить від комбінації довжин блоку та ключа.*/
 static void reverse_rkey(uint64_t *rkey, Dstu7624Ctx *ctx)
 {
     size_t block_len = ctx->block_len;
@@ -2139,6 +2190,9 @@ static void reverse_rkey(uint64_t *rkey, Dstu7624Ctx *ctx)
     }
 }
 
+/*Розшифрування блоку для блоку 128 / ключа 128 біт (10 раундів): відняття
+ * останнього ключа, обернені раунди inv_subrowcol_xor128 і завершальний
+ * обернений SubBytes з відніманням першого ключа.*/
 static __inline void subrowcol128_dec(Dstu7624Ctx *ctx, uint64_t *state)
 {
     uint64_t point[2];
@@ -2194,6 +2248,7 @@ static __inline void subrowcol128_dec(Dstu7624Ctx *ctx, uint64_t *state)
             rkey[1];
 }
 
+/*Розшифрування блоку для блоку 128 / ключа 256 біт (14 раундів).*/
 static __inline void subrowcol128_256_dec(Dstu7624Ctx *ctx, uint64_t *state)
 {
     uint64_t point[2];
@@ -2219,6 +2274,7 @@ static __inline void subrowcol128_256_dec(Dstu7624Ctx *ctx, uint64_t *state)
     inv_subrowcol_sub(point, state, &rkey[0], ctx);
 }
 
+/*Розшифрування блоку для блоку 256 / ключа 256 біт (14 раундів).*/
 static __inline void subrowcol256_dec(Dstu7624Ctx *ctx, uint64_t *state)
 {
     uint64_t point[4];
@@ -2246,6 +2302,7 @@ static __inline void subrowcol256_dec(Dstu7624Ctx *ctx, uint64_t *state)
     inv_subrowcol_sub(point, state, &rkey[0], ctx);
 }
 
+/*Розшифрування блоку для блоку 256 / ключа 512 біт (18 раундів).*/
 static __inline void subrowcol256_512_dec(Dstu7624Ctx *ctx, uint64_t *state)
 {
 
@@ -2278,6 +2335,7 @@ static __inline void subrowcol256_512_dec(Dstu7624Ctx *ctx, uint64_t *state)
     inv_subrowcol_sub(point, state, &rkey[0], ctx);
 }
 
+/*Розшифрування блоку для блоку 512 / ключа 512 біт (18 раундів).*/
 static __inline void subrowcol512_dec(Dstu7624Ctx *ctx, uint64_t *state)
 {
     uint64_t point[8];
@@ -2313,6 +2371,8 @@ static __inline void subrowcol512_dec(Dstu7624Ctx *ctx, uint64_t *state)
     inv_subrowcol_sub(point, state, &rkey[0], ctx);
 }
 
+/*Розгортання ключа: обчислює всі раундові ключі. Парні ключі формує з допоміжного
+ * ключа p_hrkey та зсунених частин секретного ключа, непарні — циклічним зсувом парних.*/
 static int precomputed_rkeys(Dstu7624Ctx *ctx, uint64_t *precompute_keyshifts, uint64_t *p_hrkey)
 {
     uint8_t swap[64];
@@ -2377,6 +2437,8 @@ cleanup:
     return ret;
 }
 
+/*Обчислює допоміжний (проміжний) ключ Kt із секретного ключа за процедурою
+ * розгортання ключа ДСТУ 7624 (окремо для однакових і різних довжин блоку/ключа).*/
 static int p_help_round_key(const ByteArray *key, Dstu7624Ctx *ctx, uint64_t *hrkey)
 {
     uint64_t *key64 = NULL;
@@ -2481,6 +2543,9 @@ cleanup:
     return ret;
 }
 
+/*Базова ініціалізація шифру: перевіряє довжини ключа й блоку, обирає функції
+ * перетворення та кількість раундів для обраної комбінації, виконує повне
+ * розгортання ключа (прямі й обернені раундові ключі).*/
 static int dstu7624_init(Dstu7624Ctx *ctx, const ByteArray *key, const size_t block_size)
 {
     const uint8_t *key_buf = NULL;
@@ -2567,6 +2632,7 @@ cleanup:
     return ret;
 }
 
+/*Розшифровує один блок: завантажує шифротекст у стан, застосовує обернене базове перетворення й вивантажує відкритий текст.*/
 static __inline void decrypt_basic_transform(Dstu7624Ctx *ctx, const uint8_t *cipher_data, uint8_t *plain_data)
 {
     uint64_t block[8];
@@ -2576,6 +2642,7 @@ static __inline void decrypt_basic_transform(Dstu7624Ctx *ctx, const uint8_t *ci
     uint64_to_uint8(block, ctx->block_len >> 3, plain_data, ctx->block_len);
 }
 
+/*Доповнює відкритий текст до цілого числа блоків (байт 0x80 і нулі); повертає кількість доповнених блоків.*/
 static uint8_t padding(Dstu7624Ctx *ctx, uint8_t *plain_data, size_t *data_size_byte, uint8_t *padded)
 {
     size_t padded_byte;
@@ -2598,6 +2665,7 @@ static uint8_t padding(Dstu7624Ctx *ctx, uint8_t *plain_data, size_t *data_size_
     return 0;
 }
 
+/*Знімає доповнення: відкидає завершальні нулі та байт 0x80, коригуючи довжину даних.*/
 static uint8_t unpadding(uint8_t *padded_data, size_t *data_size_byte, uint8_t *plain_data)
 {
     size_t i;
@@ -2625,6 +2693,9 @@ static uint8_t unpadding(uint8_t *padded_data, size_t *data_size_byte, uint8_t *
     return 1;
 }
 
+/*Обчислює імітовставку (тег автентифікації) для режиму CCM: формує заголовки
+ * автентифікації G1/G2 з IV та довжин, обробляє асоційовані й відкриті дані
+ * ланцюжком CBC-MAC і повертає перші q байтів результату.*/
 static int ccm_padd(Dstu7624Ctx *ctx, const ByteArray *auth_data, const ByteArray *plain_data,
         uint8_t **h_out, size_t Nb)
 {
@@ -2734,6 +2805,7 @@ cleanup:
     return ret;
 }
 
+/*Інкрементує лічильник (гаму) як довге ціле з переносом — для режимів CTR/CCM.*/
 static void gamma_gen(uint8_t *gamma)
 {
     size_t i = 0;
@@ -2743,6 +2815,9 @@ static void gamma_gen(uint8_t *gamma)
     } while (gamma[i++] == 0);
 }
 
+/*Шифрування/розшифрування в режимі гамування зі зворотним зв'язком за лічильником
+ * (CTR): гама = E(лічильник), дані XOR-яться з нею; підтримує потокову обробку
+ * із залишком гами між викликами.*/
 static int encrypt_ctr(Dstu7624Ctx *ctx, const ByteArray *src, ByteArray **dst)
 {
     uint8_t *gamma = ctx->mode.ctr.gamma;
@@ -2796,6 +2871,8 @@ cleanup:
     return ret;
 }
 
+/*Зашифрування з автентифікацією в режимі CCM: обчислює імітовставку (ccm_padd),
+ * шифрує відкриті дані й тег гамуванням CTR і повертає шифротекст разом з тегом.*/
 static int dstu7624_encrypt_ccm(Dstu7624Ctx *ctx, const ByteArray *auth_data, const ByteArray *plain_data,
         ByteArray **h_ba, ByteArray **cipher_data)
 {
@@ -2853,6 +2930,8 @@ cleanup:
     return ret;
 }
 
+/*Розшифрування з перевіркою автентичності в режимі CCM: гамуванням CTR відновлює
+ * відкриті дані, перераховує імітовставку й порівнює її з отриманою (тег h_ba).*/
 static int dstu7624_decrypt_ccm(Dstu7624Ctx *ctx, const ByteArray *auth_data, const ByteArray *cipher_data,
         ByteArray *h_ba, ByteArray **plain_data)
 {
@@ -2903,6 +2982,7 @@ cleanup:
     return ret;
 }
 
+/*Зашифрування в режимі простої заміни (ECB): кожен блок незалежно перетворюється базовим перетворенням.*/
 static int encrypt_ecb(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **out)
 {
     uint64_t *plain_data = NULL;
@@ -2935,6 +3015,7 @@ cleanup:
     return ret;
 }
 
+/*Розшифрування в режимі простої заміни (ECB): кожен блок незалежно перетворюється оберненим перетворенням.*/
 static int decrypt_ecb(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **out)
 {
     uint64_t *plain_data = NULL;
@@ -2967,6 +3048,7 @@ cleanup:
     return ret;
 }
 
+/*Множення двох блоків у полі GF(2^m) за модулем полінома (для режимів XTS, GCM/GMAC).*/
 static int gf2m_mul(Gf2mCtx *ctx, size_t block_len, uint8_t *arg1, uint8_t *arg2, uint8_t *out)
 {
     WordArray *wa_arg1 = NULL;
@@ -3007,6 +3089,9 @@ cleanup:
     return ret;
 }
 
+/*Зашифрування в режимі XTS: похідне значення (tweak) домножується на 2 у GF(2^m)
+ * для кожного блоку, блок XOR-иться з ним, шифрується й знову XOR-иться;
+ * неповний останній блок обробляється «крадіжкою шифротексту».*/
 static int encrypt_xts(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **out)
 {
     uint8_t *plain_data = NULL;
@@ -3073,6 +3158,7 @@ cleanup:
     return ret;
 }
 
+/*Розшифрування в режимі XTS (обернене до encrypt_xts, із «крадіжкою шифротексту» для неповного блоку).*/
 static int decrypt_xts(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **out)
 {
     uint8_t *plain_data = NULL;
@@ -3149,6 +3235,7 @@ cleanup:
     return ret;
 }
 
+/*Зашифрування в режимі зчеплення блоків (CBC): кожен блок XOR-иться з попереднім шифроблоком (спершу з IV), тоді шифрується.*/
 static int encrypt_cbc(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **out)
 {
     uint8_t *cipher_data = NULL;
@@ -3190,6 +3277,9 @@ cleanup:
     return ret;
 }
 
+/*Зашифрування в режимі гамування зі зворотним зв'язком (CFB): гама = E(зворотного
+ * зв'язку), q байтів даних XOR-яться з нею й стають новим зворотним зв'язком;
+ * підтримує потокову обробку із залишком гами між викликами.*/
 static int encrypt_cfb(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **dst)
 {
     size_t offset = ctx->mode.cfb.used_gamma_len;
@@ -3240,6 +3330,9 @@ cleanup:
     return ret;
 }
 
+/*Зашифрування з автентифікацією в режимі GCM: шифрує дані гамуванням за лічильником
+ * і обчислює імітовставку через множення в GF(2^m) на гешовий ключ H (GHASH)
+ * над асоційованими даними, шифротекстом і кодуванням довжин.*/
 static int dstu7624_encrypt_gcm(Dstu7624Ctx *ctx, const ByteArray *plain_data, const ByteArray *auth_data,
         ByteArray **h, ByteArray **cipher_text)
 {
@@ -3336,6 +3429,8 @@ cleanup:
     return ret;
 }
 
+/*Розшифрування з перевіркою автентичності в режимі GCM: перераховує імітовставку
+ * (GHASH) і порівнює її з отриманою (h_ba), після чого гамуванням відновлює дані.*/
 static int dstu7624_decrypt_gcm(Dstu7624Ctx *ctx, const ByteArray *cipher_data, const ByteArray *h_ba,
         const ByteArray *auth_data, ByteArray **out)
 {
@@ -3445,6 +3540,8 @@ cleanup:
     return ret;
 }
 
+/*Накопичує дані для GMAC: обчислює GHASH інкрементально (XOR блоку з накопичувачем
+ * і множення в GF(2^m) на H), зберігаючи неповний хвіст у буфері між викликами.*/
 static int gmac_update(Dstu7624Ctx *ctx, const ByteArray *plain_data)
 {
     uint8_t *data_buf = NULL;
@@ -3526,6 +3623,8 @@ cleanup:
     return ret;
 }
 
+/*Завершує GMAC: доповнює й додає останній блок, домішує довжину повідомлення
+ * та шифрує результат базовим перетворенням, повертаючи перші q байтів як тег.*/
 static int gmac_final(Dstu7624Ctx *ctx, ByteArray **mac)
 {
     uint8_t *last_block = NULL;
@@ -3575,6 +3674,8 @@ cleanup:
     return ret;
 }
 
+/*Обчислює код автентифікації GMAC за один прохід: GHASH над доповненими даними
+ * і кодуванням довжини, зашифрований базовим перетворенням (перші q байтів).*/
 static int encrypt_gmac(Dstu7624Ctx *ctx, const ByteArray *plain_data, ByteArray **out)
 {
     uint8_t *data_buf = NULL;
@@ -3627,6 +3728,8 @@ cleanup:
     return ret;
 }
 
+/*Шифрування/розшифрування в режимі гамування зі зворотним зв'язком за виходом
+ * (OFB): гама рекурсивно = E(гами), дані XOR-яться з нею; тримає залишок гами між викликами.*/
 static int encrypt_ofb(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **out)
 {
     uint8_t *plain_data = NULL;
@@ -3675,6 +3778,9 @@ cleanup:
     return ret;
 }
 
+/*Обгортання ключа (KW): доповнює дані, розбиває на півблоки та виконує задану
+ * стандартом кількість раундів перемішування з базовим перетворенням і зсувом,
+ * повертаючи захищений (обгорнутий) ключ.*/
 static int encrypt_kw(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **out)
 {
     uint8_t *cipher_data = NULL;
@@ -3760,11 +3866,14 @@ cleanup:
     return ret;
 }
 
+/*Розшифрування в режимі CTR збігається із зашифруванням (гамування самообернене).*/
 static int decrypt_ctr(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **out)
 {
     return encrypt_ctr(ctx, in, out);
 }
 
+/*Розшифрування в режимі гамування зі зворотним зв'язком (CFB): гама = E(зворотного
+ * зв'язку), дані XOR-яться з нею, а зворотним зв'язком стає вхідний шифротекст.*/
 static int decrypt_cfb(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **dst)
 {
     size_t offset = ctx->mode.cfb.used_gamma_len;
@@ -3815,6 +3924,8 @@ cleanup:
     return ret;
 }
 
+/*Розгортання ключа (KW): виконує раунди в оберненому порядку з оберненим базовим
+ * перетворенням, знімає доповнення й повертає початковий ключ.*/
 static int decrypt_kw(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **out)
 {
     uint8_t *cipher_data = NULL;
@@ -3889,6 +4000,7 @@ cleanup:
     return ret;
 }
 
+/*Розшифрування в режимі зчеплення блоків (CBC): кожен блок розшифровується й XOR-иться з попереднім шифроблоком (спершу з IV).*/
 static int decrypt_cbc(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **out)
 {
     uint8_t *cipher_data = NULL;
@@ -3923,6 +4035,7 @@ cleanup:
     return ret;
 }
 
+/*Ініціалізує контекст для режиму простої заміни (ECB) із заданими ключем і розміром блоку.*/
 int dstu7624_init_ecb(Dstu7624Ctx *ctx, const ByteArray *key, const size_t block_size)
 {
     int ret = RET_OK;
@@ -3939,6 +4052,7 @@ cleanup:
     return ret;
 }
 
+/*Ініціалізує контекст для режиму CBC: розгортає ключ і зберігає вектор ініціалізації (IV).*/
 int dstu7624_init_cbc(Dstu7624Ctx *ctx, const ByteArray *key, const ByteArray *iv)
 {
     int ret = RET_OK;
@@ -3958,6 +4072,7 @@ cleanup:
     return ret;
 }
 
+/*Ініціалізує контекст для режиму обгортання ключів (KW).*/
 int dstu7624_init_kw(Dstu7624Ctx *ctx, const ByteArray *key, const size_t block_size)
 {
     int ret = RET_OK;
@@ -3974,6 +4089,7 @@ cleanup:
     return ret;
 }
 
+/*Ініціалізує контекст для режиму CFB: розгортає ключ, зберігає IV і розмір частини гами q.*/
 int dstu7624_init_cfb(Dstu7624Ctx *ctx, const ByteArray *key, const ByteArray *iv, const size_t q)
 {
     int ret = RET_OK;
@@ -3999,6 +4115,7 @@ cleanup:
     return ret;
 }
 
+/*Ініціалізує контекст для режиму OFB: розгортає ключ і зберігає IV як початкову гаму.*/
 int dstu7624_init_ofb(Dstu7624Ctx *ctx, const ByteArray *key, const ByteArray *iv)
 {
     int ret = RET_OK;
@@ -4018,6 +4135,8 @@ cleanup:
     return ret;
 }
 
+/*Ініціалізує контекст для GMAC: розгортає ключ, задає довжину тега q, обирає
+ * поліном поля GF(2^m) за розміром блоку й обчислює гешовий ключ H.*/
 int dstu7624_init_gmac(Dstu7624Ctx *ctx, const ByteArray *key, const size_t block_size, const size_t q)
 {
     int ret = RET_OK;
@@ -4072,6 +4191,7 @@ cleanup:
     return ret;
 }
 
+/*Ініціалізує контекст для CMAC: розгортає ключ і задає довжину імітовставки q.*/
 int dstu7624_init_cmac(Dstu7624Ctx *ctx, const ByteArray *key, const size_t block_size, const size_t q)
 {
     int ret = RET_OK;
@@ -4091,6 +4211,8 @@ cleanup:
     return ret;
 }
 
+/*Ініціалізує контекст для режиму XTS: розгортає ключ, зберігає IV (номер сектора)
+ * і обирає поліном поля GF(2^m) для множення tweak-значення.*/
 int dstu7624_init_xts(Dstu7624Ctx *ctx, const ByteArray *key, const ByteArray *iv)
 {
     int f[5] = {0};
@@ -4138,6 +4260,8 @@ cleanup:
     return ret;
 }
 
+/*Ініціалізує контекст для режиму CCM: розгортає ключ, зберігає IV, довжину тега q
+ * та обчислює розмір поля лічильника Nb за максимальною довжиною повідомлення n_max.*/
 int dstu7624_init_ccm(Dstu7624Ctx *ctx, const ByteArray *key, const ByteArray *iv, const size_t q, uint64_t n_max)
 {
     int ret = RET_OK;
@@ -4166,6 +4290,8 @@ cleanup:
     return ret;
 }
 
+/*Ініціалізує контекст для режиму GCM: розгортає ключ, зберігає IV, довжину тега q
+ * та обирає поліном поля GF(2^m) для операції GHASH.*/
 int dstu7624_init_gcm(Dstu7624Ctx *ctx, const ByteArray *key, const ByteArray *iv, const size_t q)
 {
     int f[5] = {0};
@@ -4217,6 +4343,8 @@ cleanup:
     return ret;
 }
 
+/*Накопичує дані для CMAC: обробляє повні блоки ланцюжком CBC (шифрування XOR
+ * попереднього результату), зберігаючи неповний хвіст у буфері між викликами.*/
 static int cmac_update(Dstu7624Ctx *ctx, const ByteArray *in)
 {
     uint8_t *shifted_data = NULL;
@@ -4274,6 +4402,8 @@ cleanup:
     return ret;
 }
 
+/*Завершує CMAC: доповнює останній блок, домішує похідний підключ і шифрує
+ * результат, повертаючи перші q байтів як імітовставку.*/
 static int cmac_final(Dstu7624Ctx *ctx, ByteArray **out)
 {
     uint8_t cipher_data[64];
@@ -4308,6 +4438,7 @@ cleanup:
     return ret;
 }
 
+/*Зашифрування даних: диспетчеризує виклик до реалізації поточного режиму (ECB, CTR, CBC, CFB, OFB, XTS, KW, GMAC).*/
 int dstu7624_encrypt(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **out)
 {
     int ret = RET_OK;
@@ -4354,6 +4485,7 @@ cleanup:
     return ret;
 }
 
+/*Розшифрування даних: диспетчеризує виклик до реалізації поточного режиму (ECB, CTR, CBC, CFB, OFB, XTS, KW).*/
 int dstu7624_decrypt(Dstu7624Ctx *ctx, const ByteArray *in, ByteArray **out)
 {
     int ret = RET_OK;
@@ -4393,6 +4525,7 @@ cleanup:
     return ret;
 }
 
+/*Ініціалізує контекст для режиму CTR: розгортає ключ і формує початкове значення лічильника (гами) з IV.*/
 int dstu7624_init_ctr(Dstu7624Ctx *ctx, const ByteArray *key, const ByteArray *iv)
 {
     size_t block_len;
@@ -4419,6 +4552,7 @@ cleanup:
     return ret;
 }
 
+/*Додає порцію даних до обчислення імітовставки: диспетчеризує до GMAC або CMAC залежно від режиму.*/
 int dstu7624_update_mac(Dstu7624Ctx *ctx, const ByteArray *data)
 {
     int ret = RET_OK;
@@ -4442,6 +4576,7 @@ cleanup:
     return ret;
 }
 
+/*Завершує обчислення імітовставки й повертає її: диспетчеризує до GMAC або CMAC залежно від режиму.*/
 int dstu7624_final_mac(Dstu7624Ctx *ctx, ByteArray **mac)
 {
     int ret = RET_OK;
@@ -4465,6 +4600,7 @@ cleanup:
     return ret;
 }
 
+/*Зашифрування з автентифікацією (AEAD): диспетчеризує до GCM або CCM, повертаючи шифротекст та імітовставку.*/
 int dstu7624_encrypt_mac(Dstu7624Ctx *ctx, const ByteArray *auth_data, const ByteArray *data, ByteArray **mac,
         ByteArray **encrypted_data)
 {
@@ -4492,6 +4628,7 @@ cleanup:
     return ret;
 }
 
+/*Розшифрування з перевіркою автентичності (AEAD): диспетчеризує до GCM або CCM, повертаючи відкритий текст за умови вірної імітовставки.*/
 int dstu7624_decrypt_mac(Dstu7624Ctx *ctx, const ByteArray *auth_data, const ByteArray *encrypted_data, ByteArray *mac,
         ByteArray **data)
 {

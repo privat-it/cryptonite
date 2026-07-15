@@ -3,6 +3,14 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Файловий огляд: допоміжні (внутрішні) функції формату PKCS#12. Містить
+ * роботу з контейнером PFX (створення, кодування/декодування), формування та
+ * перевірку MAC цілісності (деривація ключа за PKCS#12 і HMAC), розбір та
+ * складання SafeBag-ів (ключі, сертифікати), а також розшифрування/шифрування
+ * вмісту через PBES2 (pkcs5). Тут також визначено OID-и типів SafeBag.
+ */
+
 #include "pkcs12_utils_internal.h"
 
 #include "pkcs12.h"
@@ -47,6 +55,10 @@ const long SAFE_CONTENTSBAG_OID[]        = {1, 2, 840, 113549, 1, 12, 10, 1, 6};
 #define PKCS12_DEFAULT_ITERATIONS       10000
 #define PKCS12_DEFAULT_SALT_LEN         32
 
+/*
+ * Витягує параметри деривації та шифрування (сіль, кількість ітерацій, алгоритм
+ * шифрування) з AlgorithmIdentifier вмісту типу PBES2.
+ */
 static int pkcs12_pkcs5_params(AlgorithmIdentifier_t *content_encryption_aid, Pkcs5Params **pkcs5_params)
 {
     int ret = RET_OK;
@@ -92,6 +104,7 @@ cleanup:
     return ret;
 }
 
+/* Створює порожній контейнер PFX. */
 PFX_t *pfx_alloc(void)
 {
     PFX_t *container = NULL;
@@ -104,11 +117,13 @@ cleanup:
     return container;
 }
 
+/* Вивільняє контейнер PFX. */
 void pfx_free(PFX_t *container)
 {
     ASN_FREE(&PFX_desc, container);
 }
 
+/* Кодує контейнер PFX у байтове представлення (DER). */
 int pfx_encode(const PFX_t *container, ByteArray **encode)
 {
     int ret = RET_OK;
@@ -125,6 +140,7 @@ cleanup:
     return ret;
 }
 
+/* Декодує контейнер PFX із байтового представлення (DER). */
 int pfx_decode(PFX_t *container, const ByteArray *encode)
 {
     int ret = RET_OK;
@@ -141,6 +157,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Створює порожню структуру MacData для заданого типу MAC: обирає алгоритм
+ * гешування та довжини солі/гешу, генерує випадкову сіль і задає кількість
+ * ітерацій; поле гешу поки заповнюється нулями.
+ */
 int pkcs12_create_empty_mac_data(Pkcs12MacType id, int rounds, MacData_t **mac_data)
 {
     int ret = RET_OK;
@@ -226,6 +247,7 @@ cleanup:
     return ret;
 }
 
+/* Переобчислює MAC контейнера PFX і записує його у macData. */
 int pfx_update_mac_data(PFX_t *pfx, const char *pass)
 {
     int ret = RET_OK;
@@ -245,6 +267,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Деривація ключа для HMAC за алгоритмом PKCS#12 (додаток B, ідентифікатор 3 —
+ * ключ MAC): формує діверсифікатор D, конкатенацію повторених солі та пароля I,
+ * після чого ітеративно гешує (D || I) задану кількість разів.
+ */
 static int pkcs12_key_gen_for_hmac(const AlgorithmIdentifier_t *aid, ByteArray *pass, ByteArray *salt, size_t iter,
         ByteArray **key)
 {
@@ -337,6 +364,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Обчислює MAC цілісності PFX: за паролем (UTF-16BE) через деривацію PKCS#12
+ * отримує ключ HMAC і обчислює HMAC над вмістом authSafe відповідним алгоритмом
+ * (ГОСТ 34.311 або SHA-1/2).
+ */
 int pfx_calc_mac(const PFX_t *pfx, const char *pass, ByteArray **mac)
 {
     int ret = RET_OK;
@@ -408,6 +440,7 @@ cleanup:
     return ret;
 }
 
+/* Перевіряє MAC цілісності PFX: порівнює обчислений MAC зі збереженим у macData. */
 int pfx_check_mac(const PFX_t *pfx, const char *pass)
 {
     int ret = RET_OK;
@@ -432,6 +465,7 @@ cleanup:
     return ret;
 }
 
+/* Виділяє масив контейнерів вмісту (Pkcs12Contents) заданого розміру. */
 Pkcs12Contents **pkcs12_contents_alloc(size_t count)
 {
     int ret = RET_OK;
@@ -454,6 +488,7 @@ cleanup:
     return contents;
 }
 
+/* Вивільняє один контейнер вмісту разом із його параметрами. */
 void pkcs12_contents_free(Pkcs12Contents *contents)
 {
     if (contents) {
@@ -468,6 +503,7 @@ void pkcs12_contents_free(Pkcs12Contents *contents)
     }
 }
 
+/* Вивільняє масив контейнерів вмісту. */
 void pkcs12_contents_arr_free(Pkcs12Contents **contents, size_t count)
 {
     size_t i;
@@ -481,6 +517,11 @@ void pkcs12_contents_arr_free(Pkcs12Contents **contents, size_t count)
     }
 }
 
+/*
+ * Розбирає AuthenticatedSafe контейнера PFX у масив контейнерів вмісту:
+ * ContentInfo типу data зчитується напряму, а encryptedData розшифровується
+ * через PBES2 (pkcs5) заданим паролем.
+ */
 int pfx_get_contents(const PFX_t *container, const char *password, Pkcs12Contents ***pkcs12_contents, size_t *count)
 {
     int ret = RET_OK;
@@ -562,6 +603,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Повертає користувацьке ім'я (friendlyName) SafeBag; за відсутності атрибута
+ * формує типове ім'я на кшталт "key<N>".
+ */
 int safebag_get_alias(const SafeBag_t *bag, int idx, char **alias)
 {
     int ret = RET_OK;
@@ -604,6 +649,7 @@ cleanup:
     return ret;
 }
 
+/* Визначає тип SafeBag за його OID (bagId). */
 int safebag_get_type(const SafeBag_t *bag, Pkcs12BagType_t *type)
 {
     int ret = RET_OK;
@@ -634,6 +680,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Збирає з усіх контейнерів вмісту сертифікати з CERT_BAG (X.509 або SDSI)
+ * у null-terminated масив байтових представлень.
+ */
 int pkcs12_contents_get_certificates(const Pkcs12Contents **contents, size_t contents_len, ByteArray ***certs)
 {
     int ret = RET_OK;
@@ -698,6 +748,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Формує SafeBag із закритим ключем: за наявності пароля — PKCS8SHROUDEDKEY_BAG
+ * (ключ шифрується pkcs5_encrypt_dstu), інакше KEY_BAG. Додає атрибути
+ * localKeyID та (за наявності) friendlyName.
+ */
 int pkcs12_contents_set_key(const char *alias, const char *pass, const PrivateKeyInfo_t *key, int rounds,
         Pkcs12Contents *contents)
 {
@@ -795,6 +850,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Формує SafeContents із сертифікатами: кожен сертифікат обгортається у CertBag
+ * (X.509) і додається окремим SafeBag типу CERT_BAG.
+ */
 int pkcs12_contents_set_certs(const ByteArray **certs, Pkcs12Contents *contents)
 {
     int ret = RET_OK;

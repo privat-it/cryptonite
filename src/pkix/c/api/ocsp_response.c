@@ -16,6 +16,15 @@
 #undef FILE_MARKER
 #define FILE_MARKER "pki/api/ocsp_response.c"
 
+/*
+ * Модуль роботи з відповіддю OCSP (структура OCSPResponse за RFC 6960). Містить
+ * функції створення/звільнення, DER-кодування та декодування, доступу до статусу
+ * відповіді й до responseBytes, а також розбір вкладеного BasicOCSPResponse:
+ * витягання сертифікатів, ідентифікатора відповідача, статусів перевірених
+ * сертифікатів і перевірки підпису відповіді.
+ */
+
+/* Виділяє та обнуляє нову структуру OCSPResponse. Повертає NULL у разі помилки. */
 OCSPResponse_t *ocspresp_alloc(void)
 {
     OCSPResponse_t *ocspresp = NULL;
@@ -30,6 +39,7 @@ cleanup:
     return ocspresp;
 }
 
+/* Звільняє пам'ять, зайняту структурою OCSPResponse. */
 void ocspresp_free(OCSPResponse_t *ocspresp)
 {
     LOG_ENTRY();
@@ -39,6 +49,7 @@ void ocspresp_free(OCSPResponse_t *ocspresp)
     }
 }
 
+/* DER-кодує відповідь OCSP у байтовий масив. */
 int ocspresp_encode(const OCSPResponse_t *ocspresp, ByteArray **out)
 {
     int ret = RET_OK;
@@ -53,6 +64,7 @@ cleanup:
     return ret;
 }
 
+/* Декодує відповідь OCSP із DER-подання (попередньо звільняє поточний вміст структури). */
 int ocspresp_decode(OCSPResponse_t *ocspresp, const ByteArray *in)
 {
     int ret = RET_OK;
@@ -71,6 +83,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію статусу відповіді (responseStatus). */
 int ocspresp_get_status(const OCSPResponse_t *ocspresp, OCSPResponseStatus_t **status)
 {
     int ret = RET_OK;
@@ -88,6 +101,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює статус відповіді (замінює наявний). */
 int ocspresp_set_status(OCSPResponse_t *ocspresp, const OCSPResponseStatus_t *status)
 {
     int ret = RET_OK;
@@ -103,6 +117,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію responseBytes; якщо поле відсутнє — RET_PKIX_OCSP_RESP_NO_BYTES. */
 int ocspresp_get_response_bytes(const OCSPResponse_t *ocspresp, ResponseBytes_t **resp_bytes)
 {
     int ret = RET_OK;
@@ -125,6 +140,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює поле responseBytes (замінює наявне). */
 int ocspresp_set_response_bytes(OCSPResponse_t *ocspresp, const ResponseBytes_t *resp_bytes)
 {
     int ret = RET_OK;
@@ -142,6 +158,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Повертає сертифікати, вкладені у відповідь: декодує BasicOCSPResponse із
+ * responseBytes і копіює елементи його поля certs у масив. Якщо сертифікатів
+ * немає — RET_PKIX_NO_CERTIFICATE.
+ */
 int ocspresp_get_certs(const OCSPResponse_t *ocspresp, Certificate_t *** certs, int *certs_len)
 {
     int ret = RET_OK;
@@ -185,6 +206,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Повертає ідентифікатор відповідача: декодує BasicOCSPResponse із responseBytes
+ * і копіює поле responderID з його tbsResponseData.
+ */
 int ocspresp_get_responder_id(const OCSPResponse_t *ocspresp, ResponderID_t **responderID)
 {
     int ret = RET_OK;
@@ -212,6 +237,12 @@ cleanup:
     return ret;
 }
 
+/*
+ * Повертає статуси перевірених сертифікатів. Декодує BasicOCSPResponse і для
+ * кожного запису responses формує OcspCertStatus: серійний номер та статус
+ * ("good"/"revoked"/"unknown"); для відкликаних додатково зчитує час і причину
+ * відкликання (перетворює код CRLReason на текстовий рядок).
+ */
 int ocspresp_get_certs_status(const OCSPResponse_t *ocspresp, OcspCertStatus *** ocsp_cert_statuses,
         int *ocsp_cert_statuses_len)
 {
@@ -324,6 +355,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Перевіряє підпис відповіді OCSP: декодує BasicOCSPResponse, DER-кодує його
+ * tbsResponseData, витягує підпис і викликає verify_data адаптера перевірки.
+ */
 int ocspresp_verify(const OCSPResponse_t *ocspresp, VerifyAdapter *adapter)
 {
     int ret = RET_OK;
@@ -358,6 +393,7 @@ cleanup:
     return ret;
 }
 
+/* Звільняє структуру OcspCertStatus (серійний номер та сам об'єкт). */
 void ocspresp_certs_status_free(OcspCertStatus *ocsp_cert_statuses)
 {
     if (ocsp_cert_statuses) {

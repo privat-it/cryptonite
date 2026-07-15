@@ -3,6 +3,16 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Огляд модуля.
+ *
+ * Відповідність адаптерів гешування та формування підпису. AdaptersMap
+ * зберігає два паралельних масиви однакової довжини - digest[] і sign[], -
+ * у яких елемент digest[i] відповідає елементу sign[i]. Структура дозволяє
+ * тримати впорядкований набір пар "геш-адаптер <-> підпис-адаптер" і
+ * використовується як довідник під час добору потрібної реалізації.
+ */
+
 #include "adapters_map.h"
 
 #include "pkix_macros_internal.h"
@@ -12,6 +22,12 @@
 #undef FILE_MARKER
 #define FILE_MARKER "pki/crypto/adapters_map.c"
 
+/**
+ * Виділяє порожній обʼєкт AdaptersMap з нульовим лічильником і порожніми
+ * масивами адаптерів.
+ *
+ * @return вказівник на створений обʼєкт або NULL у разі помилки
+ */
 AdaptersMap *adapters_map_alloc(void)
 {
     int ret;
@@ -26,6 +42,13 @@ cleanup:
     return out;
 }
 
+/**
+ * Звільняє AdaptersMap разом з усіма адаптерами, на які він посилається:
+ * для кожної пари викликає digest_adapter_free() та sign_adapter_free(),
+ * потім звільняє самі масиви й структуру.
+ *
+ * @param adapters контекст, що звільняється (може бути NULL)
+ */
 void adapters_map_free(AdaptersMap *adapters)
 {
     int i;
@@ -44,6 +67,12 @@ void adapters_map_free(AdaptersMap *adapters)
     }
 }
 
+/**
+ * Звільняє лише саму структуру AdaptersMap та її масиви, не чіпаючи адаптери,
+ * на які вона посилається (їх час життя контролюється зовні).
+ *
+ * @param adapters контекст, що звільняється (може бути NULL)
+ */
 void adapters_map_with_const_content_free(AdaptersMap *adapters)
 {
     LOG_ENTRY();
@@ -55,6 +84,17 @@ void adapters_map_with_const_content_free(AdaptersMap *adapters)
     }
 }
 
+/**
+ * Додає пару адаптерів у кінець мапи: збільшує лічильник, розширює обидва
+ * масиви (REALLOC) і записує digest та sign в нову позицію. Право власності
+ * на передані адаптери переходить до мапи.
+ *
+ * @param adapter_map мапа адаптерів
+ * @param digest      адаптер гешування
+ * @param sign        адаптер формування підпису
+ *
+ * @return код помилки
+ */
 int adapters_map_add(AdaptersMap *adapter_map, DigestAdapter *digest, SignAdapter *sign)
 {
     int ret = RET_OK;

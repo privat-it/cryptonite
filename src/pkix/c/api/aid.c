@@ -3,6 +3,17 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Модуль реалізує роботу зі структурою AlgorithmIdentifier (RFC 5280) —
+ * ідентифікатором алгоритму разом з його необов'язковими параметрами.
+ * Містить конструктори AID для конкретних алгоритмів (ГОСТ 34.311,
+ * ГОСТ 28147, ДСТУ 4145, ECDSA), а також кодування/декодування та
+ * витягання параметрів кривих ДСТУ 4145/ECDSA з готового AID. Наведені
+ * нижче масиви DSTU4145_M*_* — це заздалегідь ASN.1-кодовані стандартні
+ * параметри кривих (LE/BE, поліноміальний та нормальний базис), за якими
+ * розпізнаються іменовані криві.
+ */
+
 #include "aid.h"
 
 #include "log_internal.h"
@@ -346,6 +357,7 @@ static const uint8_t DSTU4145_M431_ONB_BE[] = {
 
 #define MEMCMP_PARAM(_encode, param, _len) ((_len == sizeof(param)) && (memcmp(_encode, param, _len) == 0))
 
+/* Виділяє пам'ять під порожній об'єкт AlgorithmIdentifier. */
 AlgorithmIdentifier_t *aid_alloc(void)
 {
     AlgorithmIdentifier_t *aid = NULL;
@@ -360,6 +372,7 @@ cleanup:
     return aid;
 }
 
+/* Звільняє об'єкт AlgorithmIdentifier. */
 void aid_free(AlgorithmIdentifier_t *aid)
 {
     LOG_ENTRY();
@@ -367,6 +380,7 @@ void aid_free(AlgorithmIdentifier_t *aid)
     ASN_FREE(&AlgorithmIdentifier_desc, aid);
 }
 
+/* Звільняє лише внутрішній вміст AID, не звільняючи саму структуру. */
 static void aid_clean(AlgorithmIdentifier_t *aid)
 {
     LOG_ENTRY();
@@ -374,6 +388,7 @@ static void aid_clean(AlgorithmIdentifier_t *aid)
     ASN_FREE_CONTENT_PTR(&AlgorithmIdentifier_desc, aid);
 }
 
+/* Кодує AlgorithmIdentifier у DER-подання (ByteArray). */
 int aid_encode(const AlgorithmIdentifier_t *aid, ByteArray **encode)
 {
     int ret = RET_OK;
@@ -389,6 +404,7 @@ cleanup:
     return ret;
 }
 
+/* Декодує AlgorithmIdentifier з DER-подання; попередній вміст очищується. */
 int aid_decode(AlgorithmIdentifier_t *aid, const ByteArray *in)
 {
     int ret = RET_OK;
@@ -407,6 +423,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Ініціалізує AID заданим OID алгоритму та (за наявності td і params)
+ * необов'язковими параметрами, які кодуються у поле parameters.
+ */
 int aid_init(AlgorithmIdentifier_t *aid,
         const OBJECT_IDENTIFIER_t *oid,
         const asn_TYPE_descriptor_t *td,
@@ -436,6 +456,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує AID лише за OID алгоритму (без параметрів). */
 int aid_init_by_oid(AlgorithmIdentifier_t *aid, const OidNumbers *oid)
 {
     int ret = RET_OK;
@@ -458,6 +479,7 @@ cleanup:
     return ret;
 }
 
+/* Створює AID геш-функції ГОСТ 34.311 (без параметрів). */
 int aid_create_gost3411(AlgorithmIdentifier_t **aid)
 {
     int ret = RET_OK;
@@ -482,6 +504,7 @@ cleanup:
     return ret;
 }
 
+/* Створює AID ГОСТ 34.311 з явними параметрами NULL. */
 int aid_create_gost3411_with_null(AlgorithmIdentifier_t **aid)
 {
     int ret = RET_OK;
@@ -507,6 +530,7 @@ cleanup:
     return ret;
 }
 
+/* Створює AID HMAC на основі ГОСТ 34.311 з параметрами NULL. */
 int aid_create_hmac_gost3411(AlgorithmIdentifier_t **aid)
 {
     int ret = RET_OK;
@@ -533,6 +557,7 @@ cleanup:
     return ret;
 }
 
+/* Створює AID для загортання ключа (key wrap) за ГОСТ 28147 з параметрами NULL. */
 int aid_create_gost28147_wrap(AlgorithmIdentifier_t **aid)
 {
     int ret = RET_OK;
@@ -562,6 +587,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Створює AID шифрування ГОСТ 28147 у режимі CFB. Параметри містять
+ * випадковий вектор ініціалізації (IV) та таблицю замін (DKE/S-box).
+ */
 int aid_create_gost28147_cfb(AlgorithmIdentifier_t **aid)
 {
     int ret = RET_OK;
@@ -609,6 +638,7 @@ cleanup:
     return ret;
 }
 
+/* Порівнює параметри кривої зі стандартними параметрами із заданим id. */
 static bool dstu4145ec_params_compare(const Dstu4145Ctx *ec_params1, Dstu4145ParamsId id)
 {
     int ret = RET_OK;
@@ -628,6 +658,12 @@ cleanup:
     return (ret == RET_OK) && is_equals;
 }
 
+/*
+ * Формує ASN.1-структуру параметрів ДСТУ 4145 з контексту кривої.
+ * Якщо крива збігається зі стандартною — записується її OID (namedCurve),
+ * інакше параметри кодуються явно (ecbinary): поле, коефіцієнти, порядок
+ * та стиснута базова точка. is_le задає порядок байтів (little/big endian).
+ */
 static int create_dstu4145_params(bool is_le, const Dstu4145Ctx *ec_params, DSTU4145Params_t **dstu4145_params)
 {
     int ret = RET_OK;
@@ -789,6 +825,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Створює AID підпису ДСТУ 4145 з ГОСТ 34.311. OID обирається за типом
+ * базису (ONB/PB) та порядком байтів (LE/BE). За наявності cipher_params
+ * до параметрів додається таблиця замін (DKE) шифру ГОСТ 28147.
+ */
 int aid_create_dstu4145(const Dstu4145Ctx *ec_params,
         const Gost28147Ctx *cipher_params,
         bool is_le,
@@ -849,6 +890,7 @@ cleanup:
     return ret;
 }
 
+/* Створює AID відкритого ключа ECDSA з іменованою кривою за param. */
 int aid_create_ecdsa_pubkey(const EcdsaParamsId param, AlgorithmIdentifier_t **aid)
 {
     AlgorithmIdentifier_t *algorithmIdentifier = NULL;
@@ -896,6 +938,7 @@ cleanup:
     return ret;
 }
 
+/* Створює контекст ECDSA за іменованою кривою (OID), взятою з параметрів AID. */
 int aid_get_ecdsa_params(const AlgorithmIdentifier_t *aid, EcdsaCtx **ctx)
 {
     OBJECT_IDENTIFIER_t *oid = NULL;
@@ -931,6 +974,13 @@ cleanup:
     return ret;
 }
 
+/*
+ * Відновлює контекст кривої ДСТУ 4145 з параметрів AID. Для явних (ecbinary)
+ * параметрів кодоване подання спершу порівнюється з таблицею стандартних
+ * кривих; за збігом береться готовий набір, інакше крива будується з полів
+ * (поле, коефіцієнти, порядок, точка) з урахуванням порядку байтів. Для
+ * namedCurve крива визначається за OID.
+ */
 int aid_get_dstu4145_params(const AlgorithmIdentifier_t *aid, Dstu4145Ctx **ctx)
 {
     int ret = RET_OK;

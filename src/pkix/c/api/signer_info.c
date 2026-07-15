@@ -19,6 +19,16 @@
 #undef FILE_MARKER
 #define FILE_MARKER "pki/api/signer_info.c"
 
+/*
+ * Модуль реалізує роботу зі структурою SignerInfo формату CMS (RFC 5652) —
+ * відомостями про одного підписувача у SignedData. Надає створення/звільнення,
+ * ASN.1 кодування/декодування, доступ до полів (версія, ідентифікатор
+ * підписувача, підписувані та непідписувані атрибути), перевірку підпису
+ * (з даними та без них), звірку сертифіката підписувача (SigningCertificateV2)
+ * і визначення формату CAdES (BES/EPES/C/X).
+ */
+
+/* Виділяє пам'ять під порожній об'єкт SignerInfo. */
 SignerInfo_t *sinfo_alloc(void)
 {
     SignerInfo_t *sinfo = NULL;
@@ -33,6 +43,7 @@ cleanup:
     return sinfo;
 }
 
+/* Звільняє об'єкт SignerInfo. */
 void sinfo_free(SignerInfo_t *sinfo)
 {
     LOG_ENTRY();
@@ -42,6 +53,11 @@ void sinfo_free(SignerInfo_t *sinfo)
     }
 }
 
+/*
+ * Ініціалізує SignerInfo (копіюванням) переданими полями: версія,
+ * ідентифікатор підписувача, алгоритми гешу та підпису, підписувані атрибути,
+ * значення підпису та необов'язкові непідписувані атрибути.
+ */
 int sinfo_init(SignerInfo_t *sinfo,
         int version,
         const SignerIdentifier_t *signer_id,
@@ -88,6 +104,7 @@ cleanup:
     return ret;
 }
 
+/* Кодує SignerInfo у DER-подання. */
 int sinfo_encode(const SignerInfo_t *sinfo, ByteArray **out)
 {
     int ret = RET_OK;
@@ -101,6 +118,7 @@ cleanup:
     return ret;
 }
 
+/* Декодує SignerInfo з DER-подання; попередній вміст очищується. */
 int sinfo_decode(SignerInfo_t *sinfo, const ByteArray *in)
 {
     int ret = RET_OK;
@@ -118,6 +136,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає версію CMS SignerInfo як ціле число. */
 int sinfo_get_version(const SignerInfo_t *sinfo, int *version)
 {
     long val;
@@ -137,6 +156,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію ідентифікатора підписувача (SignerIdentifier). */
 int sinfo_get_signer_id(const SignerInfo_t *sinfo, SignerIdentifier_t **sid)
 {
     int ret = RET_OK;
@@ -154,6 +174,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію всіх підписуваних атрибутів (або нічого, якщо їх немає). */
 int sinfo_get_signed_attrs(const SignerInfo_t *sinfo, Attributes_t **attrs)
 {
     int ret = RET_OK;
@@ -179,6 +200,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію підписуваного атрибута за індексом. */
 int sinfo_get_signed_attr_by_idx(const SignerInfo_t *sinfo, int index, Attribute_t **attr)
 {
     int ret = RET_OK;
@@ -211,6 +233,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію підписуваного атрибута за OID. */
 int sinfo_get_signed_attr_by_oid(const SignerInfo_t *sinfo, const OBJECT_IDENTIFIER_t *oid, Attribute_t **attr)
 {
     int ret = RET_OK;
@@ -229,6 +252,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює flag у true, якщо SignerInfo містить підписувані атрибути. */
 int sinfo_has_signed_attrs(const SignerInfo_t *sinfo, bool *flag)
 {
     int ret = RET_OK;
@@ -242,6 +266,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію всіх непідписуваних атрибутів (або нічого, якщо їх немає). */
 int sinfo_get_unsigned_attrs(const SignerInfo_t *sinfo, Attributes_t **attrs)
 {
     int ret = RET_OK;
@@ -263,6 +288,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію непідписуваного атрибута за індексом. */
 int sinfo_get_unsigned_attr_by_idx(const SignerInfo_t *sinfo, int index, Attribute_t **attr)
 {
     int ret = RET_OK;
@@ -291,6 +317,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію непідписуваного атрибута за OID. */
 int sinfo_get_unsigned_attr_by_oid(const SignerInfo_t *sinfo, const OBJECT_IDENTIFIER_t *oid, Attribute_t **attr)
 {
     int ret = RET_OK;
@@ -309,6 +336,7 @@ cleanup:
     return ret;
 }
 
+/* Додає копію непідписуваного атрибута (створюючи набір за потреби). */
 int sinfo_add_unsigned_attr(SignerInfo_t *sinfo, const Attribute_t *attr)
 {
     int ret = RET_OK;
@@ -335,6 +363,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює flag у true, якщо SignerInfo містить непідписувані атрибути. */
 int sinfo_has_unsigned_attrs(const SignerInfo_t *sinfo, bool *flag)
 {
     int ret = RET_OK;
@@ -348,6 +377,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Перевіряє атрибут SigningCertificateV2: у списку ESSCertIDv2 знаходить запис
+ * за серійним номером сертифіката видавця, звіряє алгоритм гешу та порівнює
+ * збережений геш з обчисленим гешем кодованого сертифіката.
+ */
 int sinfo_verify_signing_cert_v2(const SignerInfo_t *sinfo,
         const DigestAdapter *adapter,
         const Certificate_t *issuer_cert)
@@ -441,6 +475,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Перевіряє лише цифровий підпис над підписуваними атрибутами (без звірки
+ * гешу самих даних): кодує signedAttrs і перевіряє підпис адаптером.
+ */
 int verify_core_without_data(const SignerInfo_t *sinfo,
         const DigestAdapter *da,
         const VerifyAdapter *va)
@@ -472,6 +510,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає значення геша з підписуваного атрибута "message-digest". */
 int sinfo_get_message_digest(const SignerInfo_t *sinfo, ByteArray **hash)
 {
     int ret = RET_OK;
@@ -514,6 +553,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Повна перевірка підпису: звіряє геш переданих даних зі значенням атрибута
+ * "message-digest", після чого перевіряє цифровий підпис над підписуваними
+ * атрибутами.
+ */
 int verify_core(const SignerInfo_t *sinfo,
         const DigestAdapter *da,
         const VerifyAdapter *va,
@@ -587,6 +631,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Перевіряє підпис без вихідних даних: звіряє, що сертифікат адаптера
+ * відповідає ідентифікатору підписувача, і перевіряє підпис над атрибутами.
+ */
 int sinfo_verify_without_data(const SignerInfo_t *sinfo,
         const DigestAdapter *da,
         const VerifyAdapter *va)
@@ -616,6 +664,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Повна перевірка підпису з даними: звіряє сертифікат адаптера з
+ * ідентифікатором підписувача та виконує перевірку гешу даних і підпису.
+ */
 int sinfo_verify(const SignerInfo_t *sinfo,
         const DigestAdapter *da,
         const VerifyAdapter *va,
@@ -700,6 +752,12 @@ cleanup:
     return ret;
 }
 
+/*
+ * Визначає формат підпису CAdES за наявними атрибутами: перевіряє обов'язкові
+ * атрибути BES, наявність політики (EPES), посилань на сертифікати/відкликання
+ * та мітки часу (C) і значень сертифікатів/відкликань (X). Результат — набір
+ * прапорців у *format.
+ */
 int sinfo_get_format(const SignerInfo_t *sinfo, int *format)
 {
     int ret = RET_OK;

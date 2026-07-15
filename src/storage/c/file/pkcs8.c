@@ -3,6 +3,14 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Файловий огляд: контейнер закритого ключа PKCS#8 (структура PrivateKeyInfo).
+ * Модуль надає створення/звільнення, генерацію ключів (ДСТУ 4145, ECDSA),
+ * ініціалізацію, DER-кодування та декодування, визначення типу ключа, доступ
+ * до закритого ключа і формування SubjectPublicKeyInfo, а також побудову
+ * адаптерів підпису, перевірки та узгодження ключів (DH).
+ */
+
 #include "pkcs8.h"
 
 #include "ECPrivateKey.h"
@@ -54,6 +62,7 @@ static uint8_t swap_bits(uint8_t byte)
     return res;
 }
 
+/* Створює порожній контейнер закритого ключа. */
 PrivateKeyInfo_t *pkcs8_alloc(void)
 {
     PrivateKeyInfo_t *key = NULL;
@@ -66,6 +75,7 @@ cleanup:
     return key;
 }
 
+/* Вивільняє контейнер закритого ключа, попередньо затираючи байти ключа. */
 void pkcs8_free(PrivateKeyInfo_t *key)
 {
     if (key) {
@@ -74,6 +84,11 @@ void pkcs8_free(PrivateKeyInfo_t *key)
     }
 }
 
+/*
+ * Генерує закритий ключ згідно з алгоритмом aid: для ДСТУ 4145 або ECDSA
+ * генерує випадковий закритий ключ і зберігає його у PrivateKeyInfo
+ * (для ECDSA — у структурі ECPrivateKey разом із відкритим ключем).
+ */
 int pkcs8_generate(const AlgorithmIdentifier_t *aid, PrivateKeyInfo_t **key)
 {
     int ret = RET_OK;
@@ -157,6 +172,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контейнер закритим ключем та його алгоритмом. */
 int pkcs8_init(PrivateKeyInfo_t *key, const ByteArray *privkey, const AlgorithmIdentifier_t *aid)
 {
     int ret = RET_OK;
@@ -178,6 +194,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає DER-представлення контейнера закритого ключа. */
 int pkcs8_encode(const PrivateKeyInfo_t *key, ByteArray **encode)
 {
     int ret = RET_OK;
@@ -193,6 +210,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контейнер закритого ключа з DER-представлення. */
 int pkcs8_decode(PrivateKeyInfo_t *key, const ByteArray *encode)
 {
     int ret = RET_OK;
@@ -211,6 +229,7 @@ cleanup:
     return ret;
 }
 
+/* Визначає тип закритого ключа (DSTU, RSA, DSA, ECDSA, GOST3410) за OID алгоритму. */
 int pkcs8_type(const PrivateKeyInfo_t *key, Pkcs8PrivatekeyType *type)
 {
     int ret = RET_OK;
@@ -242,6 +261,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Повертає значення закритого ключа. Для ДСТУ — напряму з privateKey; для ECDSA
+ * вирізає скаляр за довжиною кривої та перетворює порядок байтів у big-endian.
+ */
 int pkcs8_get_privatekey(const PrivateKeyInfo_t *key, ByteArray **privatekey)
 {
     int ret = RET_OK;
@@ -295,6 +318,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Повертає закритий ключ КЕП (ІІТ) із відповідного атрибута контейнера,
+ * перетворюючи порядок байтів та порядок бітів у кожному байті.
+ */
 int pkcs8_get_kep_privatekey(const PrivateKeyInfo_t *private_key, ByteArray **d)
 {
     int ret = RET_OK;
@@ -344,6 +371,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Формує SubjectPublicKeyInfo для відкритого ключа, обчисленого із закритого:
+ * для ДСТУ — стиснений відкритий ключ, для ECDSA — нестиснена точка (0x04||X||Y).
+ */
 int pkcs8_get_spki(const PrivateKeyInfo_t *key, SubjectPublicKeyInfo_t **spki)
 {
     int ret = RET_OK;
@@ -407,6 +438,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Створює адаптер підпису за закритим ключем. За наявності сертифіката
+ * ініціалізує адаптер за ним, інакше — за алгоритмом ключа (для ECDSA — SHA-256).
+ */
 int pkcs8_get_sign_adapter(const PrivateKeyInfo_t *key,
         const ByteArray *cert,
         SignAdapter **sa)
@@ -464,6 +499,7 @@ cleanup:
     return ret;
 }
 
+/* Створює адаптер узгодження ключів (DH) для ключів ДСТУ або ECDSA. */
 int pkcs8_get_dh_adapter(const PrivateKeyInfo_t *key, DhAdapter **ctx)
 {
     int ret = RET_OK;
@@ -496,6 +532,7 @@ cleanup:
     return ret;
 }
 
+/* Створює адаптер перевірки підпису на основі SubjectPublicKeyInfo ключа. */
 int pkcs8_get_verify_adapter(const PrivateKeyInfo_t *key, VerifyAdapter **va)
 {
     int ret = RET_OK;
@@ -537,6 +574,7 @@ cleanup:
     return ret;
 }
 
+/* Додає атрибут до контейнера закритого ключа. */
 int pkcs8_add_attr(PrivateKeyInfo_t *key, const Attribute_t *attr)
 {
     int ret = RET_OK;

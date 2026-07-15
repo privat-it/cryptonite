@@ -99,10 +99,37 @@ int pfx_encode(const PFX_t *container, ByteArray **encode);
  */
 int pfx_decode(PFX_t *container, const ByteArray *encode);
 
+/**
+ * Створює порожню структуру MacData для заданого типу MAC.
+ *
+ * @param id       тип MAC (алгоритм гешування)
+ * @param rounds   кількість ітерацій
+ * @param mac_data створена структура MacData
+ *
+ * @return код помилки
+ */
 int pkcs12_create_empty_mac_data(Pkcs12MacType id, int rounds, MacData_t **mac_data);
 
+/**
+ * Переобчислює та оновлює MAC контейнера PFX.
+ *
+ * @param pfx  контейнер PFX
+ * @param pass пароль сховища
+ *
+ * @return код помилки
+ */
 int pfx_update_mac_data(PFX_t *pfx, const char *pass);
 
+/**
+ * Розбирає вміст контейнера PFX у масив контейнерів сховища.
+ *
+ * @param container       контейнер PFX
+ * @param password        пароль сховища
+ * @param pkcs12_contents масив контейнерів вмісту
+ * @param count           кількість контейнерів
+ *
+ * @return код помилки
+ */
 int pfx_get_contents(const PFX_t *container, const char *password, Pkcs12Contents ***pkcs12_contents, size_t *count);
 
 /**
@@ -119,19 +146,81 @@ Pkcs12Contents **pkcs12_contents_alloc(size_t count);
  */
 void pkcs12_contents_arr_free(Pkcs12Contents **contents, size_t count);
 
+/**
+ * Визначає тип SafeBag за його OID.
+ *
+ * @param bag  SafeBag
+ * @param type тип SafeBag
+ *
+ * @return код помилки
+ */
 int safebag_get_type(const SafeBag_t *bag, Pkcs12BagType_t *type);
 
+/**
+ * Повертає користувацьке ім'я (friendlyName) SafeBag або типове ім'я.
+ *
+ * @param bag   SafeBag
+ * @param idx   індекс для формування типового імені
+ * @param alias отримане ім'я
+ *
+ * @return код помилки
+ */
 int safebag_get_alias(const SafeBag_t *bag, int idx, char **alias);
 
+/**
+ * Формує контейнер вмісту із закритим ключем (за наявності пароля — зашифрованим).
+ *
+ * @param alias    користувацьке ім'я ключа або NULL
+ * @param pass     пароль до ключа або NULL
+ * @param key      закритий ключ
+ * @param rounds   кількість ітерацій деривації
+ * @param contents контейнер вмісту, що заповнюється
+ *
+ * @return код помилки
+ */
 int pkcs12_contents_set_key(const char *alias, const char *pass, const PrivateKeyInfo_t *key, int rounds,
         Pkcs12Contents *contents);
 
+/**
+ * Формує контейнер вмісту із сертифікатами.
+ *
+ * @param certs    список сертифікатів (null-terminated)
+ * @param contents контейнер вмісту, що заповнюється
+ *
+ * @return код помилки
+ */
 int pkcs12_contents_set_certs(const ByteArray **certs, Pkcs12Contents *contents);
 
+/**
+ * Повертає сертифікати з контейнерів вмісту в байтовому представленні.
+ *
+ * @param contents     масив контейнерів вмісту
+ * @param contents_len кількість контейнерів
+ * @param certs        отриманий список сертифікатів (null-terminated)
+ *
+ * @return код помилки
+ */
 int pkcs12_contents_get_certificates(const Pkcs12Contents **contents, size_t contents_len, ByteArray ***certs);
 
+/**
+ * Обчислює MAC цілісності контейнера PFX.
+ *
+ * @param pfx  контейнер PFX
+ * @param pass пароль сховища
+ * @param mac  обчислений MAC
+ *
+ * @return код помилки
+ */
 int pfx_calc_mac(const PFX_t *pfx, const char *pass, ByteArray **mac);
 
+/**
+ * Перевіряє MAC цілісності контейнера PFX.
+ *
+ * @param pfx  контейнер PFX
+ * @param pass пароль сховища
+ *
+ * @return код помилки
+ */
 int pfx_check_mac(const PFX_t *pfx, const char *pass);
 
 #endif

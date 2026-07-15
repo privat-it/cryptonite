@@ -3,6 +3,13 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Внутрішній інтерфейс ГПВЧ за схемою ДСТУ 4145
+ * (реалізація — dstu4145_prng_internal.c; генератор на основі
+ * ГОСТ 28147-89 із домішуванням випадковості через ГОСТ 34.311).
+ * Використовується публічною обгорткою prng.h/prng.c.
+ */
+
 #ifndef CRYPTONITE_RANDOM_H
 #define CRYPTONITE_RANDOM_H
 
@@ -21,27 +28,25 @@ typedef struct Dstu4145Prng_st Dstu4145PrngCtx;
  * Створює контекст ГПВЧ.
  *
  * @param seed послідовність з мінімум 40 випадкових байт
- * @param seed_len розмір послідовності випадкових байт
- * @return контекст ГПВЧ
+ * @return контекст ГПВЧ або NULL у разі помилки
  */
 Dstu4145PrngCtx *dstu4145_prng_alloc(const ByteArray *seed);
 
 /**
- * Домішуе випадковість у стартовий вектор генератора.
+ * Домішує випадковість у внутрішній стан генератора.
  *
  * @param prng контекст ГПВЧ
  * @param seed послідовність випадкових байт
- * @param seed_len розмір послідовності випадкових байт
  * @return код помилки
  */
 int dstu4145_prng_seed(Dstu4145PrngCtx *prng, const ByteArray *seed);
 
 /**
- * Повертає массив псевдовипадкових байт.
+ * Повертає масив псевдовипадкових байт.
  *
  * @param prng контекст генерації псевдовипадкових чисел
- * @param buf буфер, у якому будуть розміщено псевдовипадкові байти
- * @param buf_len розмір буфера у байтах
+ * @param buf буфер, у якому буде розміщено псевдовипадкові байти
+ *            (заповнюється повністю, buf->len байт)
  * @return код помилки
  */
 int dstu4145_prng_next_bytes(Dstu4145PrngCtx *prng, ByteArray *buf);

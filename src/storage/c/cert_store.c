@@ -3,6 +3,14 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Файловий огляд: файлове сховище сертифікатів. Сертифікати зберігаються
+ * окремими файлами (.cer) у заданому каталозі; ім'я файлу складається з
+ * префікса та шістнадцяткового серійного номера. Модуль надає додавання
+ * сертифікатів, пошук за префіксом імені та за відкритим ключем і областю
+ * застосування. Доступ до спільного стану серіалізовано м'ютексом.
+ */
+
 #include "cert_store.h"
 
 #include <string.h>
@@ -31,6 +39,7 @@ struct CertStore_st {
 static pthread_mutex_t cert_store_mutex = PTHREAD_MUTEX_INITIALIZER;
 static char *cert_store_default_path = NULL;
 
+/* Задає типовий шлях до сховища сертифікатів. */
 int cert_store_set_default_path(const char *path)
 {
     int ret = RET_OK;
@@ -44,6 +53,7 @@ int cert_store_set_default_path(const char *path)
     return ret;
 }
 
+/* Створює сховище сертифікатів для заданого шляху (або типового "./"). */
 CertStore_t *cert_store_alloc(const char *path)
 {
     CertStore_t *store = NULL;
@@ -72,6 +82,7 @@ cleanup:
     return store;
 }
 
+/* Вивільняє сховище сертифікатів. */
 void cert_store_free(CertStore_t *store)
 {
     if (store) {
@@ -82,6 +93,10 @@ void cert_store_free(CertStore_t *store)
     }
 }
 
+/*
+ * Зберігає сертифікат у файл: ім'я формується з шляху сховища, префікса (alias)
+ * та шістнадцяткового серійного номера з розширенням .cer.
+ */
 int cert_store_add_certificate(CertStore_t *store, const char *alias, const Certificate_t *cert)
 {
     ByteArray *sn = NULL;
@@ -121,6 +136,7 @@ cleanup:
     return ret;
 }
 
+/* Зберігає всі сертифікати зі списку, використовуючи спільний префікс імені. */
 int cert_store_add_certificates(CertStore_t *store, const char *prefix, const Certificates_t *certs)
 {
     int ret = RET_OK;
@@ -139,6 +155,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Зчитує з каталогу сховища сертифікати, імена файлів яких починаються із
+ * заданого префікса (або всі, якщо префікс NULL). Файли, які не вдалося
+ * прочитати чи декодувати, пропускаються.
+ */
 int cert_store_get_certificates_by_alias(CertStore_t *store, const char *alias_prefix, Certificates_t **asn_certs)
 {
     int ret = RET_OK;
@@ -220,6 +241,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Шукає у сховищі сертифікат за відкритим ключем та областю застосування
+ * (keyusage); повертає перший, що задовольняє умови.
+ */
 int cert_store_get_certificate_by_pubkey_and_usage(CertStore_t *store, const ByteArray *pubkey, int keyusage,
         Certificate_t **cert)
 {

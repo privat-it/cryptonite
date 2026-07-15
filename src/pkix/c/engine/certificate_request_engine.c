@@ -3,6 +3,14 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Двигун побудови запиту на сертифікацію PKCS #10 (CertificationRequest).
+ * Накопичує ім'я суб'єкта, альтернативне ім'я, атрибути каталогу та розширення,
+ * потім формує CertificationRequestInfo (версія, суб'єкт, відкритий ключ із
+ * SignAdapter, атрибут extensionRequest із subjectKeyIdentifier) і підписує його
+ * адаптером, повертаючи готовий CertificationRequest.
+ */
+
 #include "certificate_request_engine.h"
 
 #include "exts.h"
@@ -27,6 +35,7 @@ struct CertificateRequestEngine_st {
     Extensions_t *exts;
 };
 
+/* Виділяє контекст побудови запиту сертифікації та зберігає адаптер підпису. */
 int ecert_request_alloc(const SignAdapter *sa, CertificateRequestEngine **ctx)
 {
     int ret = RET_OK;
@@ -51,6 +60,10 @@ cleanup:
     return ret;
 }
 
+/* Розбирає форматований рядок імені "ключ=значення" на атрибути й будує Name (RDNSequence),
+ * зберігаючи його в контексті. Кожен атрибут кодується як AttributeTypeAndValue: країна та
+ * серійний номер - як PrintableString, решта - як UTF8String. Ключ може бути OID або
+ * підтримуваним скороченням (oids_get_supported_name_attr). */
 int ecert_request_set_subj_name(CertificateRequestEngine *ctx, const char *subject_name)
 {
     int ret = RET_OK;
@@ -170,6 +183,8 @@ cleanup:
     return ret;
 }
 
+/* Формує розширення альтернативного імені суб'єкта (dNSName та rfc822Name) і зберігає
+ * його в контексті. Розширення створюється лише коли задані обидва значення dns та email. */
 int ecert_request_set_subj_alt_name(CertificateRequestEngine *ctx, const char *dns, const char *email)
 {
     int ret = RET_OK;
@@ -193,6 +208,8 @@ cleanup:
     return ret;
 }
 
+/* Формує розширення атрибутів каталогу суб'єкта (subjectDirectoryAttributes) з
+ * форматованого рядка і зберігає його в контексті. */
 int ecert_request_set_subj_dir_attr(CertificateRequestEngine *ctx, const char *subject_attr)
 {
     int ret = RET_OK;
@@ -211,6 +228,7 @@ cleanup:
     return ret;
 }
 
+/* Додає довільне розширення до набору розширень, що ввійдуть до запиту сертифікації. */
 int ecert_request_add_ext(CertificateRequestEngine *ctx, const Extension_t *ext)
 {
     int ret = RET_OK;
@@ -229,6 +247,11 @@ cleanup:
     return ret;
 }
 
+/* Будує CertificationRequestInfo й підписує його адаптером, повертаючи готовий
+ * CertificationRequest. Заповнює версію (0), суб'єкт, відкритий ключ (із SignAdapter)
+ * та атрибут extensionRequest, що містить альтернативне ім'я, атрибути каталогу,
+ * обов'язковий subjectKeyIdentifier і додані розширення. Якщо ім'я суб'єкта не задане,
+ * використовується порожнє. Підпис формується у creq_init_by_adapter через SignAdapter. */
 int ecert_request_generate(CertificateRequestEngine *ctx, CertificationRequest_t **cert_req)
 {
     int ret = RET_OK;
@@ -313,6 +336,8 @@ cleanup:
     return ret;
 }
 
+/* Звільняє контекст запиту сертифікації разом із накопиченими іменами й розширеннями.
+ * Адаптер підпису належить викликаючому коду. */
 void ecert_request_free(CertificateRequestEngine *ctx)
 {
     LOG_ENTRY();

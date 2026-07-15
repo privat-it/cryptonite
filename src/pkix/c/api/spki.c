@@ -3,6 +3,13 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Модуль реалізує роботу зі структурою SubjectPublicKeyInfo (RFC 5280) —
+ * контейнером відкритого ключа, який містить ідентифікатор алгоритму та
+ * власне значення відкритого ключа. Надає створення/звільнення об'єкта,
+ * ASN.1 кодування/декодування та витягання "сирого" відкритого ключа.
+ */
+
 #include "spki.h"
 
 #include "pkix_utils.h"
@@ -13,6 +20,7 @@
 #undef FILE_MARKER
 #define FILE_MARKER "pki/api/spki.c"
 
+/* Виділяє пам'ять під порожній об'єкт SubjectPublicKeyInfo. */
 SubjectPublicKeyInfo_t *spki_alloc(void)
 {
     SubjectPublicKeyInfo_t *spki = NULL;
@@ -27,6 +35,7 @@ cleanup:
     return spki;
 }
 
+/* Звільняє об'єкт SubjectPublicKeyInfo. */
 void spki_free(SubjectPublicKeyInfo_t *spki)
 {
     LOG_ENTRY();
@@ -34,6 +43,7 @@ void spki_free(SubjectPublicKeyInfo_t *spki)
     ASN_FREE(&SubjectPublicKeyInfo_desc, spki);
 }
 
+/* Кодує SubjectPublicKeyInfo у DER-подання (ByteArray). */
 int spki_encode(const SubjectPublicKeyInfo_t *spki, ByteArray **out)
 {
     int ret = RET_OK;
@@ -49,6 +59,7 @@ cleanup:
     return ret;
 }
 
+/* Декодує SubjectPublicKeyInfo з DER-подання; попередній вміст очищується. */
 int spki_decode(SubjectPublicKeyInfo_t *spki, const ByteArray *in)
 {
     int ret = RET_OK;
@@ -67,6 +78,11 @@ cleanup:
     return ret;
 }
 
+/*
+ * Витягає "сире" значення відкритого ключа з SubjectPublicKeyInfo.
+ * Для ДСТУ 4145 ключ береться як OCTET STRING (для BE-параметрів байти
+ * переставляються), для EC-ключа — безпосередньо з бітового рядка.
+ */
 int spki_get_pub_key(const SubjectPublicKeyInfo_t *spki, ByteArray **pub_key)
 {
     int ret = RET_OK;

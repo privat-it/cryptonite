@@ -16,6 +16,15 @@
 #undef FILE_MARKER
 #define FILE_MARKER "pki/api/content_info.c"
 
+/*
+ * Модуль роботи з контейнером вмісту CMS (структура ContentInfo за RFC 5652).
+ * Містить функції створення/звільнення, DER-кодування та декодування, а також
+ * ініціалізації контейнера різними типами вмісту (data, signed-data,
+ * digested-data, encrypted-data, enveloped-data чи довільним ANY) та зворотного
+ * витягання цього вмісту з перевіркою відповідності OID у полі contentType.
+ */
+
+/* Виділяє та обнуляє нову структуру ContentInfo. Повертає NULL у разі помилки. */
 ContentInfo_t *cinfo_alloc(void)
 {
     ContentInfo_t *cinfo = NULL;
@@ -30,6 +39,7 @@ cleanup:
     return cinfo;
 }
 
+/* Звільняє пам'ять, зайняту структурою ContentInfo. */
 void cinfo_free(ContentInfo_t *cinfo)
 {
     LOG_ENTRY();
@@ -37,6 +47,7 @@ void cinfo_free(ContentInfo_t *cinfo)
     ASN_FREE(&ContentInfo_desc, cinfo);
 }
 
+/* Ініціалізує контейнер вмістом signed-data: встановлює відповідний OID типу та вкладає SignedData. */
 int cinfo_init_by_signed_data(ContentInfo_t *cinfo, const SignedData_t *sdata)
 {
     int ret = RET_OK;
@@ -60,6 +71,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контейнер вмістом digested-data: встановлює відповідний OID типу та вкладає DigestedData. */
 int cinfo_init_by_digest_data(ContentInfo_t *cinfo, const DigestedData_t *ddata)
 {
     int ret = RET_OK;
@@ -91,6 +103,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контейнер вмістом encrypted-data: встановлює відповідний OID типу та вкладає EncryptedData. */
 int cinfo_init_by_encrypted_data(ContentInfo_t *cinfo, const EncryptedData_t *encr_data)
 {
     int ret = RET_OK;
@@ -114,6 +127,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Ініціалізує контейнер вмістом data: встановлює OID id-data, загортає байти у
+ * OCTET STRING і вкладає його як вміст.
+ */
 int cinfo_init_by_data(ContentInfo_t *cinfo, const ByteArray *data)
 {
     int ret = RET_OK;
@@ -141,6 +158,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контейнер вмістом enveloped-data: встановлює відповідний OID типу та вкладає EnvelopedData. */
 int cinfo_init_by_enveloped_data(ContentInfo_t *cinfo, const EnvelopedData_t *env_data)
 {
     int ret = RET_OK;
@@ -164,6 +182,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контейнер довільним вмістом: копіює заданий тип (ctype) та вміст (ANY). */
 int cinfo_init_by_any_content(ContentInfo_t *cinfo, const ContentType_t *ctype, const ANY_t *content)
 {
     int ret = RET_OK;
@@ -188,6 +207,7 @@ cleanup:
     return ret;
 }
 
+/* DER-кодує ContentInfo у байтовий масив. */
 int cinfo_encode(const ContentInfo_t *cinfo, ByteArray **out)
 {
     int ret = RET_OK;
@@ -201,6 +221,7 @@ cleanup:
     return ret;
 }
 
+/* Декодує ContentInfo із DER-подання (попередньо звільняє поточний вміст структури). */
 int cinfo_decode(ContentInfo_t *cinfo, const ByteArray *in)
 {
     int ret = RET_OK;
@@ -219,6 +240,7 @@ cleanup:
     return ret;
 }
 
+/* Визначає, чи містить контейнер непорожній вміст (flag=true, якщо content не порожній). */
 int cinfo_has_content(const ContentInfo_t *cinfo, bool *flag)
 {
     int ret = RET_OK;
@@ -234,6 +256,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Витягує вміст типу data: перевіряє, що contentType дорівнює id-data і вміст не
+ * порожній, розбирає його як OCTET STRING та повертає як байтовий масив.
+ */
 int cinfo_get_data(const ContentInfo_t *cinfo, ByteArray **data)
 {
     int ret = RET_OK;
@@ -264,6 +290,7 @@ cleanup:
     return ret;
 }
 
+/* Витягує вміст типу signed-data (звіривши contentType з OID signed-data) як SignedData. */
 int cinfo_get_signed_data(const ContentInfo_t *cinfo, SignedData_t **sdata)
 {
     int ret = RET_OK;
@@ -290,6 +317,7 @@ cleanup:
     return ret;
 }
 
+/* Витягує вміст типу digested-data (звіривши contentType з OID digested-data) як DigestedData. */
 int cinfo_get_digested_data(const ContentInfo_t *cinfo, DigestedData_t **ddata)
 {
     int ret = RET_OK;
@@ -316,6 +344,7 @@ cleanup:
     return ret;
 }
 
+/* Витягує вміст типу encrypted-data (звіривши contentType з OID encrypted-data) як EncryptedData. */
 int cinfo_get_encrypted_data(const ContentInfo_t *cinfo, EncryptedData_t **encr_data)
 {
     int ret = RET_OK;
@@ -342,6 +371,7 @@ cleanup:
     return ret;
 }
 
+/* Витягує вміст типу enveloped-data (звіривши contentType з OID enveloped-data) як EnvelopedData. */
 int cinfo_get_enveloped_data(const ContentInfo_t *cinfo, EnvelopedData_t **env_data)
 {
     int ret = RET_OK;
@@ -368,6 +398,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копії типу вмісту (contentType) та самого вмісту (ANY) без перевірки OID. */
 int cinfo_get_any_content(const ContentInfo_t *cinfo, ContentType_t **ctype, ANY_t **content)
 {
     int ret = RET_OK;
@@ -396,6 +427,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Визначає тип вмісту контейнера, порівнюючи contentType з відомими OID, і повертає
+ * відповідне значення CinfoType (CONTENT_UNKNOWN, якщо OID не розпізнано).
+ */
 int cinfo_get_type(const ContentInfo_t *cinfo, CinfoType *type)
 {
     int ret = RET_OK;

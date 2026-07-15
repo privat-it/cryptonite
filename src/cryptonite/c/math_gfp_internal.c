@@ -3,6 +3,17 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/**
+ * Арифметика простого скінченного поля GF(p).
+ *
+ * Елементи поля — цілі 0 <= x < p у представленні WordArray (little-endian
+ * масив машинних слів word_t, див. word_internal.h). Редукція — загальна,
+ * діленням з остачею (int_div), без спеціальної форми модуля.
+ * Обернений елемент обчислюється бінарним алгоритмом "майже оберненого"
+ * (для непарного p) або розширеним алгоритмом Евкліда.
+ * Використовується реалізаціями ECDSA та ГОСТ 34.310 (криві над GF(p)).
+ */
+
 #include "math_gfp_internal.h"
 #include "math_int_internal.h"
 #include "macros_internal.h"
@@ -10,6 +21,15 @@
 #undef FILE_MARKER
 #define FILE_MARKER "cryptonite/math_gfp_internal.c"
 
+/**
+ * Обчислює обернений елемент за модулем p класичним розширеним алгоритмом
+ * Евкліда (з діленнями): підтримує коефіцієнт Безу x2 такий, що x2 * in = a (mod p).
+ * Працює і для парного модуля.
+ *
+ * @param in елемент, in != 0
+ * @param p модуль
+ * @return новий масив in^(-1) mod p або NULL, якщо НСД(in, p) != 1 чи сталася помилка
+ */
 static WordArray *gfp_mod_inv_ext_euclid(const WordArray *in, const WordArray *p)
 {
     WordArray *out = NULL;
@@ -93,7 +113,13 @@ cleanup:
 }
 
 /**
- * Вычисляет обратный элемент в поле GF(p) используется бинарный алгоритм.
+ * Обчислює обернений елемент у полі GF(p) бінарним розширеним алгоритмом
+ * Евкліда: без ділень, лише зсуви вправо, додавання та віднімання.
+ * Вимагає непарного модуля p (інакше ділення на 2 за модулем некоректне).
+ *
+ * @param x елемент, x != 0
+ * @param p непарний модуль
+ * @return новий масив x^(-1) mod p або NULL у разі помилки
  */
 static WordArray *gfp_mod_inv_binary(const WordArray *x, const WordArray *p)
 {
@@ -178,19 +204,32 @@ cleanup:
 }
 
 /**
- * Вычисляет обратный элемент в поле GF(p).
+ * Обчислює обернений елемент за модулем p без контексту поля.
+ * Вибір алгоритму: для парного p — розширений алгоритм Евкліда,
+ * для непарного — бінарний (без ділень).
+ *
+ * @param x елемент, x != 0
+ * @param p модуль, p != 0
+ * @return новий масив x^(-1) mod p або NULL
  */
 WordArray *gfp_mod_inv_core(const WordArray *x, const WordArray *p)
 {
     ASSERT(!int_is_zero(x));
     ASSERT(!int_is_zero(p));
 
-    /* Если p четное - необходимо использовать базовый алгоритм поиска обратного элемента на основе расширенного алгоритма Евклида. */
+    /* Якщо p парне (молодший біт 0) — бінарний алгоритм незастосовний,
+     * використовується розширений алгоритм Евкліда. */
     return ((p->buf[0] & 1) == 0)
             ? gfp_mod_inv_ext_euclid(x, p)
             : gfp_mod_inv_binary(x, p);
 }
 
+/**
+ * Створює та ініціалізує контекст поля GF(p).
+ *
+ * @param p модуль поля
+ * @return контекст GF(p) або NULL, якщо p == NULL чи бракує пам'яті
+ */
 GfpCtx *gfp_alloc(const WordArray *p)
 {
     GfpCtx *ctx;
@@ -209,6 +248,12 @@ GfpCtx *gfp_alloc(const WordArray *p)
     return ctx;
 }
 
+/**
+ * Створює глибоку копію контексту поля GF(p).
+ *
+ * @param ctx контекст GF(p)
+ * @return копія контексту або NULL у разі помилки
+ */
 GfpCtx *gfp_copy_with_alloc(const GfpCtx *ctx)
 {
     GfpCtx *ctx_copy = NULL;
@@ -232,6 +277,15 @@ cleanup:
     return NULL;
 }
 
+/**
+ * Ініціалізує контекст поля GF(p): зберігає модуль, константи 1 і 2 та
+ * обчислює invert_const = (2^(n*w))^(-1) mod p, де n — довжина p у словах,
+ * w — бітова довжина слова. Ця константа знімає зайвий степінь двійки
+ * після циклу "майже оберненого" у gfp_mod_inv.
+ *
+ * @param ctx контекст GF(p)
+ * @param p модуль поля
+ */
 void gfp_init(GfpCtx *ctx, const WordArray *p)
 {
     WordArray *two_power_plen = NULL;
@@ -248,7 +302,7 @@ void gfp_init(GfpCtx *ctx, const WordArray *p)
 
     CHECK_NOT_NULL(two_power_plen = wa_alloc_with_zero(2 * p->len));
     CHECK_NOT_NULL(two_power_plen_mod_p = wa_alloc_with_zero(p->len));
-    two_power_plen->buf[int_word_len(p)] = 1;
+    two_power_plen->buf[int_word_len(p)] = 1;    /* 2^(n*w): одиниця у слові одразу за старшим словом p */
 
     int_div(two_power_plen, p, NULL, two_power_plen_mod_p);
     CHECK_NOT_NULL(ctx->invert_const = gfp_mod_inv_core(two_power_plen_mod_p, p));
@@ -258,6 +312,11 @@ cleanup:
     wa_free(two_power_plen_mod_p);
 }
 
+/**
+ * Додавання у полі GF(p): out = (a + b) mod p.
+ * Передумова: a, b < p; редукція — одне умовне віднімання p
+ * (при переносі зі старшого слова або якщо сума >= p).
+ */
 void gfp_mod_add(const GfpCtx *ctx, const WordArray *a, const WordArray *b, WordArray *out)
 {
     ASSERT(ctx != NULL);
@@ -272,6 +331,10 @@ void gfp_mod_add(const GfpCtx *ctx, const WordArray *a, const WordArray *b, Word
     }
 }
 
+/**
+ * Віднімання у полі GF(p): out = (a - b) mod p.
+ * Передумова: a, b < p; при позичці (a < b) до результату додається p.
+ */
 void gfp_mod_sub(const GfpCtx *ctx, const WordArray *a, const WordArray *b, WordArray *out)
 {
     ASSERT(ctx != NULL);
@@ -286,6 +349,10 @@ void gfp_mod_sub(const GfpCtx *ctx, const WordArray *a, const WordArray *b, Word
     }
 }
 
+/**
+ * Редукція за модулем p: out = a mod p, обчислюється діленням з остачею.
+ * Передумова: a має подвійну довжину p (типовий результат множення).
+ */
 void gfp_mod(const GfpCtx *ctx, const WordArray *a, WordArray *out)
 {
     ASSERT(ctx != NULL);
@@ -296,6 +363,10 @@ void gfp_mod(const GfpCtx *ctx, const WordArray *a, WordArray *out)
     int_div(a, ctx->p, NULL, out);
 }
 
+/**
+ * Множення у полі GF(p): out = (a * b) mod p.
+ * Спочатку повний добуток подвійної довжини (int_mul), потім редукція gfp_mod.
+ */
 void gfp_mod_mul(const GfpCtx *ctx, const WordArray *a, const WordArray *b, WordArray *out)
 {
     WordArray *ab;
@@ -320,6 +391,10 @@ void gfp_mod_mul(const GfpCtx *ctx, const WordArray *a, const WordArray *b, Word
     wa_free(ab);
 }
 
+/**
+ * Піднесення до квадрата у полі GF(p): out = a^2 mod p.
+ * Використовує спеціалізоване піднесення до квадрата (int_sqr) і редукцію gfp_mod.
+ */
 void gfp_mod_sqr(const GfpCtx *ctx, const WordArray *a, WordArray *out)
 {
     WordArray *aa;
@@ -339,6 +414,17 @@ void gfp_mod_sqr(const GfpCtx *ctx, const WordArray *a, WordArray *out)
     wa_free(aa);
 }
 
+/**
+ * Обчислює обернений елемент у полі GF(p) алгоритмом "майже оберненого"
+ * (almost inverse): бінарний цикл без ділень дає c = in^(-1) * 2^k (mod p);
+ * далі k зменшується зсувами до n*w (довжина p у бітах, кратна слову),
+ * а залишковий множник 2^(n*w) знімається множенням на ctx->invert_const.
+ * Для парного p — розширений алгоритм Евкліда.
+ *
+ * @param ctx контекст GF(p)
+ * @param in елемент, in != 0
+ * @return новий масив in^(-1) mod p або NULL у разі помилки
+ */
 WordArray *gfp_mod_inv(const GfpCtx *ctx, const WordArray *in)
 {
     WordArray *out = NULL;
@@ -355,7 +441,8 @@ WordArray *gfp_mod_inv(const GfpCtx *ctx, const WordArray *in)
     size_t k = 0;
     size_t len;
 
-    /* Если p четное - необходимо использовать базовый алгоритм поиска обратного элемента на основе расширенного алгоритма Евклида. */
+    /* Якщо p парне — бінарний алгоритм незастосовний, використовується
+     * розширений алгоритм Евкліда. */
     if ((ctx->p->buf[0] & 1) == 0) {
         return gfp_mod_inv_ext_euclid(in, ctx->p);
     }
@@ -375,7 +462,7 @@ WordArray *gfp_mod_inv(const GfpCtx *ctx, const WordArray *in)
         if (int_get_bit(b, 0) == 0) {
             /* якщо b = 0 (mod 2), b = b/2, c = 2*c. */
             int_rshift(0, b, 1, b);
-            carry = c->buf[c->len - 1] >> (WORD_BIT_LENGTH - 1);
+            carry = c->buf[c->len - 1] >> (WORD_BIT_LENGTH - 1); /* старший біт c — перенос при подвоєнні */
             int_lshift(c, 1, c);
         } else if (int_get_bit(a, 0) == 0) {
             /* якщо a = 0 (mod 2), a = a/2, d = 2*d. */
@@ -386,7 +473,7 @@ WordArray *gfp_mod_inv(const GfpCtx *ctx, const WordArray *in)
             int_sub(b, a, b);
             int_rshift(0, b, 1, b);
             int_add(d, c, d);
-            carry = c->buf[c->len - 1] >> (WORD_BIT_LENGTH - 1);
+            carry = c->buf[c->len - 1] >> (WORD_BIT_LENGTH - 1); /* старший біт c — перенос при подвоєнні */
             int_lshift(c, 1, c);
         } else {
             /* Иначе a = (a - b)/2, c = d + c, d = 2*d. */
@@ -417,6 +504,7 @@ WordArray *gfp_mod_inv(const GfpCtx *ctx, const WordArray *in)
     }
 
     CHECK_NOT_NULL(out = wa_alloc(in->len));
+    /* Знімаємо залишковий множник 2^(n*w): out = c * (2^(n*w))^(-1) mod p. */
     gfp_mod_mul(ctx, c, ctx->invert_const, out);
 
 cleanup:
@@ -430,10 +518,15 @@ cleanup:
 }
 
 /**
- * @param ctx
- * @param a - Число для вознесения в степень.
- * @param x - Степень.
- * @param out
+ * Піднесення до степеня у полі GF(p): out = a^x mod p.
+ * Алгоритм "квадрат-множення" зліва направо; при нульовому біті показника
+ * виконується фіктивне множення у tmp, щоб потік операцій не залежав
+ * від бітів x.
+ *
+ * @param ctx контекст GF(p)
+ * @param a основа
+ * @param x показник степеня
+ * @param out буфер для результату (довжина як в a)
  */
 void gfp_mod_pow(const GfpCtx *ctx, const WordArray *a, const WordArray *x, WordArray *out)
 {
@@ -446,7 +539,7 @@ void gfp_mod_pow(const GfpCtx *ctx, const WordArray *a, const WordArray *x, Word
     ASSERT(x != NULL);
     ASSERT(a->len == out->len);
 
-    /* Метод удвоения сложения. */
+    /* Метод "квадрат-множення" зліва направо за бітами показника. */
     wa_copy(ctx->one, out);
     wa_copy(ctx->one, tmp);
 
@@ -463,6 +556,12 @@ void gfp_mod_pow(const GfpCtx *ctx, const WordArray *a, const WordArray *x, Word
     wa_free(tmp);
 }
 
+/**
+ * Обчислює добуток двох степенів у полі GF(p): out = a^x * b^y mod p
+ * одним спільним циклом "квадрат-множення" за бітами обох показників
+ * (одне піднесення до квадрата на ітерацію замість двох окремих циклів).
+ * Фіктивні множення у tmp вирівнюють потік операцій.
+ */
 void gfp_mod_dual_pow(const GfpCtx *ctx, const WordArray *a, const WordArray *x,
         const WordArray *b, const WordArray *y, WordArray *out)
 {
@@ -478,7 +577,7 @@ void gfp_mod_dual_pow(const GfpCtx *ctx, const WordArray *a, const WordArray *x,
     ASSERT(a->len == out->len);
     ASSERT(b->len == out->len);
 
-    /* Метод удвоения сложения. */
+    /* Метод "квадрат-множення" зліва направо за бітами показника. */
     wa_copy(ctx->one, out);
     wa_copy(ctx->one, tmp);
 
@@ -503,15 +602,17 @@ void gfp_mod_dual_pow(const GfpCtx *ctx, const WordArray *a, const WordArray *x,
 }
 
 /**
- * Генерирует последовательности Лукаса.
- * c[0] = 2, c[1] = a, c[k] = a * c[k - 1] - b * c[k - 2] (mod p).
+ * Обчислює елементи послідовності Лукаса
+ * c[0] = 2, c[1] = a, c[i] = a * c[i - 1] - b * c[i - 2] (mod p)
+ * бінарним методом за бітами k (обидві гілки виконують однаковий набір операцій).
+ * Використовується у gfp_mod_sqrt для випадку p = 1 (mod 8).
  *
- * @param ctx контекст простого конечного поля
- * @param a начальное значение для генерации последовательности
- * @param b начальное значение для генерации последовательности
- * @param k номер элемента последовательности Лукаса
- * @param ck = c[k] (mod p)
- * @param bk = b^[k/2] (mod p)
+ * @param ctx контекст простого скінченного поля
+ * @param a початкове значення послідовності
+ * @param b початкове значення послідовності
+ * @param k номер елемента послідовності Лукаса
+ * @param ck буфер для c[k] (mod p)
+ * @param bk буфер для b^[k/2] (mod p)
  */
 static void gfp_mod_lucas_seq(const GfpCtx *ctx, const WordArray *a, const WordArray *b,
         const WordArray *k, WordArray *ck, WordArray *bk)
@@ -561,6 +662,17 @@ cleanup:
     wa_free(t);
 }
 
+/**
+ * Обчислює один із квадратних коренів елемента поля GF(p): out^2 = a (mod p).
+ * Алгоритм обирається за остачею модуля:
+ *  - p = 3 (mod 4): out = a^((p+1)/4), перевірка піднесенням до квадрата;
+ *  - p = 5 (mod 8): детермінований метод через c = (2a)^((p-5)/8);
+ *  - p = 1 (mod 8): імовірнісний метод на послідовностях Лукаса з випадковим
+ *    параметром (цикл повторюється, доки не знайдено корінь або доведено,
+ *    що a — квадратичний нелишок).
+ *
+ * @return true — корінь знайдено і записано в out, false — кореня не існує
+ */
 bool gfp_mod_sqrt(const GfpCtx *ctx, const WordArray *a, WordArray *out)
 {
     ASSERT(ctx != NULL);
@@ -672,6 +784,10 @@ cleanup:
     return answ;
 }
 
+/**
+ * Звільняє контекст поля GF(p);
+ * p та invert_const очищуються перед звільненням (wa_free_private).
+ */
 void gfp_free(GfpCtx *ctx)
 {
     if (ctx) {

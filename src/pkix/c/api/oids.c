@@ -3,6 +3,15 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Модуль реалізує реєстр об'єктних ідентифікаторів (OID), що використовуються
+ * у бібліотеці: алгоритми, криві, розширення, атрибути імені, політики тощо.
+ * Кожен OID оголошено як статичний масив дуг (макросом CREATE_OID_VARS), а
+ * функції нижче надають доступ до них за внутрішнім ідентифікатором (OidId),
+ * будують OidNumbers/OBJECT_IDENTIFIER з дуг, рядка чи ASN.1-об'єкта, а також
+ * повертають переліки підтримуваних розширень і атрибутів імені.
+ */
+
 #include "oids.h"
 
 #include "pkix_macros_internal.h"
@@ -263,6 +272,7 @@ OidId SUPPORTED_EXTENSIONS[] = {
     OID_SERVICE_LOCATOR_EXTENSION_ID,
 };
 
+/* Повертає OID підтримуваного розширення за індексом; NULL, якщо індекс поза межами. */
 const OidNumbers *oids_get_supported_extention(int ind)
 {
     int size = sizeof(SUPPORTED_EXTENSIONS) / sizeof(SUPPORTED_EXTENSIONS[0]);
@@ -294,6 +304,7 @@ const NameAttr SUPPORTED_NAME_ATTRS[] = {
     {"E", OID_EMAIL_ID},
 };
 
+/* Повертає підтримуваний атрибут імені (скорочення + OID) за індексом або NULL. */
 const NameAttr *oids_get_supported_name_attr(int ind)
 {
     int size = GET_ARR_CNT(SUPPORTED_NAME_ATTRS);
@@ -306,6 +317,7 @@ const NameAttr *oids_get_supported_name_attr(int ind)
 
 #define CASE_GET_OID_ST(exp) case exp##_ID:  return &exp##_ST
 
+/* Повертає дуги OID (OidNumbers) за внутрішнім ідентифікатором; NULL, якщо невідомий. */
 const OidNumbers *oids_get_oid_numbers_by_id(OidId oid_id)
 {
     switch (oid_id) {
@@ -470,6 +482,7 @@ const OidNumbers *oids_get_oid_numbers_by_id(OidId oid_id)
     return NULL;
 }
 
+/* Створює OidNumbers з дугами, отриманими з ASN.1-об'єкта OBJECT IDENTIFIER. */
 OidNumbers *oids_get_oid_numbers_by_oid(const OBJECT_IDENTIFIER_t *oid)
 {
     OidNumbers *oid_numbers = NULL;
@@ -489,6 +502,7 @@ cleanup:
     return oid_numbers;
 }
 
+/* Створює OidNumbers з текстового подання OID (наприклад "1.2.804..."). */
 OidNumbers *oids_get_oid_numbers_by_str(const char *oid_str)
 {
     OBJECT_IDENTIFIER_t *oid = NULL;
@@ -510,6 +524,7 @@ cleanup:
     return oid_numbers;
 }
 
+/* Звільняє структуру OidNumbers разом з масивом дуг. */
 void oids_oid_numbers_free(OidNumbers *oid)
 {
     if (oid) {
@@ -518,6 +533,7 @@ void oids_oid_numbers_free(OidNumbers *oid)
     }
 }
 
+/* Створює ASN.1-об'єкт OBJECT IDENTIFIER за внутрішнім ідентифікатором OID. */
 OBJECT_IDENTIFIER_t *oids_get_oid_by_id(OidId oid_id)
 {
     int ret = RET_OK;

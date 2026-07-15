@@ -3,6 +3,15 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Двигун побудови захищеного контейнера CMS EnvelopedData.
+ * Генерує сесійний ключ GOST 28147, шифрує ним дані та для кожного отримувача формує
+ * RecipientInfo: спільний секрет виробляється DhAdapter (DSTU 4145), сесійний ключ
+ * загортається (wrap) на відкритому ключі отримувача. За потреби до контейнера
+ * додаються сертифікат відправника та зашифровані дані. Коли параметри кривих
+ * відправника й отримувача різняться, генерується тимчасова пара ключів для узгодження.
+ */
+
 #include "enveloped_data_engine.h"
 
 #include "enveloped_data.h"
@@ -302,6 +311,8 @@ cleanup:
     return ret;
 }
 
+/* Виділяє контекст побудови EnvelopedData та зберігає адаптер узгодження ключів.
+ * За замовчуванням увімкнено збереження зашифрованих даних у контейнері. */
 int eenvel_data_alloc(const DhAdapter *dha, EnvelopedDataEngine **ctx)
 {
     int ret = RET_OK;
@@ -320,6 +331,8 @@ cleanup:
     return ret;
 }
 
+/* Звільняє контекст EnvelopedData разом із сертифікатами, даними та ГПВЧ.
+ * Адаптер узгодження ключів належить викликаючому коду. */
 void eenvel_data_free(EnvelopedDataEngine *ctx)
 {
     LOG_ENTRY();
@@ -336,6 +349,7 @@ void eenvel_data_free(EnvelopedDataEngine *ctx)
     }
 }
 
+/* Зберігає у контексті копію сертифіката відправника (originator). */
 int eenvel_data_set_originator_cert(EnvelopedDataEngine *ctx, const Certificate_t *cert)
 {
     int ret = RET_OK;
@@ -352,6 +366,7 @@ cleanup:
     return ret;
 }
 
+/* Зберігає у контексті набір незахищених (нешифрованих) атрибутів контейнера. */
 int eenvel_data_set_unprotected_attrs(EnvelopedDataEngine *ctx, const UnprotectedAttributes_t *attrs)
 {
     int ret = RET_OK;
@@ -367,6 +382,7 @@ cleanup:
     return ret;
 }
 
+/* Зберігає у контексті дані для шифрування та їх ідентифікатор типу (contentType). */
 int eenvel_data_set_data(EnvelopedDataEngine *ctx, const OBJECT_IDENTIFIER_t *oid, const ByteArray *data)
 {
     int ret = RET_OK
@@ -384,6 +400,7 @@ cleanup:
     return ret;
 }
 
+/* Зберігає у контексті ідентифікатор алгоритму шифрування вмісту. */
 int eenvel_data_set_encription_oid(EnvelopedDataEngine *ctx, const OBJECT_IDENTIFIER_t *oid)
 {
     int ret = RET_OK;
@@ -400,6 +417,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює прапорець збереження сертифіката відправника в контейнері. */
 int eenvel_data_set_save_cert_optional(EnvelopedDataEngine *ctx, bool is_save_cert)
 {
     int ret = RET_OK;
@@ -414,6 +432,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює прапорець збереження зашифрованих даних у контейнері. */
 int eenvel_data_set_save_data_optional(EnvelopedDataEngine *ctx, bool is_save_data)
 {
     int ret = RET_OK;
@@ -428,6 +447,8 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує власний ГПВЧ контексту (режим DSTU), засіявши його байтами з переданого prng.
+ * ГПВЧ використовується для генерації сесійного ключа та випадкових значень (ukm). */
 int eenvel_data_set_prng(EnvelopedDataEngine *ctx, PrngCtx *prng)
 {
     int ret = RET_OK;
@@ -448,6 +469,7 @@ cleanup:
     return ret;
 }
 
+/* Додає сертифікат отримувача до набору отримувачів захищеного контейнера. */
 int eenvel_data_add_recipient(EnvelopedDataEngine *ctx, const Certificate_t *cert)
 {
     int ret = RET_OK;
@@ -479,6 +501,13 @@ cleanup:
     return ret;
 }
 
+/* Будує контейнер EnvelopedData та (опційно) повертає зашифровані дані.
+ * Кроки: генерує сесійний ключ GOST 28147; для кожного отримувача формує RecipientInfo,
+ * загортаючи сесійний ключ на його відкритому ключі через DhAdapter (за розбіжності
+ * параметрів кривих узгодження виконується на тимчасовій парі ключів); шифрує вміст
+ * cipher-адаптером; за прапорцями додає зашифровані дані та сертифікат відправника.
+ * Передумови: задані отримувачі, OID шифрування, ГПВЧ, дані та їх OID; відкритий ключ
+ * адаптера має відповідати сертифікату відправника. */
 int eenvel_data_generate(EnvelopedDataEngine *ctx, EnvelopedData_t **env_data, ByteArray **enc_data)
 {
     int ret = RET_OK;

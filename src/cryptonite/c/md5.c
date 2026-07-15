@@ -3,6 +3,12 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Реалізація геш-функції MD5 (RFC 1321) з дайджестом 128 біт.
+ * Дані обробляються 512-бітними блоками у чотири раунди по 16 операцій
+ * (логічні функції F/G/H/I, зсуви S* та адитивні константи ac).
+ */
+
 #include <inttypes.h>
 #include <memory.h>
 
@@ -14,6 +20,7 @@
 #undef FILE_MARKER
 #define FILE_MARKER "cryptonite/md5.c"
 
+/* Контекст MD5: стан ABCD, лічильник довжини у бітах та буфер незавершеного блоку. */
 struct MD5Ctx_st {
     uint32_t state[4]; /* state (ABCD) */
     uint32_t count[2]; /* number of bits, modulo 2^64 (lsb first) */
@@ -40,6 +47,7 @@ struct MD5Ctx_st {
 #define S43 15
 #define S44 21
 
+/* Байти доповнення: провідний біт 0x80 та нулі. */
 static unsigned char PADDING[64] = {
     0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -84,10 +92,12 @@ Rotation is separate from addition to prevent recomputation.
         (a) += (b);                                         \
         }
 
+/* Пакує 4 байти блоку у 32-бітне слово в little-endian порядку. */
 #define PACK32(i, j)\
     x[i] = ((uint32_t) block[j]) | (((uint32_t) block[j + 1]) << 8) | \
     (((uint32_t) block[j + 2]) << 16) | (((uint32_t) block[j + 3]) << 24);
 
+/* Функція стиснення MD5: оновлює стан ABCD одним 512-бітним блоком (4 раунди по 16 операцій). */
 __inline static void md5_basic_transform(uint32_t state[4], const uint8_t block[64])
 {
     uint32_t x[16];
@@ -209,6 +219,7 @@ __inline static void md5_basic_transform(uint32_t state[4], const uint8_t block[
   a multiple of 4.
  */
 
+/* Скидає контекст до початкового стану MD5 (стандартні константи ABCD). */
 static int md5_init(Md5Ctx *ctx)
 {
     int ret = RET_OK;
@@ -226,6 +237,7 @@ cleanup:
     return ret;
 }
 
+/* Виділяє та ініціалізує контекст MD5. */
 Md5Ctx *md5_alloc(void)
 {
     Md5Ctx *ctx = NULL;
@@ -239,6 +251,7 @@ cleanup:
     return ctx;
 }
 
+/* Додає дані: оновлює лічильник бітів і стискає всі повні 64-байтні блоки. */
 int md5_update(Md5Ctx *ctx, const ByteArray *data)
 {
     uint8_t *data_buf = NULL;
@@ -341,6 +354,7 @@ cleanup:
     return ret;
 }
 
+/* Звільняє контекст MD5. */
 void md5_free(Md5Ctx *ctx)
 {
     free(ctx);

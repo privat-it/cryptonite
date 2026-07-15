@@ -14,9 +14,17 @@
 #include "cert.h"
 #include "pkix_macros_internal.h"
 
+/*
+ * Модуль роботи із запитом OCSP (структура OCSPRequest за RFC 6960). Містить
+ * функції створення/звільнення, DER-кодування та декодування, доступу до
+ * TBS-частини (tbsRequest) і необов'язкового підпису запиту, а також перевірки
+ * цього підпису.
+ */
+
 #undef FILE_MARKER
 #define FILE_MARKER "pki/api/ocsp_request.c"
 
+/* Виділяє та обнуляє нову структуру OCSPRequest. Повертає NULL у разі помилки. */
 OCSPRequest_t *ocspreq_alloc(void)
 {
     OCSPRequest_t *ocspreq = NULL;
@@ -31,6 +39,7 @@ cleanup:
     return ocspreq;
 }
 
+/* Звільняє пам'ять, зайняту структурою OCSPRequest. */
 void ocspreq_free(OCSPRequest_t *ocspreq)
 {
     LOG_ENTRY();
@@ -40,6 +49,7 @@ void ocspreq_free(OCSPRequest_t *ocspreq)
     }
 }
 
+/* DER-кодує запит OCSP у байтовий масив. */
 int ocspreq_encode(const OCSPRequest_t *ocspreq, ByteArray **out)
 {
     int ret = RET_OK;
@@ -53,6 +63,7 @@ cleanup:
     return ret;
 }
 
+/* Декодує запит OCSP із DER-подання (попередньо звільняє поточний вміст структури). */
 int ocspreq_decode(OCSPRequest_t *ocspreq, const ByteArray *in)
 {
     int ret = RET_OK;
@@ -70,6 +81,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію TBS-частини запиту (tbsRequest). */
 int ocspreq_get_tbsreq(const OCSPRequest_t *ocspreq, TBSRequest_t **tbsreq)
 {
     int ret = RET_OK;
@@ -92,6 +104,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює TBS-частину запиту (замінює наявну копією tbsreq). */
 int ocspreq_set_tbsreq(OCSPRequest_t *ocspreq, const TBSRequest_t *tbsreq)
 {
     int ret = RET_OK;
@@ -109,6 +122,7 @@ cleanup:
     return ret;
 }
 
+/* Повертає копію необов'язкового підпису запиту; якщо підпису немає — *sign = NULL. */
 int ocspreq_get_sign(const OCSPRequest_t *ocspreq, Signature_t **sign)
 {
     int ret = RET_OK;
@@ -131,6 +145,7 @@ cleanup:
     return ret;
 }
 
+/* Встановлює необов'язковий підпис запиту (замінює наявний). */
 int ocspreq_set_sign(OCSPRequest_t *ocspreq, const Signature_t *sign)
 {
     int ret = RET_OK;
@@ -148,6 +163,7 @@ cleanup:
     return ret;
 }
 
+/* Визначає, чи містить запит необов'язковий підпис (has_sign=true за наявності). */
 int ocspreq_has_sign(const OCSPRequest_t *ocspreq, bool *has_sign)
 {
     int ret = RET_OK;
@@ -161,6 +177,10 @@ cleanup:
     return ret;
 }
 
+/*
+ * Перевіряє підпис запиту OCSP: переконується у наявності підпису, DER-кодує
+ * TBS-частину, витягує підпис із optionalSignature і викликає verify_data адаптера.
+ */
 int ocspreq_verify(const OCSPRequest_t *ocspreq, const VerifyAdapter *adapter)
 {
     int ret = RET_OK;

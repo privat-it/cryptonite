@@ -3,6 +3,12 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Реалізація сімейства геш-функцій SHA-2 (FIPS 180): варіанти 224/256 (32-бітні слова,
+ * блок 512 біт) та 384/512 (64-бітні слова, блок 1024 біт). Спільна логіка стиснення
+ * параметризована через макроси; варіанти відрізняються початковим станом і довжиною дайджесту.
+ */
+
 #include <string.h>
 #include <stddef.h>
 
@@ -23,6 +29,7 @@
 #define SHA384_BLOCK_SIZE  SHA512_BLOCK_SIZE
 #define SHA224_BLOCK_SIZE  SHA256_BLOCK_SIZE
 
+/* Контекст SHA-224/256: лічильники довжини, буфер блоку та стан геша з 8 слів. */
 struct Sha256Ctx_st {
     size_t tot_len;
     size_t len;
@@ -30,6 +37,7 @@ struct Sha256Ctx_st {
     uint32_t h[8];
 };
 
+/* Контекст SHA-384/512: аналогічно, але зі станом із 8 64-бітних слів. */
 struct Sha512Ctx_st {
     size_t tot_len;
     size_t len;
@@ -42,6 +50,7 @@ typedef struct Sha256Ctx_st Sha256Ctx;
 typedef struct Sha512Ctx_st Sha384Ctx;
 typedef struct Sha512Ctx_st Sha512Ctx;
 
+/* Загальний контекст SHA-2: обраний варіант та об'єднання внутрішніх контекстів. */
 struct Sha2Ctx_st {
     Sha2Variant variant;
     uint8_t k_opad[SHA512_BLOCK_SIZE];
@@ -54,6 +63,7 @@ struct Sha2Ctx_st {
     } type;
 };
 
+/* Ініціалізує стан геша (8 слів) початковими значеннями h0. */
 #define BASE_INIT(ctx, h0)          \
         ctx->h[0] = h0[0];          \
         ctx->h[1] = h0[1];          \
@@ -64,6 +74,7 @@ struct Sha2Ctx_st {
         ctx->h[6] = h0[6];          \
         ctx->h[7] = h0[7]
 
+/* Базові операції: зсув, циклічні зсуви та логічні функції Ch і Maj. */
 #define SHFR(x, n)    ((x) >> (n))
 #define ROTR32(x, n)   (((x) >> (n)) | (((x) << (32 - (n)))))
 #define ROTR64(x, n)   (((x) >> (n)) | (((x) << (64 - (n)))))
@@ -71,16 +82,19 @@ struct Sha2Ctx_st {
 #define CH(x, y, z)  (((x) & (y)) ^ ((~(x)) & (z)))
 #define MAJ(x, y, z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
 
+/* Сигма-функції SHA-256 (великі F1/F2 для раундів, малі F3/F4 для розкладу). */
 #define SHA256_F1(x) (ROTR32(x,  2) ^ ROTR32(x, 13) ^ ROTR32(x, 22))
 #define SHA256_F2(x) (ROTR32(x,  6) ^ ROTR32(x, 11) ^ ROTR32(x, 25))
 #define SHA256_F3(x) (ROTR32(x,  7) ^ ROTR32(x, 18) ^ SHFR(x,  3))
 #define SHA256_F4(x) (ROTR32(x, 17) ^ ROTR32(x, 19) ^ SHFR(x, 10))
 
+/* Сигма-функції SHA-512 (аналогічно, для 64-бітних слів). */
 #define SHA512_F1(x) (ROTR64(x, 28) ^ ROTR64(x, 34) ^ ROTR64(x, 39))
 #define SHA512_F2(x) (ROTR64(x, 14) ^ ROTR64(x, 18) ^ ROTR64(x, 41))
 #define SHA512_F3(x) (ROTR64(x,  1) ^ ROTR64(x,  8) ^ SHFR(x,  7))
 #define SHA512_F4(x) (ROTR64(x, 19) ^ ROTR64(x, 61) ^ SHFR(x,  6))
 
+/* Перетворення між словами та байтами у big-endian порядку (32/64 біти). */
 #define UNPACK32(x, str)                            \
 {                                                   \
     *((str) + 3) = (uint8_t) ((x)      );           \
@@ -134,6 +148,7 @@ struct Sha2Ctx_st {
 }
 
 /* Macros used for loops unrolling */
+/* Розширення розкладу повідомлення: обчислення слова w[i] з попередніх. */
 #define SHA256_SCR(i)                               \
 {                                                   \
     w[i] =  SHA256_F4(w[i -  2]) + w[i -  7]        \
@@ -146,6 +161,7 @@ struct Sha2Ctx_st {
           + SHA512_F3(w[i - 15]) + w[i - 16];       \
 }
 
+/* Один раунд стиснення: обчислює t1, t2 та оновлює робочі змінні стану. */
 #define SHA256_EXP(a, b, c, d, e, f, g, h, j)               \
 {                                                           \
     t1 = wv[h] + SHA256_F2(wv[e]) + CH(wv[e], wv[f], wv[g]) \
@@ -212,11 +228,13 @@ static const uint32_t sha224_h0[8] = {
     0xffc00b31, 0x68581511, 0x64f98fa7, 0xbefa4fa4
 };
 
+/* Початковий стан геша для SHA-256. */
 static const uint32_t sha256_h0[8] = {
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
     0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
 };
 
+/* Початковий стан геша для SHA-384. */
 static const uint64_t sha384_h0[8] = {
     0xcbbb9d5dc1059ed8ULL, 0x629a292a367cd507ULL,
     0x9159015a3070dd17ULL, 0x152fecd8f70e5939ULL,
@@ -224,6 +242,7 @@ static const uint64_t sha384_h0[8] = {
     0xdb0c2e0d64f98fa7ULL, 0x47b5481dbefa4fa4ULL
 };
 
+/* Початковий стан геша для SHA-512. */
 static const uint64_t sha512_h0[8] = {
     0x6a09e667f3bcc908ULL, 0xbb67ae8584caa73bULL,
     0x3c6ef372fe94f82bULL, 0xa54ff53a5f1d36f1ULL,
@@ -251,6 +270,7 @@ static const uint32_t sha256_k[64] = {
     0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
 };
 
+/* Раундові константи SHA-512/384. */
 static const uint64_t sha512_k[80] = {
     0x428a2f98d728ae22ULL, 0x7137449123ef65cdULL,
     0xb5c0fbcfec4d3b2fULL, 0xe9b5dba58189dbbcULL,
@@ -294,6 +314,7 @@ static const uint64_t sha512_k[80] = {
     0x5fcb6fab3ad6faecULL, 0x6c44198c4a475817ULL
 };
 
+/* Ініціалізує контекст для SHA-224 (початковий стан і скидання лічильників). */
 static __inline int sha224_init(Sha2Ctx *ctx)
 {
     Sha224Ctx *ctx224;
@@ -316,6 +337,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для SHA-256. */
 static __inline int sha256_init(Sha2Ctx *ctx)
 {
     int ret = RET_OK;
@@ -336,6 +358,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для SHA-384. */
 static __inline int sha384_init(Sha2Ctx *ctx)
 {
     int ret = RET_OK;
@@ -356,6 +379,7 @@ cleanup:
     return ret;
 }
 
+/* Ініціалізує контекст для SHA-512. */
 static __inline int sha512_init(Sha2Ctx *ctx)
 {
     int ret = RET_OK;
@@ -509,6 +533,7 @@ static __inline void sha512_transf(Sha512Ctx *ctx, const uint8_t *msg, size_t bl
     }
 }
 
+/* Додає дані до SHA-224: накопичує залишок і стискає повні 64-байтні блоки. */
 static int sha224_update(Sha224Ctx *ctx, const ByteArray *data_ba)
 {
     uint8_t *shifted_message = NULL;
@@ -553,6 +578,7 @@ cleanup:
     return ret;
 }
 
+/* Завершує SHA-224: доповнення, довжина повідомлення, повертає 28 байтів дайджесту. */
 static int sha224_final(Sha2Ctx *ctx, ByteArray **hash_code)
 {
     Sha224Ctx *ctx224;
@@ -598,6 +624,7 @@ cleanup:
     return ret;
 }
 
+/* Додає дані до SHA-256: накопичує залишок і стискає повні 64-байтні блоки. */
 static int sha256_update(Sha256Ctx *ctx, const ByteArray *msg_ba)
 {
     uint8_t *msg = NULL;
@@ -639,6 +666,7 @@ cleanup:
     return ret;
 }
 
+/* Завершує SHA-256: доповнення, довжина повідомлення, повертає 32 байти дайджесту. */
 static int sha256_final(Sha2Ctx *ctx, ByteArray **hash_code)
 {
     Sha256Ctx *ctx256;
@@ -689,6 +717,7 @@ cleanup:
     return ret;
 }
 
+/* Додає дані до SHA-384: накопичує залишок і стискає повні 128-байтні блоки. */
 static int sha384_update(Sha384Ctx *ctx, const ByteArray *msg_ba)
 {
     uint8_t *shifted_message = NULL;
@@ -730,6 +759,7 @@ cleanup:
     return ret;
 }
 
+/* Завершує SHA-384: доповнення, довжина повідомлення, повертає 48 байтів дайджесту. */
 static int sha384_final(Sha2Ctx *ctx, ByteArray **hash_code)
 {
     Sha384Ctx *ctx384;
@@ -774,6 +804,7 @@ cleanup:
     return ret;
 }
 
+/* Додає дані до SHA-512: накопичує залишок і стискає повні 128-байтні блоки. */
 static int sha512_update(Sha512Ctx *ctx, const ByteArray *msg_ba)
 {
     uint8_t *shifted_message = NULL;
@@ -816,6 +847,7 @@ cleanup:
     return ret;
 }
 
+/* Завершує SHA-512: доповнення, довжина повідомлення, повертає 64 байти дайджесту. */
 static int sha512_final(Sha2Ctx *ctx, ByteArray **hash_code)
 {
     Sha512Ctx *ctx512;
@@ -862,6 +894,7 @@ cleanup:
     return ret;
 }
 
+/* Виділяє контекст SHA-2 та ініціалізує його для обраного варіанта. */
 Sha2Ctx *sha2_alloc(Sha2Variant variant)
 {
     int ret = RET_OK;
@@ -896,6 +929,7 @@ cleanup:
     return ctx;
 }
 
+/* Створює копію контексту SHA-2 у новій пам'яті. */
 Sha2Ctx *sha2_copy_with_alloc(const Sha2Ctx *ctx)
 {
     Sha2Ctx *out = NULL;
@@ -909,6 +943,7 @@ cleanup:
     return out;
 }
 
+/* Додає дані, делегуючи update відповідному варіанту SHA-2. */
 int sha2_update(Sha2Ctx *ctx, const ByteArray *data)
 {
     int ret = RET_OK;
@@ -938,6 +973,7 @@ cleanup:
     return ret;
 }
 
+/* Завершує геш, делегуючи final відповідному варіанту SHA-2. */
 int sha2_final(Sha2Ctx *ctx, ByteArray **out)
 {
     int ret = RET_OK;
@@ -967,6 +1003,7 @@ cleanup:
     return ret;
 }
 
+/* Звільняє контекст SHA-2. */
 void sha2_free(Sha2Ctx *ctx)
 {
     free(ctx);

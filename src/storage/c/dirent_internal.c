@@ -3,6 +3,14 @@
  * Redistribution and modifications are permitted subject to BSD license.
  */
 
+/*
+ * Файловий огляд: обгортка над обходом каталогів для переносимості між Windows
+ * та POSIX. На Windows реалізує інтерфейс opendir/readdir/closedir/rewinddir
+ * поверх _wfindfirst/_wfindnext з підтримкою імен у UTF-8, а також перевірку
+ * is_dir. На інших системах використовується системний <dirent.h>, а тут
+ * лишається лише is_dir через stat.
+ */
+
 #include "dirent_internal.h"
 #include "macros_internal.h"
 
@@ -34,6 +42,7 @@ struct DIR {
     char                utf8_cur_file_name[260];  /* null-terminated char string */
 };
 
+/* Перетворює рядок UTF-8 у щойно виділений рядок wchar_t (UTF-16); повертає NULL у разі помилки. */
 wchar_t *utf8_to_wchar(const char *in)
 {
     wchar_t *wout = NULL;
@@ -58,6 +67,7 @@ cleanup:
     return wout;
 }
 
+/* Відкриває каталог для обходу, формуючи шаблон пошуку із символом підстановки. */
 DIR *opendir(const char *name)
 {
     DIR *dir = 0;
@@ -106,6 +116,7 @@ DIR *opendir(const char *name)
     return dir;
 }
 
+/* Завершує обхід каталогу та вивільняє ресурси DIR. */
 int closedir(DIR *dir)
 {
     int result = -1;
@@ -127,6 +138,7 @@ int closedir(DIR *dir)
     return result;
 }
 
+/* Повертає наступний елемент каталогу; ім'я файлу конвертується у UTF-8. */
 struct dirent *readdir(DIR *dir)
 {
     struct dirent *result = 0;
@@ -152,6 +164,7 @@ struct dirent *readdir(DIR *dir)
     return result;
 }
 
+/* Перезапускає обхід каталогу з початку. */
 void rewinddir(DIR *dir)
 {
     if (dir && dir->handle != -1) {
@@ -163,6 +176,7 @@ void rewinddir(DIR *dir)
     }
 }
 
+/* Перевіряє, чи є шлях каталогом (за атрибутами файлової системи Windows). */
 bool is_dir(const char *path)
 {
     bool is_dir = false;
@@ -183,6 +197,7 @@ bool is_dir(const char *path)
 
 #include <sys/stat.h>
 
+/* Перевіряє, чи є шлях каталогом (через stat). */
 bool is_dir(const char *path)
 {
     struct stat path_stat;
