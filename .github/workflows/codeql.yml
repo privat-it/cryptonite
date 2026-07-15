@@ -1,0 +1,51 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  schedule:
+    # weekly full analysis (Monday, 06:00 UTC)
+    - cron: '0 6 * * 1'
+
+# Automatic code scanning (the Security tab integration) requires GitHub
+# Advanced Security, which is not available on private repositories on the
+# free plan — the analyze step still calls that API and fails. So this job
+# does not block CI (continue-on-error): the analysis runs and the SARIF is
+# saved as an artifact (Actions -> run -> Artifacts -> codeql-results) for
+# manual review. On a repository with code scanning enabled, drop
+# continue-on-error and upload:false.
+jobs:
+  analyze:
+    name: Static analysis (C)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: c-cpp
+          queries: security-and-quality
+
+      - name: Build
+        run: |
+          cmake -B build
+          cmake --build build -j 4
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3
+        with:
+          upload: false
+          output: codeql-results
+
+      - name: Save results as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-results
+          path: codeql-results

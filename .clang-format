@@ -1,0 +1,24 @@
+# Cryptonite code style. Matches the historical astyle config
+# (tools/astyle/astyle.cfg): K&R braces, 4 spaces, 120 column limit, pointer
+# next to the name. Apply to NEW/changed code; do not mass-reformat the
+# historical codebase (CI only checks the diff — git-clang-format).
+Language:        Cpp
+BasedOnStyle:    LLVM
+IndentWidth:     4
+TabWidth:        4
+UseTab:          Never
+ColumnLimit:     120
+BreakBeforeBraces: Linux
+PointerAlignment: Right
+ReferenceAlignment: Right
+SpaceBeforeParens: ControlStatements
+AlignAfterOpenBracket: Align
+AlignEscapedNewlines: Left
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: false
+IndentCaseLabels: false
+SortIncludes:    false
+KeepEmptyLinesAtTheStartOfBlocks: false
+SpaceAfterCStyleCast: false

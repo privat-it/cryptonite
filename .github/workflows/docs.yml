@@ -1,0 +1,52 @@
+name: Documentation
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Generate Doxygen
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Doxygen
+        run: sudo apt-get update && sudo apt-get install -y doxygen
+
+      - name: Generate
+        run: doxygen Doxyfile
+
+      # The HTML is always available as a build artifact (Actions -> run -> Artifacts)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: api-docs-html
+          path: docs/api/html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/api/html
+
+  # GitHub Pages on private repositories is only available on paid plans, so
+  # this job is optional — the documentation is still in the artifact above.
+  deploy:
+    name: Publish to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,36 @@
+name: Code format
+
+on:
+  pull_request:
+
+# Style check (.clang-format) ONLY on the lines changed in the PR — the
+# historical codebase is not mass-reformatted. The job is advisory (does not
+# block), because the historical macro/table style does not match clang-format
+# exactly; the goal is to hint to the PR author.
+jobs:
+  clang-format:
+    name: clang-format (PR diff)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install clang-format
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq clang-format
+
+      - name: Check changed lines
+        run: |
+          base="origin/${{ github.base_ref }}"
+          git fetch --quiet origin "${{ github.base_ref }}"
+          # git-clang-format shows how clang-format would reformat only the
+          # lines changed relative to the base.
+          diff=$(git clang-format --diff "$base" -- '*.c' '*.h' || true)
+          if [ -n "$diff" ] && [ "$diff" != "no modified files to format" ] \
+                 && [ "$diff" != "clang-format did not modify any files" ]; then
+            echo "$diff"
+            echo "::warning::clang-format suggests changes on the modified lines (see the diff above)"
+          else
+            echo "Formatting of the changed lines matches .clang-format."
+          fi
