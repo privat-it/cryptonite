@@ -1,0 +1,137 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  build:
+    name: Build and examples (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The codebase is clean under -Wall (GCC 13 Linux, GCC 15 MinGW).
+      # On Ubuntu warnings are errors, so regressions are caught immediately.
+      - name: Configure
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            # on Windows the MinGW build is the one that is verified
+            cmake -B build -G "MinGW Makefiles"
+          else
+            cmake -B build -DCRYPTONITE_WERROR=ON
+          fi
+
+      # cryptoniteXtest is off by default (needs system OpenSSL/libgcrypt/
+      # bee2/cppcrypto) — CRYPTONITE_BUILD_XTEST=OFF.
+      - name: Build
+        run: cmake --build build -j 4
+
+      - name: Run examples
+        shell: bash
+        run: |
+          for exe in build/examples/example_*; do
+            case "$exe" in *.pdb|*.ilk) continue;; esac
+            if [ -x "$exe" ]; then
+              echo "=== $exe ==="
+              "$exe"
+            fi
+          done
+
+      # pkixUtest is registered with WILL_FAIL (a date-dependent test with an
+      # expired test certificate) — ctest accounts for that on its own.
+      - name: Unit tests (CTest)
+        run: ctest --test-dir build --output-on-failure
+
+  # The sanitizers are consistently green — this job is blocking, so
+  # regressions (use-after-free, overflows, UB) are caught immediately.
+  sanitize:
+    name: ASan/UBSan (Linux)
+    runs-on: ubuntu-latest
+    env:
+      ASAN_OPTIONS: detect_leaks=0
+      UBSAN_OPTIONS: print_stacktrace=1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake -B build
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_C_FLAGS="-w -fsanitize=address,undefined"
+          -DCMAKE_CXX_FLAGS="-w -fsanitize=address,undefined"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+
+      - name: Build
+        run: cmake --build build -j 4
+
+      - name: Tests under sanitizers
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Examples under sanitizers
+        run: |
+          for exe in build/examples/example_*; do
+            echo "=== $exe ==="
+            "$exe"
+          done
+
+  # Fuzzing of the untrusted-input decoders (X.509, PKCS#12, CRL, OCSP, TSP).
+  # Findings should become bug reports; this job does not block CI. The corpus
+  # is cached between runs, so coverage accumulates.
+  fuzz:
+    name: Fuzz the ASN.1 decoders
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache corpus
+        uses: actions/cache@v4
+        with:
+          path: corpus
+          key: fuzz-corpus-${{ github.run_id }}
+          restore-keys: fuzz-corpus-
+
+      - name: Configure
+        run: >
+          cmake -B build
+          -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+          -DCRYPTONITE_BUILD_FUZZERS=ON
+          -DCMAKE_C_FLAGS="-w -fsanitize=fuzzer-no-link,address"
+          -DCMAKE_CXX_FLAGS="-w -fsanitize=fuzzer-no-link,address"
+
+      - name: Build harnesses
+        run: cmake --build build -j 4
+
+      - name: Seed corpus
+        run: |
+          mkdir -p corpus/cert_decode corpus/pkcs12_decode corpus/crl_decode \
+                   corpus/ocsp_response_decode corpus/tsp_response_decode
+          cp src/pkixUtest/resources/*.cer corpus/cert_decode/ 2>/dev/null || true
+          cp "src/storageUtest/resources/pkcs12_by_iit(123456).pfx" corpus/pkcs12_decode/ 2>/dev/null || true
+          cp src/pkixUtest/resources/*.crl corpus/crl_decode/ 2>/dev/null || true
+          cp src/pkixUtest/resources/*ocsp*resp*.dat corpus/ocsp_response_decode/ 2>/dev/null || true
+          cp src/pkixUtest/resources/tsp_response.dat corpus/tsp_response_decode/ 2>/dev/null || true
+
+      - name: Fuzz (90 s per decoder)
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+        run: |
+          for h in cert_decode pkcs12_decode crl_decode ocsp_response_decode tsp_response_decode; do
+            echo "=== fuzz_$h ==="
+            ./build/fuzz/fuzz_$h -max_total_time=90 -print_final_stats=1 corpus/$h
+          done
+
+      - name: Upload corpus as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-corpus
+          path: corpus
