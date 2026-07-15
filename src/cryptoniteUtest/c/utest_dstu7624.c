@@ -950,7 +950,9 @@ static void dstu7624_gmac_16_16(void)
             "202122232425262728292A2B2C2D2E2F303132333435363738393A3B3C3D3E3F404142434445464748494A4B4C4D4E4F");
     ByteArray *key = ba_alloc_from_le_hex_string("000102030405060708090A0B0C0D0E0F");
     ByteArray *mac = NULL;
-    ByteArray *exp = ba_alloc_from_le_hex_string("7ce770b1a6bd5fcb704bf23216e53f1f");
+    ByteArray *mac_oneshot = NULL;
+    /* 48 bytes = 3 blocks; standard GHASH form (same as one-shot and GCM). */
+    ByteArray *exp = ba_alloc_from_le_hex_string("1d32b7f6a02f734489178e800ca81cbd");
 
     ASSERT_NOT_NULL(ctx = dstu7624_alloc(DSTU7624_SBOX_1));
     ASSERT_RET_OK(dstu7624_init_gmac(ctx, key, 16, 16));
@@ -959,6 +961,13 @@ static void dstu7624_gmac_16_16(void)
 
     ASSERT_EQUALS_BA(exp, mac);
 
+    /* The streaming path must equal one-shot (dstu7624_encrypt in GMAC mode). */
+    dstu7624_free(ctx);
+    ASSERT_NOT_NULL(ctx = dstu7624_alloc(DSTU7624_SBOX_1));
+    ASSERT_RET_OK(dstu7624_init_gmac(ctx, key, 16, 16));
+    ASSERT_RET_OK(dstu7624_encrypt(ctx, data, &mac_oneshot));
+    ASSERT_EQUALS_BA(mac, mac_oneshot);
+
 cleanup:
 
     dstu7624_free(ctx);
@@ -966,6 +975,7 @@ cleanup:
     ba_free(data);
     ba_free(exp);
     ba_free(mac);
+    ba_free(mac_oneshot);
 }
 
 static void dstu7624_gmac_32_32(void)

@@ -3447,79 +3447,62 @@ cleanup:
 
 static int gmac_update(Dstu7624Ctx *ctx, const ByteArray *plain_data)
 {
-    uint8_t *data_buf = NULL;
-    uint8_t *last_block = NULL;
-    uint64_t *B = NULL;
-    uint64_t *H = NULL;
+    uint8_t *data_buf;
+    uint8_t *last_block;
     uint8_t H8[MAX_BLOCK_LEN];
     uint8_t B8[MAX_BLOCK_LEN];
     size_t data_len;
     size_t block_len;
-    size_t tail_len;
     size_t last_block_len;
-    size_t i;
+    size_t pos = 0;
     int ret = RET_OK;
 
     CHECK_PARAM(ctx != NULL);
     CHECK_PARAM(plain_data != NULL);
 
-    B = ctx->mode.gmac.B;
-    H = ctx->mode.gmac.H;
     block_len = ctx->block_len;
     last_block = ctx->mode.gmac.last_block;
     last_block_len = ctx->mode.gmac.last_block_len;
 
-    //Приводим данные к u8 типу
-    DO(uint64_to_uint8(B, block_len >> 3, B8, block_len));
-    DO(uint64_to_uint8(H, block_len >> 3, H8, block_len));
+    /* Accumulator B and subkey H as bytes for kalina_xor / gf2m_mul. */
+    DO(uint64_to_uint8(ctx->mode.gmac.B, block_len >> 3, B8, block_len));
+    DO(uint64_to_uint8(ctx->mode.gmac.H, block_len >> 3, H8, block_len));
 
     data_buf = plain_data->buf;
     data_len = plain_data->len;
-
     ctx->mode.gmac.msg_tot_len += data_len;
-    //Если последний блок не пустой:
+
+    /* 1. Complete the buffered partial block and absorb it: B = (B ^ blk)*H. */
     if (last_block_len != 0) {
-        /*Если длинна последнего блока и данных в сумме меньше размера блока*/
-        if (last_block_len + data_len < block_len) {
-            //Добавляем в конец последнего блока новые данные
+        size_t need = block_len - last_block_len;
+
+        if (data_len < need) {
             memcpy(&last_block[last_block_len], data_buf, data_len);
             ctx->mode.gmac.last_block_len += data_len;
             goto cleanup;
-        } else {
-            //Ксорим последний блок с текущими данными
-            kalina_xor(last_block, B8, last_block_len, B8);
-            tail_len = block_len - last_block_len;
-            //Ксорим первые байты из пришедшего блока, до размера блока.
-            kalina_xor(data_buf, &B8[last_block_len], tail_len, &B[last_block_len]);
-            data_len -= tail_len;
         }
-    } else {
-
-        if (data_len >= block_len) {
-            kalina_xor(&data_buf[0], B8, block_len, B8);
-        } else {
-            memcpy(last_block, data_buf, data_len);
-            ctx->mode.gmac.last_block_len = data_len;
-            goto cleanup;
-        }
-    }
-    //Высчитываем остаток
-    tail_len = (block_len - data_len % block_len) % block_len;
-
-    data_len -= tail_len;
-    for (i = 0; i < data_len; i += block_len) {
+        memcpy(&last_block[last_block_len], data_buf, need);
+        kalina_xor(last_block, B8, block_len, B8);
         DO(gf2m_mul(ctx->mode.gmac.gf2m_ctx, block_len, B8, H8, B8));
-        if ((i + block_len) < data_len) {
-            kalina_xor(&data_buf[i], B8, block_len, B8);
-        }
+        pos = need;
     }
 
-    if (tail_len != 0) {
-        memcpy(last_block, &data_buf[i], tail_len);
-        ctx->mode.gmac.last_block_len = tail_len;
+    /* 2. Absorb whole blocks from the remaining data. */
+    while (data_len - pos >= block_len) {
+        kalina_xor(&data_buf[pos], B8, block_len, B8);
+        DO(gf2m_mul(ctx->mode.gmac.gf2m_ctx, block_len, B8, H8, B8));
+        pos += block_len;
     }
 
-    DO(uint8_to_uint64(B8, block_len, B, block_len >> 3));
+    /* 3. Keep the remainder (< block) as a partial block for next time. */
+    if (pos < data_len) {
+        memcpy(last_block, &data_buf[pos], data_len - pos);
+        ctx->mode.gmac.last_block_len = data_len - pos;
+    } else {
+        ctx->mode.gmac.last_block_len = 0;
+    }
+
+    DO(uint8_to_uint64(B8, block_len, ctx->mode.gmac.B, block_len >> 3));
 
 cleanup:
 
@@ -3528,43 +3511,43 @@ cleanup:
 
 static int gmac_final(Dstu7624Ctx *ctx, ByteArray **mac)
 {
-    uint8_t *last_block = NULL;
+    uint8_t *last_block;
     uint64_t *H;
-    uint64_t *B;
     uint8_t B8[MAX_BLOCK_LEN];
     uint8_t H8[MAX_BLOCK_LEN];
     size_t last_block_len;
     size_t block_len;
+    size_t padded_total;
     int ret = RET_OK;
 
     CHECK_PARAM(ctx != NULL);
     CHECK_PARAM(mac != NULL);
 
-    B = ctx->mode.gmac.B;
     H = ctx->mode.gmac.H;
     block_len = ctx->block_len;
     last_block = ctx->mode.gmac.last_block;
     last_block_len = ctx->mode.gmac.last_block_len;
 
-    DO(uint64_to_uint8(B, block_len >> 3, B8, block_len));
-    DO(uint64_to_uint8(H, block_len >> 3, H8, block_len));
+    DO(uint64_to_uint8(ctx->mode.gmac.B, block_len >> 3, B8, block_len));
+    DO(uint64_to_uint8(H, block_len >> 3, H8, block_len));   /* H8 = subkey */
 
-    // Проверяем, нужно ли достчитывать последний блок.
+    /* Length of the padded data in bits — same as one-shot encrypt_gmac. */
+    padded_total = ctx->mode.gmac.msg_tot_len;
+
+    /* Pad the buffered partial block to a full block and absorb it. */
     if (last_block_len != 0) {
-        //Если последний блок не нулевой, дополняем его.
+        size_t tail = last_block_len;
+
         padding(ctx, last_block, &last_block_len, last_block);
-
-        kalina_xor(&last_block, B8, last_block_len, B8);
+        kalina_xor(last_block, B8, block_len, B8);
         DO(gf2m_mul(ctx->mode.gmac.gf2m_ctx, block_len, B8, H8, B8));
+        padded_total += block_len - tail;
     }
+
+    /* length-block ^ B, encrypt with the basic transform, take q bytes. */
     memset(H, 0, MAX_BLOCK_LEN);
-
-    //Записываем длинну всего сообщения в битах
-    H[0] = ctx->mode.gmac.msg_tot_len << 3;
-
-    DO(uint64_to_uint8(H, block_len >> 3, H8, block_len));
-    kalina_xor(H8, B8, block_len, H8);
-    DO(uint8_to_uint64(H8, block_len, H, block_len >> 3));
+    H[0] = (uint64_t)padded_total << 3;
+    kalina_xor(H, B8, block_len, H);
     ctx->basic_transform(ctx, H);
 
     DO(uint64_to_uint8(H, block_len >> 3, H8, block_len));
@@ -4064,6 +4047,7 @@ int dstu7624_init_gmac(Dstu7624Ctx *ctx, const ByteArray *key, const size_t bloc
     memset(ctx->mode.gmac.H, 0, MAX_BLOCK_LEN);
     ctx->basic_transform(ctx, ctx->mode.gmac.H);
     ctx->mode.gmac.last_block_len = 0;
+    ctx->mode.gmac.msg_tot_len = 0;
 
     ctx->mode_id = DSTU7624_MODE_GMAC;
 
