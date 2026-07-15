@@ -1,0 +1,69 @@
+/**
+ * @mainpage Cryptonite — криптографічна бібліотека
+ *
+ * @section intro Огляд
+ *
+ * Cryptonite — бібліотека криптографічних примітивів з підтримкою українських
+ * стандартів криптографічного захисту інформації та криптоконтейнерів.
+ * Написана мовою C, збирається під Windows, Linux та Android.
+ *
+ * Бібліотека пройшла державну експертизу у сфері КЗІ
+ * (експертний висновок № 04/03/02-4834 від 30.11.2016).
+ *
+ * @section arch Архітектура
+ *
+ * Бібліотека складається з чотирьох шарів (знизу догори):
+ *
+ * - <b>asn1</b> — runtime для кодування/декодування ASN.1-структур (DER/BER);
+ * - <b>cryptonite</b> — криптографічне ядро: хеш-функції, блокові шифри,
+ *   електронний підпис, ГПВЧ (див. @ref cryptonite);
+ * - <b>pkix</b> — інфраструктура відкритих ключів: сертифікати, CRL, OCSP, TSP,
+ *   підписані та зашифровані контейнери CMS (див. @ref pkix);
+ * - <b>storage</b> — ключові сховища PKCS#5/8/12 та сховище сертифікатів
+ *   (див. @ref storage).
+ *
+ * @section algos Реалізовані алгоритми
+ *
+ * | Категорія | Алгоритми |
+ * |-----------|-----------|
+ * | Хеш-функції | ДСТУ 7564:2014 («Купина»), ГОСТ 34.311-95, SHA-1, SHA-2, MD5 |
+ * | Блокові шифри | ДСТУ 7624:2014 («Калина»), ДСТУ ГОСТ 28147:2009, AES, DES/3DES |
+ * | Електронний підпис | ДСТУ 4145-2002, ГОСТ 34.310-95, ECDSA, DSA, RSA |
+ * | MAC | HMAC, imito (ГОСТ 28147), KMAC (ДСТУ 7564) |
+ *
+ * @section start З чого почати
+ *
+ * Базовий тип для передачі даних у бібліотеці — ByteArray (див. byte_array.h).
+ * Більшість функцій повертають код помилки (::RET_OK у разі успіху).
+ *
+ * Приклад обчислення хешу ДСТУ 7564 («Купина»):
+ * @code
+ * ByteArray *data = ba_alloc_from_str("повідомлення");
+ * ByteArray *hash = NULL;
+ * Dstu7564Ctx *ctx = dstu7564_alloc(DSTU7564_SBOX_1);
+ *
+ * dstu7564_init(ctx, 32);
+ * dstu7564_update(ctx, data);
+ * dstu7564_final(ctx, &hash);
+ *
+ * dstu7564_free(ctx);
+ * ba_free(data);
+ * ba_free(hash);
+ * @endcode
+ *
+ * Повні приклади: <tt>src/cryptoniteExample/c/cryptonite_example.c</tt> та
+ * <tt>src/pkiExample/c/pki_example.c</tt>.
+ *
+ * @section build Збірка
+ *
+ * @code
+ * cmake -B build && cmake --build build
+ * ctest --test-dir build
+ * @endcode
+ *
+ * Докладніше — у <tt>docs/building.md</tt>.
+ *
+ * @section license Ліцензія
+ *
+ * BSD. Copyright (c) 2016 PrivatBank IT. Див. файл LICENSE.
+ */

@@ -1,0 +1,41 @@
+# Doxyfile для проєкту Cryptonite.
+# Генерація: doxygen Doxyfile (з кореня репозиторію), результат — docs/api/html/index.html
+
+PROJECT_NAME           = "Cryptonite"
+PROJECT_BRIEF          = "Криптографічна бібліотека з підтримкою українських стандартів та криптоконтейнерів"
+OUTPUT_DIRECTORY       = docs/api
+OUTPUT_LANGUAGE        = Ukrainian
+INPUT_ENCODING         = UTF-8
+
+INPUT                  = docs/doxygen \
+                         src/cryptonite/c \
+                         src/pkix/c/api \
+                         src/pkix/c/crypto \
+                         src/pkix/c/engine \
+                         src/storage/c
+RECURSIVE              = YES
+FILE_PATTERNS          = *.h *.dox
+# Внутрішні заголовки та автозгенеровані ASN.1-структури не входять у публічну документацію
+EXCLUDE_PATTERNS       = *_internal.h \
+                         */struct/*
+
+EXTRACT_ALL            = YES
+OPTIMIZE_OUTPUT_FOR_C  = YES
+TYPEDEF_HIDES_STRUCT   = YES
+FULL_PATH_NAMES        = YES
+STRIP_FROM_PATH        = .
+
+# CRYPTONITE_EXPORT задається через CMake (add_definitions), Doxygen про нього не знає
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = YES
+PREDEFINED             = "CRYPTONITE_EXPORT=extern"
+
+GENERATE_HTML          = YES
+GENERATE_TREEVIEW      = YES
+GENERATE_LATEX         = NO
+SOURCE_BROWSER         = NO
+ALPHABETICAL_INDEX     = YES
+
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_LOGFILE           = docs/api/doxygen-warnings.log
